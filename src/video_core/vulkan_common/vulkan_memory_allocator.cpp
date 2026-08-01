@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cstdlib>
 #include <limits>
 #include <optional>
 #include <type_traits>
@@ -13,17 +14,19 @@
 #include <vector>
 
 #include "common/alignment.h"
-#include "common/assert.h"
 #include "common/common_types.h"
 #include "common/literals.h"
-#include "common/logging.h"
 #include <ranges>
 #include "video_core/vulkan_common/vma.h"
+#if !defined(EDEN_PS5_BOOTSTRAP_MINIMAL)
+#include "common/assert.h"
+#include "common/logging.h"
+#include "common/settings.h"
+#include "video_core/gpu_logging/gpu_logging.h"
 #include "video_core/vulkan_common/vulkan_device.h"
+#endif
 #include "video_core/vulkan_common/vulkan_memory_allocator.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
-#include "video_core/gpu_logging/gpu_logging.h"
-#include "common/settings.h"
 
 namespace Vulkan {
     namespace {
@@ -46,7 +49,11 @@ namespace Vulkan {
                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
             }
+#if !defined(EDEN_PS5_BOOTSTRAP_MINIMAL)
             ASSERT_MSG(false, "Invalid memory usage={}", usage);
+#else
+            std::abort();
+#endif
             return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
         }
 
@@ -85,6 +92,16 @@ namespace Vulkan {
             return VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
         }
 
+        const MemoryAllocator::Context &ValidateContext(
+            const MemoryAllocator::Context &context) {
+            if (context.allocator == VK_NULL_HANDLE ||
+                static_cast<VkPhysicalDevice>(context.physical) == VK_NULL_HANDLE ||
+                context.logical == VK_NULL_HANDLE || context.dispatch == nullptr) {
+                throw vk::Exception(VK_ERROR_INITIALIZATION_FAILED);
+            }
+            return context;
+        }
+
 
 // This avoids calling vkGetBufferMemoryRequirements* directly.
         template<typename T>
@@ -111,6 +128,7 @@ namespace Vulkan {
             : allocator{alloc}, allocation{a}, memory{info.deviceMemory},
               offset{info.offset}, size{info.size}, mapped_ptr{info.pMappedData} {
         // Log GPU memory allocation
+#if !defined(EDEN_PS5_BOOTSTRAP_MINIMAL)
         if (GPU::Logging::IsActive() &&
             Settings::values.gpu_log_memory_tracking.GetValue()) {
             GPU::Logging::GPULogger::GetInstance().LogMemoryAllocation(
@@ -119,6 +137,7 @@ namespace Vulkan {
                 0  // Memory property flags (not easily available from VMA)
             );
         }
+#endif
     }
 
     MemoryCommit::~MemoryCommit() { Release(); }
@@ -179,6 +198,7 @@ namespace Vulkan {
     void MemoryCommit::Release() {
         if (allocation && allocator) {
             // Log GPU memory deallocation
+#if !defined(EDEN_PS5_BOOTSTRAP_MINIMAL)
             if (GPU::Logging::IsActive() &&
                 Settings::values.gpu_log_memory_tracking.GetValue() &&
                 memory != VK_NULL_HANDLE) {
@@ -186,6 +206,7 @@ namespace Vulkan {
                     reinterpret_cast<uintptr_t>(memory)
                 );
             }
+#endif
 
             if (mapped_ptr) {
                 vmaUnmapMemory(allocator, allocation);
@@ -200,17 +221,37 @@ namespace Vulkan {
         size = 0;
     }
 
+#if !defined(EDEN_PS5_BOOTSTRAP_MINIMAL)
     MemoryAllocator::MemoryAllocator(const Device &device_)
-            : device{device_}, allocator{device.GetAllocator()},
-              properties{device_.GetPhysical().GetMemoryProperties().memoryProperties},
-              buffer_image_granularity{
-                      device_.GetPhysical().GetProperties().limits.bufferImageGranularity} {
+            : MemoryAllocator{Context{
+                  .allocator = device_.GetAllocator(),
+                  .physical = device_.GetPhysical(),
+                  .logical = *device_.GetLogical(),
+                  .dispatch = &device_.GetDispatchLoader(),
+                  .driver_id = device_.GetDriverID(),
+                  .debugging_tool_attached = device_.HasDebuggingToolAttached(),
+              }} {}
+#endif
 
+    MemoryAllocator::MemoryAllocator(const Context &context)
+            : allocator{ValidateContext(context).allocator}, physical{context.physical},
+              logical{context.logical},
+              dispatch{context.dispatch}, driver_id{context.driver_id},
+              properties{physical.GetMemoryProperties().memoryProperties},
+              buffer_image_granularity{physical.GetProperties().limits.bufferImageGranularity} {
         // Preserve the previous "RenderDoc small heap" trimming behavior that we had in original vma minus the heap bug
-        if (device.HasDebuggingToolAttached())
+        if (context.debugging_tool_attached)
         {
             using namespace Common::Literals;
-            ForEachDeviceLocalHostVisibleHeap(device, [this](size_t heap_idx, VkMemoryHeap &heap) {
+            auto memory_props = properties;
+            for (size_t i = 0; i < memory_props.memoryTypeCount; ++i) {
+                const auto &memory_type = memory_props.memoryTypes[i];
+                if ((memory_type.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == 0 ||
+                    (memory_type.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == 0) {
+                    continue;
+                }
+                const size_t heap_idx = memory_type.heapIndex;
+                const auto &heap = memory_props.memoryHeaps[heap_idx];
                 if (heap.size <= 256_MiB) {
                     for (u32 t = 0; t < properties.memoryTypeCount; ++t) {
                         if (properties.memoryTypes[t].heapIndex == heap_idx) {
@@ -218,7 +259,7 @@ namespace Vulkan {
                         }
                     }
                 }
-            });
+            }
         }
     }
 
@@ -243,6 +284,7 @@ namespace Vulkan {
         vk::Check(vmaCreateImage(allocator, &ci, &alloc_ci, &handle, &allocation, &alloc_info));
 
         // Log GPU memory allocation for images
+#if !defined(EDEN_PS5_BOOTSTRAP_MINIMAL)
         if (GPU::Logging::IsActive() &&
             Settings::values.gpu_log_memory_tracking.GetValue()) {
             GPU::Logging::GPULogger::GetInstance().LogMemoryAllocation(
@@ -251,15 +293,15 @@ namespace Vulkan {
                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
             );
         }
+#endif
 
-        return vk::Image(handle, ci.usage, *device.GetLogical(), allocator, allocation,
-                         device.GetDispatchLoader());
+        return vk::Image(handle, ci.usage, logical, allocator, allocation, *dispatch);
     }
 
     vk::Buffer MemoryAllocator::CreateBuffer(const VkBufferCreateInfo &ci, MemoryUsage usage) const {
         // MESA will do memcpy() if not marked as host cached, so just force mark it for most buffers
         auto const anv_flags = (usage == MemoryUsage::Stream
-            && device.GetDriverID() == VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA)
+            && driver_id == VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA)
             ? VK_MEMORY_PROPERTY_HOST_CACHED_BIT : 0;
         const VmaAllocationCreateInfo alloc_ci = {
             .flags = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT | MemoryUsageVmaFlags(usage),
@@ -281,6 +323,7 @@ namespace Vulkan {
         vmaGetAllocationMemoryProperties(allocator, allocation, &property_flags);
 
         // Log GPU memory allocation for buffers
+#if !defined(EDEN_PS5_BOOTSTRAP_MINIMAL)
         if (GPU::Logging::IsActive() &&
             Settings::values.gpu_log_memory_tracking.GetValue()) {
             GPU::Logging::GPULogger::GetInstance().LogMemoryAllocation(
@@ -289,14 +332,14 @@ namespace Vulkan {
                 property_flags
             );
         }
+#endif
 
         u8 *data = reinterpret_cast<u8 *>(alloc_info.pMappedData);
         const std::span<u8> mapped_data = data ? std::span<u8>{data, ci.size} : std::span<u8>{};
         const bool is_coherent = (property_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
 
-        return vk::Buffer(handle, *device.GetLogical(), allocator, allocation, mapped_data,
-                          is_coherent,
-                          device.GetDispatchLoader());
+        return vk::Buffer(handle, logical, allocator, allocation, mapped_data, is_coherent,
+                          *dispatch);
     }
 
     MemoryCommit MemoryAllocator::Commit(const VkMemoryRequirements &reqs, MemoryUsage usage)

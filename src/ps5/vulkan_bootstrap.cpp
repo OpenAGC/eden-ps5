@@ -21,6 +21,8 @@
 #include <cstdint>
 #include <cstdio>
 
+#include "video_core/vulkan_common/vulkan_memory_allocator.h"
+#include "video_core/vulkan_common/vulkan_wrapper.h"
 #include "vulkan_quad_indexed_comp_spv.h"
 
 namespace {
@@ -46,12 +48,15 @@ struct BootstrapState {
     VkQueue queue = VK_NULL_HANDLE;
     std::array<VkCommandBuffer, ImageCount> commands{};
     VmaAllocator allocator = VK_NULL_HANDLE;
+    Vulkan::vk::InstanceDispatch instance_dispatch{};
+    Vulkan::vk::DeviceDispatch device_dispatch{};
+    Vulkan::MemoryAllocator* production_allocator = nullptr;
+    Vulkan::vk::Buffer upload_commit{};
+    Vulkan::vk::Buffer device_commit{};
+    Vulkan::vk::Buffer readback_commit{};
     VkBuffer upload_buffer = VK_NULL_HANDLE;
     VkBuffer device_buffer = VK_NULL_HANDLE;
     VkBuffer readback_buffer = VK_NULL_HANDLE;
-    VmaAllocation upload_allocation = VK_NULL_HANDLE;
-    VmaAllocation device_allocation = VK_NULL_HANDLE;
-    VmaAllocation readback_allocation = VK_NULL_HANDLE;
     void* upload_mapping = nullptr;
     void* readback_mapping = nullptr;
     VkDescriptorSetLayout descriptor_layout = VK_NULL_HANDLE;
@@ -96,28 +101,6 @@ struct BootstrapState {
         }                                                                                          \
     } while (false)
 
-VkResult CreateVmaBuffer(BootstrapState& state, VkBufferUsageFlags usage,
-                         VmaMemoryUsage memory_usage, VmaAllocationCreateFlags flags,
-                         VkBuffer& buffer, VmaAllocation& allocation, void** mapping) {
-    const VkBufferCreateInfo buffer_info{
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = VmaProbeSize,
-        .usage = usage,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-    };
-    const VmaAllocationCreateInfo allocation_info{
-        .flags = flags,
-        .usage = memory_usage,
-    };
-    VmaAllocationInfo result_info{};
-    const VkResult result = vmaCreateBuffer(state.allocator, &buffer_info, &allocation_info,
-                                            &buffer, &allocation, &result_info);
-    if (result == VK_SUCCESS && mapping != nullptr) {
-        *mapping = result_info.pMappedData;
-    }
-    return result;
-}
-
 VkResult RunVmaProbe(BootstrapState& state) {
     VmaVulkanFunctions functions{};
     functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
@@ -140,28 +123,64 @@ VkResult RunVmaProbe(BootstrapState& state) {
     resolved_allocator_info.physicalDevice = physical;
     VK_REQUIRE(vmaCreateAllocator(&resolved_allocator_info, &state.allocator));
 
-    constexpr VmaAllocationCreateFlags upload_flags =
-        VMA_ALLOCATION_CREATE_MAPPED_BIT |
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    constexpr VmaAllocationCreateFlags readback_flags =
-        VMA_ALLOCATION_CREATE_MAPPED_BIT |
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-    VK_REQUIRE(CreateVmaBuffer(state,
-                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-                                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                               VMA_MEMORY_USAGE_AUTO_PREFER_HOST, upload_flags,
-                               state.upload_buffer, state.upload_allocation,
-                               &state.upload_mapping));
-    VK_REQUIRE(CreateVmaBuffer(state,
-                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-                                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                               VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, 0,
-                               state.device_buffer, state.device_allocation, nullptr));
-    VK_REQUIRE(CreateVmaBuffer(state, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                               VMA_MEMORY_USAGE_AUTO_PREFER_HOST, readback_flags,
-                               state.readback_buffer, state.readback_allocation,
-                               &state.readback_mapping));
+    state.instance_dispatch.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    if (!Vulkan::vk::Load(state.instance_dispatch) ||
+        !Vulkan::vk::Load(state.instance, state.instance_dispatch)) {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+    static_cast<Vulkan::vk::InstanceDispatch&>(state.device_dispatch) = state.instance_dispatch;
+    Vulkan::vk::Load(state.device, state.device_dispatch);
+
+    VkPhysicalDeviceDriverProperties driver_properties{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES,
+    };
+    VkPhysicalDeviceProperties2 properties{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+        .pNext = &driver_properties,
+    };
+    vkGetPhysicalDeviceProperties2(physical, &properties);
+    const Vulkan::MemoryAllocator::Context allocator_context{
+        .allocator = state.allocator,
+        .physical = Vulkan::vk::PhysicalDevice{physical, state.instance_dispatch},
+        .logical = state.device,
+        .dispatch = &state.device_dispatch,
+        .driver_id = driver_properties.driverID,
+    };
+    try {
+        state.production_allocator = new Vulkan::MemoryAllocator{allocator_context};
+        const VkBufferCreateInfo upload_info{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = VmaProbeSize,
+            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        };
+        const VkBufferCreateInfo device_info{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = VmaProbeSize,
+            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        };
+        const VkBufferCreateInfo readback_info{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = VmaProbeSize,
+            .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        };
+        state.upload_commit = state.production_allocator->CreateBuffer(
+            upload_info, Vulkan::MemoryUsage::Upload);
+        state.device_commit = state.production_allocator->CreateBuffer(
+            device_info, Vulkan::MemoryUsage::DeviceLocal);
+        state.readback_commit = state.production_allocator->CreateBuffer(
+            readback_info, Vulkan::MemoryUsage::Download);
+    } catch (const Vulkan::vk::Exception& exception) {
+        return exception.GetResult();
+    }
+    state.upload_buffer = *state.upload_commit;
+    state.device_buffer = *state.device_commit;
+    state.readback_buffer = *state.readback_commit;
+    state.upload_mapping = state.upload_commit.Mapped().data();
+    state.readback_mapping = state.readback_commit.Mapped().data();
     if (state.upload_mapping == nullptr || state.readback_mapping == nullptr) {
         return VK_ERROR_MEMORY_MAP_FAILED;
     }
@@ -173,7 +192,7 @@ VkResult RunVmaProbe(BootstrapState& state) {
         upload_words[index] = 0x51a70000U ^ static_cast<std::uint32_t>(index * 0x1021U);
         readback_words[index] = 0;
     }
-    VK_REQUIRE(vmaFlushAllocation(state.allocator, state.upload_allocation, 0, VK_WHOLE_SIZE));
+    state.upload_commit.Flush();
 
     VkCommandBuffer probe_command = VK_NULL_HANDLE;
     const VkCommandBufferAllocateInfo command_info{
@@ -200,8 +219,7 @@ VkResult RunVmaProbe(BootstrapState& state) {
     };
     VK_REQUIRE(vkQueueSubmit(state.queue, 1, &submit_info, state.fence));
     VK_REQUIRE(vkWaitForFences(state.device, 1, &state.fence, VK_TRUE, WaitTimeoutNs));
-    VK_REQUIRE(vmaInvalidateAllocation(state.allocator, state.readback_allocation, 0,
-                                       VK_WHOLE_SIZE));
+    state.readback_commit.Invalidate();
     for (std::size_t index = 0; index < WordCount; ++index) {
         if (readback_words[index] != upload_words[index]) {
             std::printf("eden-ps5-bootstrap: VMA mismatch word=%zu expected=%08x actual=%08x\n",
@@ -337,8 +355,7 @@ VkResult DispatchEdenCompute(BootstrapState& state, std::uint32_t base_vertex) {
     for (std::size_t index = 0; index < 6; ++index) {
         readback_words[index] = 0;
     }
-    VK_REQUIRE(vmaFlushAllocation(state.allocator, state.upload_allocation, 0,
-                                  Input.size() * sizeof(std::uint32_t)));
+    state.upload_commit.Flush();
 
     VkCommandBuffer command = VK_NULL_HANDLE;
     const VkCommandBufferAllocateInfo command_info{
@@ -413,8 +430,7 @@ VkResult DispatchEdenCompute(BootstrapState& state, std::uint32_t base_vertex) {
     VK_REQUIRE(vkQueueSubmit(state.queue, 1, &submit_info, state.fence));
     VK_REQUIRE(vkWaitForFences(state.device, 1, &state.fence, VK_TRUE,
                                WaitTimeoutNs));
-    VK_REQUIRE(vmaInvalidateAllocation(state.allocator, state.readback_allocation, 0,
-                                       6 * sizeof(std::uint32_t)));
+    state.readback_commit.Invalidate();
     constexpr std::array<std::uint32_t, 6> Swizzle{3, 5, 7, 3, 7, 11};
     for (std::size_t index = 0; index < Swizzle.size(); ++index) {
         const std::uint32_t expected = Swizzle[index] + base_vertex;
@@ -743,24 +759,16 @@ int main() {
         vkDestroyCommandPool(state.device, state.command_pool, nullptr);
     }
     if (state.allocator != VK_NULL_HANDLE) {
-        if (state.readback_buffer != VK_NULL_HANDLE) {
-            vmaDestroyBuffer(state.allocator, state.readback_buffer,
-                             state.readback_allocation);
-            state.readback_buffer = VK_NULL_HANDLE;
-            state.readback_allocation = VK_NULL_HANDLE;
-        }
-        if (state.device_buffer != VK_NULL_HANDLE) {
-            vmaDestroyBuffer(state.allocator, state.device_buffer,
-                             state.device_allocation);
-            state.device_buffer = VK_NULL_HANDLE;
-            state.device_allocation = VK_NULL_HANDLE;
-        }
-        if (state.upload_buffer != VK_NULL_HANDLE) {
-            vmaDestroyBuffer(state.allocator, state.upload_buffer,
-                             state.upload_allocation);
-            state.upload_buffer = VK_NULL_HANDLE;
-            state.upload_allocation = VK_NULL_HANDLE;
-        }
+        state.readback_commit.reset();
+        state.device_commit.reset();
+        state.upload_commit.reset();
+        state.readback_buffer = VK_NULL_HANDLE;
+        state.device_buffer = VK_NULL_HANDLE;
+        state.upload_buffer = VK_NULL_HANDLE;
+        state.readback_mapping = nullptr;
+        state.upload_mapping = nullptr;
+        delete state.production_allocator;
+        state.production_allocator = nullptr;
         VmaTotalStatistics statistics{};
         vmaCalculateStatistics(state.allocator, &statistics);
         std::printf("eden-ps5-bootstrap: VMA teardown allocations=%u bytes=%llu\n",

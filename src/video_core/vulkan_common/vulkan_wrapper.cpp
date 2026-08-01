@@ -11,7 +11,9 @@
 #include <vector>
 
 #include "common/common_types.h"
+#if !defined(EDEN_PS5_BOOTSTRAP_MINIMAL)
 #include "common/logging.h"
+#endif
 #include "video_core/vulkan_common/vk_enum_string_helper.h"
 #include "video_core/vulkan_common/vma.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
@@ -80,7 +82,7 @@ void Proc(T& result, const DeviceDispatch& dld, const char* proc_name, VkDevice 
     result = reinterpret_cast<T>(dld.vkGetDeviceProcAddr(device, proc_name));
 }
 
-void Load(VkDevice device, DeviceDispatch& dld) noexcept {
+void LoadDevice(VkDevice device, DeviceDispatch& dld) noexcept {
 #define X(name) Proc(dld.name, dld, #name, device)
     X(vkAcquireNextImageKHR);
     X(vkAllocateCommandBuffers);
@@ -284,6 +286,10 @@ void SetObjectName(const DeviceDispatch* dld, VkDevice device, T handle, VkObjec
 
 } // Anonymous namespace
 
+void Load(VkDevice device, DeviceDispatch& dld) noexcept {
+    LoadDevice(device, dld);
+}
+
 bool Load(InstanceDispatch& dld) noexcept {
 #define X(name) Proc(dld.name, dld, #name)
     return X(vkCreateInstance) && X(vkEnumerateInstanceExtensionProperties) &&
@@ -443,6 +449,9 @@ VkResult Free(VkDevice device, VkCommandPool handle, Span<VkCommandBuffer> buffe
 
 Instance Instance::Create(u32 version, Span<const char*> layers, Span<const char*> extensions,
                           InstanceDispatch& dispatch) {
+#if defined(EDEN_PS5_BOOTSTRAP_MINIMAL)
+    (void)version;
+#endif
 #ifdef __APPLE__
     constexpr VkFlags ci_flags{VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR};
 #else
@@ -1011,8 +1020,12 @@ u32 AvailableVersion(const InstanceDispatch& dld) noexcept {
     }
     u32 version;
     if (const VkResult result = vkEnumerateInstanceVersion(&version); result != VK_SUCCESS) {
+#if !defined(EDEN_PS5_BOOTSTRAP_MINIMAL)
         LOG_ERROR(Render_Vulkan, "vkEnumerateInstanceVersion returned {}, assuming Vulkan 1.1",
                   string_VkResult(result));
+#else
+        (void)result;
+#endif
         return VK_API_VERSION_1_1;
     }
     return version;

@@ -19,7 +19,10 @@ cmake --build build-prospero-bootstrap \
 
 `EDEN_PS5_VMA_INCLUDE_DIR` may name an installed directory containing
 `vk_mem_alloc.h`. When unset, CMake accepts Eden's pinned CPM 3.3.0 cache or
-the adjacent `VulkanMemoryAllocator` checkout. A host
+the adjacent `VulkanMemoryAllocator` checkout.
+`EDEN_PS5_VULKAN_UTILITY_INCLUDE_DIR` may likewise name installed Vulkan
+Utility Libraries headers; the adjacent checkout is accepted for development.
+A host
 `glslangValidator` is required at build time to regenerate the embedded
 SPIR-V from Eden's production `vulkan_quad_indexed.comp`; it is not a PS5
 runtime dependency.
@@ -28,8 +31,8 @@ The current gate performs:
 
 1. Vulkan instance, PS5 surface, device, and three-image FIFO swapchain
    creation.
-2. Eden's production VMA implementation with mapped upload/readback and a
-   device-local buffer.
+2. Eden's production `MemoryAllocator` and `vk::Buffer` wrappers over its VMA
+   implementation, with mapped upload/readback and a device-local buffer.
 3. A 4,096-byte upload→device→readback copy and exact CPU oracle.
 4. Compilation and execution of Eden's production quad-index compute shader
    with two storage descriptors, a 12-byte push-constant range, and an exact

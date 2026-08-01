@@ -183,9 +183,11 @@ Remaining work that can block real Eden games:
 
 - Expand the bootstrap-only Prospero platform into Eden's full dependency and
   application build. The minimal Vulkan lifecycle has hardware credit, but it
-  does not yet construct Eden's `MemoryAllocator` wrapper, guest shader cache,
-  renderer command streams, RmlUi, input, audio, or game boot. The production
-  VMA implementation and its Vulkan allocation contract are hardware-proven.
+  does not yet construct the guest shader cache, renderer command streams,
+  RmlUi, input, audio, or game boot. Eden's production `MemoryAllocator`
+  wrapper is now part of the Prospero bootstrap, but that exact wrapper build
+  still needs FW 5.50 execution. The underlying production VMA implementation
+  and its Vulkan allocation contract are hardware-proven.
 - Add ASTC and ETC/EAC conversion in Eden or a general-purpose Vulkan path when
   actual game traces require them. Keep D24 and unsupported storage-image
   combinations honest until native support or conversion is implemented.
@@ -238,7 +240,19 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   1,024-thread no-store result isolated OpenAGC's all-ones
   `COMPUTE_RESOURCE_LIMITS`; OpenAGC `2be2b1c` derives the gfx10 wave-count
   policy and is generic/Prospero-build clean. The corrected exact ELF remains
-  pending FW 5.50 execution because the endpoint is currently unreachable.
+  pending FW 5.50 execution because the console is reachable but its guarded
+  websrv/FTP launcher services are not currently running.
+- The bootstrap now compiles Eden's production `vulkan_wrapper.cpp` and
+  `vulkan_memory_allocator.cpp` rather than calling `vmaCreateBuffer`
+  directly. Its upload, device-local, and readback allocations use
+  `MemoryAllocator::CreateBuffer`; mapped access, cache maintenance, and
+  destruction use Eden's `vk::Buffer` RAII path. A context constructor keeps
+  the normal renderer-owned `Device` constructor unchanged while allowing the
+  staged bootstrap to adopt its existing Vulkan/VMA device. The complete host
+  `video_core` target and two clean Release Prospero builds pass, and the two
+  independently built ELFs are byte-identical at
+  `2abe2f150839748ae3a06532ae18a33d61780c6d73341bfd219c54d8e63b58e4`.
+  Hardware qualification is pending because FW 5.50 websrv/FTP remain closed.
 
 ## Milestones and gates
 

@@ -37,6 +37,26 @@ if (NOT EDEN_PS5_VMA_INCLUDE_DIR)
             "Directory containing Eden's pinned vk_mem_alloc.h" FORCE)
     endif()
 endif()
+
+set(EDEN_PS5_VULKAN_UTILITY_INCLUDE_DIR "" CACHE PATH
+    "Directory containing vulkan/vk_enum_string_helper.h")
+if (NOT EDEN_PS5_VULKAN_UTILITY_INCLUDE_DIR)
+    find_path(_eden_ps5_vulkan_utility_include_dir vulkan/vk_enum_string_helper.h
+        HINTS
+            "${PROJECT_SOURCE_DIR}/.cache/cpm/vulkanutilitylibraries/include"
+            "${PROJECT_SOURCE_DIR}/../Vulkan-Utility-Libraries/include"
+        NO_CMAKE_FIND_ROOT_PATH)
+    if (_eden_ps5_vulkan_utility_include_dir)
+        set(EDEN_PS5_VULKAN_UTILITY_INCLUDE_DIR
+            "${_eden_ps5_vulkan_utility_include_dir}" CACHE PATH
+            "Directory containing vulkan/vk_enum_string_helper.h" FORCE)
+    endif()
+endif()
+if (NOT EDEN_PS5_VULKAN_UTILITY_INCLUDE_DIR)
+    message(FATAL_ERROR
+        "Vulkan Utility Libraries headers were not found; install them or set "
+        "EDEN_PS5_VULKAN_UTILITY_INCLUDE_DIR")
+endif()
 if (NOT EDEN_PS5_VMA_INCLUDE_DIR)
     message(FATAL_ERROR
         "vk_mem_alloc.h was not found; install VulkanMemoryAllocator or set "
@@ -64,14 +84,20 @@ add_custom_command(
 add_custom_target(eden-ps5-host-shaders
     DEPENDS "${_eden_ps5_quad_shader_header}")
 
-add_executable(eden-ps5-vulkan-bootstrap vulkan_bootstrap.cpp)
+add_executable(eden-ps5-vulkan-bootstrap
+    vulkan_bootstrap.cpp
+    "${PROJECT_SOURCE_DIR}/src/video_core/vulkan_common/vulkan_memory_allocator.cpp"
+    "${PROJECT_SOURCE_DIR}/src/video_core/vulkan_common/vulkan_wrapper.cpp")
 add_dependencies(eden-ps5-vulkan-bootstrap eden-ps5-host-shaders)
 target_compile_features(eden-ps5-vulkan-bootstrap PRIVATE cxx_std_20)
 target_compile_options(eden-ps5-vulkan-bootstrap PRIVATE
-    -Wall -Wextra -Wpedantic -Werror -Wno-missing-field-initializers)
+    -Wall -Wextra -Wpedantic -Werror -Wno-missing-field-initializers
+    -Wno-nullability-extension -Wno-nullability-completeness)
+target_compile_definitions(eden-ps5-vulkan-bootstrap PRIVATE
+    EDEN_PS5_BOOTSTRAP_MINIMAL=1)
 target_include_directories(eden-ps5-vulkan-bootstrap PRIVATE
     "${PROJECT_SOURCE_DIR}/src" "${EDEN_PS5_VMA_INCLUDE_DIR}"
-    "${_eden_ps5_generated_dir}")
+    "${EDEN_PS5_VULKAN_UTILITY_INCLUDE_DIR}" "${_eden_ps5_generated_dir}")
 target_link_libraries(eden-ps5-vulkan-bootstrap PRIVATE
     VulkanPS5::ICD SceSystemService)
 set_target_properties(eden-ps5-vulkan-bootstrap PROPERTIES SUFFIX ".elf")

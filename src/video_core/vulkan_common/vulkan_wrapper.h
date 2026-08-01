@@ -365,6 +365,9 @@ bool Load(InstanceDispatch&) noexcept;
 /// @return True on success, false on error.
 bool Load(VkInstance, InstanceDispatch&) noexcept;
 
+/// Loads device function pointers into an existing dispatch table.
+void Load(VkDevice, DeviceDispatch&) noexcept;
+
 void Destroy(VkInstance, const InstanceDispatch&) noexcept;
 void Destroy(VkDevice, const InstanceDispatch&) noexcept;
 

@@ -11,7 +11,9 @@
 #include <vector>
 
 #include "common/common_types.h"
+#if !defined(EDEN_PS5_BOOTSTRAP_MINIMAL)
 #include "video_core/vulkan_common/vulkan_device.h"
+#endif
 #include "video_core/vulkan_common/vulkan_wrapper.h"
 #include "video_core/vulkan_common/vma.h"
 
@@ -27,8 +29,8 @@ namespace Vulkan {
         Stream,      ///< Requests device local host visible buffer, falling back host memory.
     };
 
-    template<typename F>
-    void ForEachDeviceLocalHostVisibleHeap(const Device &device, F &&f) {
+    template<typename DeviceLike, typename F>
+    void ForEachDeviceLocalHostVisibleHeap(const DeviceLike &device, F &&f) {
         auto memory_props = device.GetPhysical().GetMemoryProperties().memoryProperties;
         for (size_t i = 0; i < memory_props.memoryTypeCount; i++) {
             auto &memory_type = memory_props.memoryTypes[i];
@@ -88,6 +90,15 @@ namespace Vulkan {
 /// Allocates and releases memory allocations on demand.
     class MemoryAllocator {
     public:
+        struct Context {
+            VmaAllocator allocator{};
+            vk::PhysicalDevice physical{};
+            VkDevice logical{};
+            const vk::DeviceDispatch *dispatch{};
+            VkDriverIdKHR driver_id{VK_DRIVER_ID_MAX_ENUM};
+            bool debugging_tool_attached{};
+        };
+
         /**
          * Construct memory allocator
          *
@@ -96,6 +107,9 @@ namespace Vulkan {
          * @throw vk::Exception on failure
          */
         explicit MemoryAllocator(const Device &device_);
+
+        /// Construct around an existing production VMA/Vulkan device context.
+        explicit MemoryAllocator(const Context &context);
 
         ~MemoryAllocator();
 
@@ -132,8 +146,11 @@ namespace Vulkan {
             }
         }
 
-        const Device &device;                              ///< Device handle.
-        VmaAllocator allocator;                           ///< VMA allocator.
+        VmaAllocator allocator;                            ///< VMA allocator.
+        vk::PhysicalDevice physical;                       ///< Physical device wrapper.
+        VkDevice logical{};                                ///< Logical Vulkan device.
+        const vk::DeviceDispatch *dispatch{};              ///< Loaded device entrypoints.
+        VkDriverIdKHR driver_id{VK_DRIVER_ID_MAX_ENUM};    ///< Driver identity.
         const VkPhysicalDeviceMemoryProperties properties; ///< Physical device memory properties.
         VkDeviceSize buffer_image_granularity;            ///< Adjacent buffer/image granularity
         u32 valid_memory_types{~0u};
