@@ -1,0 +1,11 @@
+--- a/libs/process/src/posix/close_handles.cpp
++++ b/libs/process/src/posix/close_handles.cpp
+@@ -17,7 +17,7 @@
+ // linux has close_range since 5.19
+ 
+ 
+-#if defined(__FreeBSD__)
++#if defined(__FreeBSD__) && !defined(BOOST_PROCESS_V2_POSIX_FORCE_DISABLE_CLOSE_RANGE)
+ 
+ // https://www.freebsd.org/cgi/man.cgi?query=close_range&apropos=0&sektion=0&manpath=FreeBSD+13.1-RELEASE+and+Ports&arch=default&format=html
+ // __FreeBSD__

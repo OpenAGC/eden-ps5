@@ -269,6 +269,18 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   OpenSSL target. Host configuration and `video_core` remain clean, and full
   Prospero configuration now reaches the missing FFmpeg target, the next
   dependency/package gate.
+- The full Prospero configuration now resolves the pacbrew-compatible OpenSSL
+  3.6.2 sysroot install and Eden's source-built FFmpeg 8.0 dependency. FFmpeg
+  must link its configure probes through `prospero-clang`, because raw
+  `prospero-lld` omits crt/libc/SceLibcInternal and incorrectly reports PS5
+  math functions unavailable. The PS5-only linker-driver selection preserves
+  other platforms. Boost.Process's FreeBSD shortcut also assumes
+  `close_range`, which the Prospero libc does not expose; the PS5 build now
+  selects Boost's portable `/dev/fd` implementation through a narrow patched
+  capability macro. FFmpeg's four required static libraries, Boost.Process,
+  and Eden's complete Release `video_core` target now cross-build for
+  Prospero. A clean native macOS `video_core` build also passes, confirming the
+  platform-specific selections do not regress the host path.
 
 ## Milestones and gates
 

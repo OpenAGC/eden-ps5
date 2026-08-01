@@ -407,6 +407,11 @@ set(BOOST_INCLUDE_LIBRARIES algorithm icl pool container heap asio headers proce
 
 AddJsonPackage(boost)
 
+if (PLATFORM_PS5 AND TARGET boost_process)
+    target_compile_definitions(boost_process PRIVATE
+        BOOST_PROCESS_V2_POSIX_FORCE_DISABLE_CLOSE_RANGE)
+endif()
+
 # really annoying thing where boost::headers doesn't work with cpm
 # TODO(crueter) investigate
 set(BOOST_NO_HEADERS ${Boost_ADDED})

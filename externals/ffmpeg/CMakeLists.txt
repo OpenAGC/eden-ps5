@@ -254,6 +254,13 @@ else()
     # `--disable-vdpau` is needed to avoid linking issues
     set(FFmpeg_CC ${CMAKE_C_COMPILER_LAUNCHER}  ${CMAKE_C_COMPILER})
     set(FFmpeg_CXX ${CMAKE_CXX_COMPILER_LAUNCHER}  ${CMAKE_CXX_COMPILER})
+    set(FFmpeg_LD ${CMAKE_LINKER})
+    if (PLATFORM_PS5)
+        # The Prospero compiler driver supplies crt, libc, the kernel stub, and
+        # SceLibcInternal. Invoking lld directly makes FFmpeg's configure-time
+        # libc probes fail and enables colliding fallback math definitions.
+        set(FFmpeg_LD ${CMAKE_C_COMPILER})
+    endif()
     add_custom_command(
         OUTPUT
             ${FFmpeg_MAKEFILE}
@@ -274,7 +281,7 @@ else()
                 --enable-pic
                 --cc=${FFmpeg_CC}
                 --cxx=${FFmpeg_CXX}
-                --ld=${CMAKE_LINKER}
+                --ld=${FFmpeg_LD}
                 --extra-cflags=${CMAKE_C_FLAGS}
                 --extra-cxxflags=${CMAKE_CXX_FLAGS}
                 --extra-ldflags=${CMAKE_C_LINK_FLAGS}
@@ -285,6 +292,7 @@ else()
     )
     unset(FFmpeg_CC)
     unset(FFmpeg_CXX)
+    unset(FFmpeg_LD)
     unset(FFmpeg_HWACCEL_FLAGS)
     unset(FFmpeg_CROSS_COMPILE_FLAGS)
 
