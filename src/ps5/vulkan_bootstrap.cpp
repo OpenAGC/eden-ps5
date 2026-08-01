@@ -3,6 +3,20 @@
 
 #include <vulkan/vulkan.h>
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnullability-extension"
+#pragma clang diagnostic ignored "-Wnullability-completeness"
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wunused-variable"
+#pragma clang diagnostic ignored "-Wunused-private-field"
+#endif
+#define VMA_IMPLEMENTATION
+#include "video_core/vulkan_common/vma.h"
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -12,6 +26,7 @@ namespace {
 constexpr std::uint32_t ImageCount = 3;
 constexpr std::uint32_t FrameCount = 600;
 constexpr std::uint64_t WaitTimeoutNs = 2'000'000'000;
+constexpr VkDeviceSize VmaProbeSize = 4096;
 
 extern "C" int sceKernelUsleep(unsigned int microseconds);
 extern "C" int sceSystemServiceGetAppStatus(void* status);
@@ -28,6 +43,15 @@ struct BootstrapState {
     VkFence fence = VK_NULL_HANDLE;
     VkQueue queue = VK_NULL_HANDLE;
     std::array<VkCommandBuffer, ImageCount> commands{};
+    VmaAllocator allocator = VK_NULL_HANDLE;
+    VkBuffer upload_buffer = VK_NULL_HANDLE;
+    VkBuffer device_buffer = VK_NULL_HANDLE;
+    VkBuffer readback_buffer = VK_NULL_HANDLE;
+    VmaAllocation upload_allocation = VK_NULL_HANDLE;
+    VmaAllocation device_allocation = VK_NULL_HANDLE;
+    VmaAllocation readback_allocation = VK_NULL_HANDLE;
+    void* upload_mapping = nullptr;
+    void* readback_mapping = nullptr;
     bool fence_pending = false;
 };
 
@@ -62,6 +86,122 @@ struct BootstrapState {
             return required_result;                                                                \
         }                                                                                          \
     } while (false)
+
+VkResult CreateVmaBuffer(BootstrapState& state, VkBufferUsageFlags usage,
+                         VmaMemoryUsage memory_usage, VmaAllocationCreateFlags flags,
+                         VkBuffer& buffer, VmaAllocation& allocation, void** mapping) {
+    const VkBufferCreateInfo buffer_info{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = VmaProbeSize,
+        .usage = usage,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    };
+    const VmaAllocationCreateInfo allocation_info{
+        .flags = flags,
+        .usage = memory_usage,
+    };
+    VmaAllocationInfo result_info{};
+    const VkResult result = vmaCreateBuffer(state.allocator, &buffer_info, &allocation_info,
+                                            &buffer, &allocation, &result_info);
+    if (result == VK_SUCCESS && mapping != nullptr) {
+        *mapping = result_info.pMappedData;
+    }
+    return result;
+}
+
+VkResult RunVmaProbe(BootstrapState& state) {
+    VmaVulkanFunctions functions{};
+    functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+    const VmaAllocatorCreateInfo allocator_info{
+        .physicalDevice = VK_NULL_HANDLE,
+        .device = state.device,
+        .pVulkanFunctions = &functions,
+        .instance = state.instance,
+        .vulkanApiVersion = VK_API_VERSION_1_1,
+    };
+
+    std::uint32_t physical_count = 1;
+    VkPhysicalDevice physical = VK_NULL_HANDLE;
+    VK_REQUIRE(vkEnumeratePhysicalDevices(state.instance, &physical_count, &physical));
+    if (physical_count != 1 || physical == VK_NULL_HANDLE) {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+    VmaAllocatorCreateInfo resolved_allocator_info = allocator_info;
+    resolved_allocator_info.physicalDevice = physical;
+    VK_REQUIRE(vmaCreateAllocator(&resolved_allocator_info, &state.allocator));
+
+    constexpr VmaAllocationCreateFlags upload_flags =
+        VMA_ALLOCATION_CREATE_MAPPED_BIT |
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    constexpr VmaAllocationCreateFlags readback_flags =
+        VMA_ALLOCATION_CREATE_MAPPED_BIT |
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+    VK_REQUIRE(CreateVmaBuffer(state, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                               VMA_MEMORY_USAGE_AUTO_PREFER_HOST, upload_flags,
+                               state.upload_buffer, state.upload_allocation,
+                               &state.upload_mapping));
+    VK_REQUIRE(CreateVmaBuffer(state,
+                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                                   VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                               VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, 0,
+                               state.device_buffer, state.device_allocation, nullptr));
+    VK_REQUIRE(CreateVmaBuffer(state, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                               VMA_MEMORY_USAGE_AUTO_PREFER_HOST, readback_flags,
+                               state.readback_buffer, state.readback_allocation,
+                               &state.readback_mapping));
+    if (state.upload_mapping == nullptr || state.readback_mapping == nullptr) {
+        return VK_ERROR_MEMORY_MAP_FAILED;
+    }
+
+    auto* upload_words = static_cast<std::uint32_t*>(state.upload_mapping);
+    auto* readback_words = static_cast<std::uint32_t*>(state.readback_mapping);
+    constexpr std::size_t WordCount = VmaProbeSize / sizeof(std::uint32_t);
+    for (std::size_t index = 0; index < WordCount; ++index) {
+        upload_words[index] = 0x51a70000U ^ static_cast<std::uint32_t>(index * 0x1021U);
+        readback_words[index] = 0;
+    }
+    VK_REQUIRE(vmaFlushAllocation(state.allocator, state.upload_allocation, 0, VK_WHOLE_SIZE));
+
+    VkCommandBuffer probe_command = VK_NULL_HANDLE;
+    const VkCommandBufferAllocateInfo command_info{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = state.command_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    VK_REQUIRE(vkAllocateCommandBuffers(state.device, &command_info, &probe_command));
+    const VkCommandBufferBeginInfo begin_info{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    VK_REQUIRE(vkBeginCommandBuffer(probe_command, &begin_info));
+    const VkBufferCopy copy{.size = VmaProbeSize};
+    vkCmdCopyBuffer(probe_command, state.upload_buffer, state.device_buffer, 1, &copy);
+    vkCmdCopyBuffer(probe_command, state.device_buffer, state.readback_buffer, 1, &copy);
+    VK_REQUIRE(vkEndCommandBuffer(probe_command));
+    VK_REQUIRE(vkResetFences(state.device, 1, &state.fence));
+    const VkSubmitInfo submit_info{
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &probe_command,
+    };
+    VK_REQUIRE(vkQueueSubmit(state.queue, 1, &submit_info, state.fence));
+    VK_REQUIRE(vkWaitForFences(state.device, 1, &state.fence, VK_TRUE, WaitTimeoutNs));
+    VK_REQUIRE(vmaInvalidateAllocation(state.allocator, state.readback_allocation, 0,
+                                       VK_WHOLE_SIZE));
+    for (std::size_t index = 0; index < WordCount; ++index) {
+        if (readback_words[index] != upload_words[index]) {
+            std::printf("eden-ps5-bootstrap: VMA mismatch word=%zu expected=%08x actual=%08x\n",
+                        index, upload_words[index], readback_words[index]);
+            return VK_ERROR_VALIDATION_FAILED_EXT;
+        }
+    }
+    vkFreeCommandBuffers(state.device, state.command_pool, 1, &probe_command);
+    std::printf("eden-ps5-bootstrap: VMA upload/device/readback verified bytes=%llu\n",
+                static_cast<unsigned long long>(VmaProbeSize));
+    return VK_SUCCESS;
+}
 
 } // namespace
 
@@ -247,6 +387,7 @@ VkResult RunBootstrap(BootstrapState& state) {
     };
     VK_REQUIRE(vkCreateFence(device, &fence_info, nullptr, &fence));
     std::printf("eden-ps5-bootstrap: synchronization created\n");
+    VK_REQUIRE(RunVmaProbe(state));
 
     for (std::uint32_t frame = 0; frame < FrameCount; ++frame) {
         VK_REQUIRE(vkWaitForFences(device, 1, &fence, VK_TRUE, WaitTimeoutNs));
@@ -311,6 +452,39 @@ int main() {
     }
     if (state.command_pool != VK_NULL_HANDLE) {
         vkDestroyCommandPool(state.device, state.command_pool, nullptr);
+    }
+    if (state.allocator != VK_NULL_HANDLE) {
+        if (state.readback_buffer != VK_NULL_HANDLE) {
+            vmaDestroyBuffer(state.allocator, state.readback_buffer,
+                             state.readback_allocation);
+            state.readback_buffer = VK_NULL_HANDLE;
+            state.readback_allocation = VK_NULL_HANDLE;
+        }
+        if (state.device_buffer != VK_NULL_HANDLE) {
+            vmaDestroyBuffer(state.allocator, state.device_buffer,
+                             state.device_allocation);
+            state.device_buffer = VK_NULL_HANDLE;
+            state.device_allocation = VK_NULL_HANDLE;
+        }
+        if (state.upload_buffer != VK_NULL_HANDLE) {
+            vmaDestroyBuffer(state.allocator, state.upload_buffer,
+                             state.upload_allocation);
+            state.upload_buffer = VK_NULL_HANDLE;
+            state.upload_allocation = VK_NULL_HANDLE;
+        }
+        VmaTotalStatistics statistics{};
+        vmaCalculateStatistics(state.allocator, &statistics);
+        std::printf("eden-ps5-bootstrap: VMA teardown allocations=%u bytes=%llu\n",
+                    statistics.total.statistics.allocationCount,
+                    static_cast<unsigned long long>(
+                        statistics.total.statistics.allocationBytes));
+        if (result == VK_SUCCESS &&
+            (statistics.total.statistics.allocationCount != 0 ||
+             statistics.total.statistics.allocationBytes != 0)) {
+            result = VK_ERROR_UNKNOWN;
+        }
+        vmaDestroyAllocator(state.allocator);
+        state.allocator = VK_NULL_HANDLE;
     }
     if (state.swapchain != VK_NULL_HANDLE) {
         vkDestroySwapchainKHR(state.device, state.swapchain, nullptr);

@@ -171,13 +171,21 @@ Completed evidence at the current baseline:
   lifecycles on FW 5.500.008, including clean teardown and immediate relaunch.
   The tested SHA-256 is
   `3e07642449b6dddd371cb233bddb88a62a70a50a15efb20f43f028493591fa9e`.
+- The same PS5 frontend now compiles Eden's pinned production VMA 3.3.0
+  implementation and exercises mapped upload/readback plus device-local
+  allocations through an upload→device→readback copy oracle. Exact Release O3
+  bytes `5df47079ba9dfb0f00c052f3e721670e04fd1ee75b9beb8f93a0c1590d74f778`
+  passed twice on FW 5.500.008, verified all 4,096 bytes, returned to
+  `allocations=0 bytes=0`, presented 600 frames, tore down, and immediately
+  relaunched.
 
 Remaining work that can block real Eden games:
 
 - Expand the bootstrap-only Prospero platform into Eden's full dependency and
   application build. The minimal Vulkan lifecycle has hardware credit, but it
-  does not yet exercise VMA, the shader cache, renderer command streams, RmlUi,
-  input, audio, or game boot.
+  does not yet construct Eden's `MemoryAllocator` wrapper, guest shader cache,
+  renderer command streams, RmlUi, input, audio, or game boot. The production
+  VMA implementation and its Vulkan allocation contract are hardware-proven.
 - Add ASTC and ETC/EAC conversion in Eden or a general-purpose Vulkan path when
   actual game traces require them. Keep D24 and unsupported storage-image
   combinations honest until native support or conversion is implemented.
@@ -215,6 +223,12 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   also fixed a general Vulkan reusable-clear state bug and an optimized
   OpenAGC VideoOut attribute-stack corruption; it did not add an Eden-specific
   graphics workaround.
+- The next sub-gate compiled the exact VMA implementation used by Eden's
+  frontends into that target. Two identical-hash FW 5.50 runs proved host
+  upload, device-local allocation, GPU copies, invalidated readback, zero live
+  VMA allocations at teardown, 600 presentations, and immediate relaunch. The
+  next renderer step is the real `MemoryAllocator`/scheduler/shader-cache path,
+  not another allocation harness.
 
 ## Milestones and gates
 
