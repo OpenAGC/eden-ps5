@@ -253,6 +253,13 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   independently built ELFs are byte-identical at
   `2abe2f150839748ae3a06532ae18a33d61780c6d73341bfd219c54d8e63b58e4`.
   Hardware qualification is pending because FW 5.50 websrv/FTP remain closed.
+- The first full (non-bootstrap) Prospero configuration exposed a host zstd
+  config file that reported itself found without exporting any target Eden can
+  link. `Findzstd.cmake` now rejects that unusable result instead of aliasing a
+  nonexistent target, allowing CPM/pacbrew fallback. Host configuration and
+  `video_core` still build, while the Prospero configuration now advances to
+  SDL3's unsupported Unix desktop-window check. That SDL platform selection is
+  the next full-build dependency gate.
 
 ## Milestones and gates
 
