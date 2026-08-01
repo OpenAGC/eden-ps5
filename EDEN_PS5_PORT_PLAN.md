@@ -165,13 +165,19 @@ Completed evidence at the current baseline:
   VideoOut-backed `VK_EXT_headless_surface`, and resolves the statically linked
   `vkGetInstanceProcAddr` on Prospero. The complete host `video_core` target and
   a Prospero compiler syntax pass cover this integration.
+- Eden now has an explicit Prospero bootstrap target. Its Release O3 ELF uses
+  only standard Vulkan entrypoints plus the PS5 system-exit service and passed
+  two identical-hash 600-frame instance/surface/device/swapchain/clear/present
+  lifecycles on FW 5.500.008, including clean teardown and immediate relaunch.
+  The tested SHA-256 is
+  `3e07642449b6dddd371cb233bddb88a62a70a50a15efb20f43f028493591fa9e`.
 
 Remaining work that can block real Eden games:
 
-- Eden still has no complete Prospero CMake platform or runnable `src/ps5`
-  executable. The surface and entrypoint bridge cannot receive hardware credit
-  until that executable creates a swapchain, presents, tears down, and
-  immediately relaunches.
+- Expand the bootstrap-only Prospero platform into Eden's full dependency and
+  application build. The minimal Vulkan lifecycle has hardware credit, but it
+  does not yet exercise VMA, the shader cache, renderer command streams, RmlUi,
+  input, audio, or game boot.
 - Add ASTC and ETC/EAC conversion in Eden or a general-purpose Vulkan path when
   actual game traces require them. Keep D24 and unsupported storage-image
   combinations honest until native support or conversion is implemented.
@@ -194,7 +200,7 @@ format/command inventory as a release gate.
 
 ### Progress evidence
 
-On 2026-08-02 the first Eden-side Vulkan integration slice completed:
+On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 
 - A clean macOS configuration built all 614 objects in the `video_core` target.
 - The PS5 compiler accepted `vulkan_library.cpp`, `vulkan_instance.cpp`, and
@@ -202,9 +208,13 @@ On 2026-08-02 the first Eden-side Vulkan integration slice completed:
   conventions preserved.
 - The initial PS5 compile probe exposed and then closed an Xlib/Wayland
   fallthrough in both the instance-extension and surface-creation switches.
-- No hardware run is claimed: this slice intentionally creates no standalone
-  ELF, and the next gate is the explicit Prospero CMake platform plus minimal
-  `src/ps5` lifecycle executable.
+- The explicit Prospero CMake path builds
+  `eden-ps5-vulkan-bootstrap.elf`. The final Release O3 bytes passed twice on
+  FW 5.500.008 for 600 presented frames, bounded synchronization, full
+  teardown, exact process absence, and immediate relaunch. The investigation
+  also fixed a general Vulkan reusable-clear state bug and an optimized
+  OpenAGC VideoOut attribute-stack corruption; it did not add an Eden-specific
+  graphics workaround.
 
 ## Milestones and gates
 

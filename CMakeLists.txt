@@ -27,6 +27,20 @@ if (NOT DEFINED ARCHITECTURE)
     message(FATAL_ERROR "Architecture didn't make it out of scope, did you delete DetectArchitecture.cmake?")
 endif()
 
+option(EDEN_PS5_BOOTSTRAP_ONLY
+    "Build only the Prospero Vulkan lifecycle bootstrap" ${PLATFORM_PS5})
+set(EDEN_PS5_VULKAN_PS5_SOURCE_DIR "" CACHE PATH
+    "Optional Vulkan-PS5 source checkout used when no installed package exists")
+
+if (EDEN_PS5_BOOTSTRAP_ONLY)
+    if (NOT PLATFORM_PS5)
+        message(FATAL_ERROR
+            "EDEN_PS5_BOOTSTRAP_ONLY requires the ps5-payload-sdk Prospero toolchain")
+    endif()
+    add_subdirectory(src/ps5)
+    return()
+endif()
+
 # Needed for FFmpeg w/ VAAPI and DRM
 if (PLATFORM_OPENBSD)
     # OpenBSD 7.8 broke libcxx when upgrading, so we must define the PSTL backend manually

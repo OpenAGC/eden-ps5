@@ -15,7 +15,12 @@
 # This module contains contributions from the Eden Emulator Project,
 # notably from crueter and Lizzie.
 
-if (${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
+if (PROSPERO OR PS5)
+    # ps5-payload-sdk identifies the kernel ABI as FreeBSD for its sysroot,
+    # but Prospero is a distinct application platform and must not inherit
+    # desktop FreeBSD dependency or window-system policy.
+    set(PLATFORM_PS5 ON)
+elseif (${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
     set(PLATFORM_SUN ON)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "OpenOrbis")
     set(PLATFORM_PS4 ON)
