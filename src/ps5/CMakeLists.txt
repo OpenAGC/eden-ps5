@@ -30,6 +30,9 @@ if (NOT EDEN_PS5_BOOTSTRAP_ONLY)
             "The full PS5 frontend requires YUZU_CMD=ON")
     endif()
     target_link_libraries(yuzu-cmd PRIVATE VulkanPS5::ICD SceSystemService)
+    target_sources(yuzu-cmd PRIVATE
+        launch_config.cpp
+        runtime.cpp)
     set_target_properties(yuzu-cmd PROPERTIES
         OUTPUT_NAME "eden-ps5"
         SUFFIX ".elf")

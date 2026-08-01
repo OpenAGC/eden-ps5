@@ -262,6 +262,12 @@ add_subdirectory(shader_recompiler)
 
 if (YUZU_TESTS)
     add_subdirectory(tests)
+
+    add_executable(eden_ps5_launch_config_tests
+        ps5/launch_config.cpp
+        tests/ps5/launch_config.cpp)
+    target_link_libraries(eden_ps5_launch_config_tests PRIVATE Catch2::Catch2WithMain)
+    add_test(NAME eden_ps5.launch_config COMMAND eden_ps5_launch_config_tests)
 endif()
 
 if (YUZU_CMD)

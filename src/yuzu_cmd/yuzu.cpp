@@ -27,6 +27,10 @@
 #include "frontend_common/config.h"
 #include "input_common/main.h"
 #include "network/network.h"
+#ifdef __PROSPERO__
+#include "ps5/launch_config.h"
+#include "ps5/runtime.h"
+#endif
 #include "sdl_config.h"
 #include "video_core/renderer_base.h"
 #include "yuzu_cmd/emu_window/emu_window_sdl3.h"
@@ -175,7 +179,7 @@ static void OnStatusMessageReceived(const Network::StatusMessageEntry& msg) {
 }
 
 /// Application entry point
-int main(int argc, char** argv) {
+static int EdenMain(int argc, char** argv) {
 #ifdef _WIN32
     if (AttachConsole(ATTACH_PARENT_PROCESS)) {
         freopen("CONOUT$", "wb", stdout);
@@ -197,6 +201,24 @@ int main(int argc, char** argv) {
     }
 #endif
     std::string filepath;
+#ifdef __PROSPERO__
+    if (argc == 1) {
+        Eden::PS5::LaunchConfig launch_config{};
+        const auto launch_error =
+            Eden::PS5::ReadLaunchConfigFile(Eden::PS5::DefaultLaunchConfigPath, launch_config);
+        if (launch_error != Eden::PS5::LaunchConfigError::None) {
+            LOG_CRITICAL(Frontend, "Invalid PS5 launch configuration: {}",
+                         Eden::PS5::LaunchConfigErrorName(launch_error));
+            return -1;
+        }
+        if (launch_config.mode == Eden::PS5::LaunchMode::Init) {
+            LOG_INFO(Frontend, "PS5 initialization preflight complete");
+            return 0;
+        }
+        filepath = std::move(launch_config.game_path);
+        LOG_INFO(Frontend, "PS5 sidecar selected game: {}", filepath);
+    }
+#endif
     std::optional<std::string> config_path{};
     std::string program_args;
     std::optional<int> selected_user{};
@@ -278,7 +300,8 @@ int main(int argc, char** argv) {
                 }
                 std::regex nickname_re("^[a-zA-Z0-9._\\- ]+$");
                 if (!std::regex_match(nickname, nickname_re)) {
-                    LOG_ERROR(Frontend, "Nickname is not valid. Must be 4 to 20 alphanumeric characters");
+                    LOG_ERROR(Frontend,
+                              "Nickname is not valid. Must be 4 to 20 alphanumeric characters");
                     return -1;
                 }
                 if (address.empty()) {
@@ -459,8 +482,16 @@ int main(int argc, char** argv) {
     }
 
     system.RegisterExitCallback([&] {
+#ifdef __PROSPERO__
+        SDL_Event quit{};
+        quit.type = SDL_EVENT_QUIT;
+        if (!SDL_PushEvent(&quit)) {
+            LOG_ERROR(Frontend, "Failed to enqueue the PS5 shutdown event: {}", SDL_GetError());
+        }
+#else
         // Just exit right away.
         exit(0);
+#endif
     });
     void(system.Run());
     if (system.DebuggerEnabled()) {
@@ -473,6 +504,16 @@ int main(int argc, char** argv) {
     void(system.Pause());
     system.ShutdownMainProcess();
     return 0;
+}
+
+int main(int argc, char** argv) {
+    const int result = EdenMain(argc, argv);
+#ifdef __PROSPERO__
+    Common::Log::Stop();
+    Eden::PS5::TerminateApplication(result);
+#else
+    return result;
+#endif
 }
 
 #define VMA_IMPLEMENTATION

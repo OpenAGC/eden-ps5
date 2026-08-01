@@ -292,9 +292,26 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   `IPPROTO_DCCP` is absent, and read an interface name directly from
   `sockaddr_dl` because the SDK declares but does not export `link_ntoa` or
   `link_ntoa_r`. The resulting unstripped 63 MiB ELF has discovery hash
-  `b5033930f2637cdb8e4bb90e1201d61b2afba301c5f28da90857308911594105`;
-  this is build evidence, not a hardware qualification pin. A native macOS
-  `core` rebuild passes after the shared network change.
+  `b5033930f2637cdb8e4bb90e1201d61b2afba301c5f28da90857308911594105` before
+  the launch-contract slice; this is historical build evidence, not a hardware
+  qualification pin. A native macOS `core` rebuild passes after the shared
+  network change.
+- Websrv launches do not provide a dependable argv contract, so the production
+  ELF now reads `/data/homebrew/eden_ps5/eden.launch` before creating
+  `Core::System` or any Vulkan object. A missing file and exact `init\n` select
+  the no-game preflight. A game launch is exactly
+  `game\n<absolute-path>\n`. The complete file is capped at 1,032 bytes and the
+  path at 1,024 bytes; relative paths, controls, extra lines, malformed, I/O,
+  and oversized inputs fail closed. The exit callback now injects an SDL quit
+  event on PS5 so Eden reaches `Pause` and `ShutdownMainProcess` instead of
+  calling `exit` from the emulation callback. After C++ teardown and logger
+  shutdown, the frontend requests app termination through
+  `sceSystemServiceKillApp`, with a two-second grace bound and `_Exit` fallback
+  rather than an unbounded process loop. The isolated host CTest covers exact
+  modes, malformed forms, missing-file defaulting, and file-size bounds. The
+  full Release Prospero frontend rebuild passes at discovery hash
+  `0ee124ca63263d6c3d101405261703a80784b0f90cadffcc0ee6d0da00959262`;
+  hardware qualification and pinning remain pending.
 
 ## Milestones and gates
 
@@ -342,8 +359,9 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 1. Restore FW 5.50 websrv/FTP/klog services and run the already-pinned
    production-memory/compute bootstrap twice through the guarded runner,
    including immediate relaunch and exact process-absence checks.
-2. Add a bounded PS5 launch-path sidecar and system-service termination path to
-   the full `eden-ps5.elf`; then run initialization/teardown without a game.
+2. Run the full `eden-ps5.elf` missing-sidecar/`init` preflight and verify
+   bounded system-service termination, exact process absence, and immediate
+   relaunch before giving it a game path.
 3. Boot a small homebrew application through the real scheduler, shader cache,
    renderer, WSI, and present path, closing only general-purpose Vulkan/OpenAGC
    gaps exposed by that workload.
