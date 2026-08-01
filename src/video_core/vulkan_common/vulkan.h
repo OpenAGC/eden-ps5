@@ -13,6 +13,9 @@
 #define VK_USE_PLATFORM_METAL_EXT
 #elif defined(__ANDROID__)
 #define VK_USE_PLATFORM_ANDROID_KHR
+#elif defined(__PROSPERO__)
+// Vulkan-PS5 exposes VideoOut through VK_EXT_headless_surface, so no
+// platform-native Vulkan handle types are required here.
 #elif defined(__HAIKU__)
 #define VK_USE_PLATFORM_XCB_KHR
 #else

@@ -11,7 +11,25 @@
 #include "common/logging.h"
 #include "video_core/vulkan_common/vulkan_library.h"
 
+#ifdef __PROSPERO__
+extern "C" VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(VkInstance instance,
+                                                                          const char* name);
+#endif
+
 namespace Vulkan {
+
+bool LoadGetInstanceProcAddr(const Common::DynamicLibrary& library,
+                             PFN_vkGetInstanceProcAddr* proc) noexcept {
+    if (!proc) {
+        return false;
+    }
+#ifdef __PROSPERO__
+    *proc = &vkGetInstanceProcAddr;
+    return true;
+#else
+    return library.IsOpen() && library.GetSymbol("vkGetInstanceProcAddr", proc);
+#endif
+}
 
 std::shared_ptr<Common::DynamicLibrary> OpenLibrary(
     [[maybe_unused]] Core::Frontend::GraphicsContext* context) {
@@ -21,7 +39,9 @@ std::shared_ptr<Common::DynamicLibrary> OpenLibrary(
     return context->GetDriverLibrary();
 #else
     auto library = std::make_shared<Common::DynamicLibrary>();
-#ifdef __APPLE__
+#ifdef __PROSPERO__
+    LOG_DEBUG(Render_Vulkan, "Using statically linked Vulkan entrypoints");
+#elif defined(__APPLE__)
     const auto libvulkan_filename =
         Common::FS::GetBundleDirectory() / "Contents/Frameworks/libvulkan.1.dylib";
     const auto libmoltenvk_filename =

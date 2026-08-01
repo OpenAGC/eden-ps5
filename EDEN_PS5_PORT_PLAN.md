@@ -7,9 +7,10 @@ the PS4/OpenOrbis frontend or inherit PS4 platform assumptions. PS4 work may be
 used only as a behavioral reference after the equivalent PS5 contract has been
 identified and tested independently.
 
-The source baseline for this plan is Eden revision `612409c7ba`. The graphics
-baseline is Vulkan-PS5 revision `6610cfd`, OpenAGC API 45, the matching
-`openagc-psbc`, SDL2 2.30.12, and the pinned Mesa/Zink integration recorded in
+The upstream source baseline for this plan is Eden revision `612409c7ba`; the
+PS5 planning branch begins at `b5cdae421b`. The graphics baseline is Vulkan-PS5
+revision `e78b64eaf8`, OpenAGC revision `6a9b7bcac3`, and openagc-psbc revision
+`ef8a98cb5e`, plus SDL2 2.30.12 and the pinned Mesa/Zink integration recorded in
 the adjacent projects.
 
 ## Frontend decision
@@ -152,18 +153,31 @@ Completed evidence at the current baseline:
   and FW 11.600.005.
 - `VK_EXT_depth_clip_enable` is qualified on both endpoints without the former
   Zink warning.
+- Eden's 109 unique guest image formats have been audited: 68 are direct
+  Vulkan-PS5 image formats, ASTC and ETC/EAC remain explicit transcode cases,
+  D24 remains fail-closed, and RGB32 forms remain buffer-only.
+- The scalar/vector attachment matrix has exact-pixel FW 5.50 evidence for 36
+  formats, including signed and unsigned integer fragment exports.
+- 2D disjoint-subresource self-blits and mixed 2D/3D color blits are implemented
+  and FW 5.50-qualified; feedback-loop self-blits remain deliberately
+  fail-closed.
+- Eden now has a `Ps5` window-system type, maps it to Vulkan-PS5's
+  VideoOut-backed `VK_EXT_headless_surface`, and resolves the statically linked
+  `vkGetInstanceProcAddr` on Prospero. The complete host `video_core` target and
+  a Prospero compiler syntax pass cover this integration.
 
 Remaining work that can block real Eden games:
 
-- Eden has no Prospero build, Vulkan surface creation, or Vulkan entrypoint
-  integration yet.
-- The ICD exposes a narrow format set relative to Eden's roughly 150
-  guest-relevant format snapshot. Expand qualified uncompressed and BC
-  formats. Keep D24, ASTC, ETC, and unsupported storage-image combinations
-  honest until native support or conversion is implemented.
-- Color clear, blit, depth/stencil clear, attachment clear, and resolve forms
-  that lack native contracts intentionally fail closed. Implement the exact
-  forms observed in Eden before enabling affected games.
+- Eden still has no complete Prospero CMake platform or runnable `src/ps5`
+  executable. The surface and entrypoint bridge cannot receive hardware credit
+  until that executable creates a swapchain, presents, tears down, and
+  immediately relaunches.
+- Add ASTC and ETC/EAC conversion in Eden or a general-purpose Vulkan path when
+  actual game traces require them. Keep D24 and unsupported storage-image
+  combinations honest until native support or conversion is implemented.
+- Continue implementing any remaining clear, blit, depth/stencil, attachment,
+  and resolve forms only from captured application requirements; unsupported
+  forms must continue to fail closed.
 - Run the broader native-only Vulkan feature sequence on FW 5.50 and the full
   advertised-feature endpoint sequence on FW 11.60; the Zink endpoint pass is
   not a substitute for complete driver qualification.
@@ -177,6 +191,20 @@ The older `Vulkan-PS5/analysis/eden-compatibility.md` revision matrix contains
 stale pre-migration statements, including old direct-call and presentation
 status. Refresh it against this Eden revision before treating its detailed
 format/command inventory as a release gate.
+
+### Progress evidence
+
+On 2026-08-02 the first Eden-side Vulkan integration slice completed:
+
+- A clean macOS configuration built all 614 objects in the `video_core` target.
+- The PS5 compiler accepted `vulkan_library.cpp`, `vulkan_instance.cpp`, and
+  `vulkan_surface.cpp` with `__PROSPERO__` enabled and warnings-as-errors source
+  conventions preserved.
+- The initial PS5 compile probe exposed and then closed an Xlib/Wayland
+  fallthrough in both the instance-extension and surface-creation switches.
+- No hardware run is claimed: this slice intentionally creates no standalone
+  ELF, and the next gate is the explicit Prospero CMake platform plus minimal
+  `src/ps5` lifecycle executable.
 
 ## Milestones and gates
 
@@ -229,4 +257,3 @@ format/command inventory as a release gate.
 4. Bring up SDL2 controller input plus a standalone RmlUi/Vulkan-PS5 screen.
 5. Extract a PS5-native emulation session from `yuzu_cmd` and Android lifecycle
    behavior, then boot the first homebrew application.
-

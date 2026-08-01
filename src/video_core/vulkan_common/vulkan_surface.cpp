@@ -17,6 +17,21 @@ vk::SurfaceKHR CreateSurface(
     [[maybe_unused]] const vk::InstanceDispatch& dld = instance.Dispatch();
     VkSurfaceKHR unsafe_surface = VkSurfaceKHR{};
 
+    if (window_info.type == Core::Frontend::WindowSystemType::Ps5) {
+        const VkHeadlessSurfaceCreateInfoEXT surface_ci{
+            .sType = VK_STRUCTURE_TYPE_HEADLESS_SURFACE_CREATE_INFO_EXT,
+            .pNext = nullptr,
+            .flags = 0,
+        };
+        const auto vkCreateHeadlessSurfaceEXT = reinterpret_cast<PFN_vkCreateHeadlessSurfaceEXT>(
+            dld.vkGetInstanceProcAddr(*instance, "vkCreateHeadlessSurfaceEXT"));
+        if (!vkCreateHeadlessSurfaceEXT ||
+            vkCreateHeadlessSurfaceEXT(*instance, &surface_ci, nullptr, &unsafe_surface) !=
+                VK_SUCCESS) {
+            LOG_ERROR(Render_Vulkan, "Failed to initialize PS5 VideoOut surface");
+            throw vk::Exception(VK_ERROR_INITIALIZATION_FAILED);
+        }
+    }
 #ifdef _WIN32
     if (window_info.type == Core::Frontend::WindowSystemType::Windows) {
         const HWND hWnd = static_cast<HWND>(window_info.render_surface);
@@ -38,7 +53,8 @@ vk::SurfaceKHR CreateSurface(
             .flags = 0,
             .pLayer = static_cast<const CAMetalLayer*>(window_info.render_surface),
         };
-        const auto vkCreateMetalSurfaceEXT = reinterpret_cast<PFN_vkCreateMetalSurfaceEXT>(dld.vkGetInstanceProcAddr(*instance, "vkCreateMetalSurfaceEXT"));
+        const auto vkCreateMetalSurfaceEXT = reinterpret_cast<PFN_vkCreateMetalSurfaceEXT>(
+            dld.vkGetInstanceProcAddr(*instance, "vkCreateMetalSurfaceEXT"));
         if (!vkCreateMetalSurfaceEXT ||
             vkCreateMetalSurfaceEXT(*instance, &metal_ci, nullptr, &unsafe_surface) != VK_SUCCESS) {
             LOG_ERROR(Render_Vulkan, "Failed to initialize Metal surface");
@@ -66,8 +82,7 @@ vk::SurfaceKHR CreateSurface(
             .pNext = nullptr,
             .flags = 0,
             .connection = static_cast<xcb_connection_t*>(window_info.display_connection),
-            .window = xcb_window_t(uintptr_t(window_info.render_surface))
-        };
+            .window = xcb_window_t(uintptr_t(window_info.render_surface))};
         const auto vkCreateXcbSurfaceKHR = reinterpret_cast<PFN_vkCreateXcbSurfaceKHR>(
             dld.vkGetInstanceProcAddr(*instance, "vkCreateXcbSurfaceKHR"));
         if (!vkCreateXcbSurfaceKHR ||
@@ -76,6 +91,8 @@ vk::SurfaceKHR CreateSurface(
             throw vk::Exception(VK_ERROR_INITIALIZATION_FAILED);
         }
     }
+#elif defined(__PROSPERO__)
+    // PS5 presentation is handled by the platform-independent Ps5 case above.
 #else
     if (window_info.type == Core::Frontend::WindowSystemType::X11) {
         const VkXlibSurfaceCreateInfoKHR xlib_ci{

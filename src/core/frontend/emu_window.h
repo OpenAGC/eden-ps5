@@ -20,6 +20,7 @@ class GraphicsContext;
 /// WindowInformation
 enum class WindowSystemType {
     Headless,
+    Ps5,
     Windows,
     X11,
     Wayland,
