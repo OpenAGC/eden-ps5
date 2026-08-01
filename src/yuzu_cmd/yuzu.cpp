@@ -213,6 +213,7 @@ static int EdenMain(int argc, char** argv) {
         }
         if (launch_config.mode == Eden::PS5::LaunchMode::Init) {
             LOG_INFO(Frontend, "PS5 initialization preflight complete");
+            std::cout << "eden-ps5: INIT PASS" << std::endl;
             return 0;
         }
         filepath = std::move(launch_config.game_path);
@@ -503,6 +504,9 @@ static int EdenMain(int argc, char** argv) {
     system.DetachDebugger();
     void(system.Pause());
     system.ShutdownMainProcess();
+#ifdef __PROSPERO__
+    std::cout << "eden-ps5: GAME PASS" << std::endl;
+#endif
     return 0;
 }
 

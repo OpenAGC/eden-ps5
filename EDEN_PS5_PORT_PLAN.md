@@ -312,6 +312,18 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   full Release Prospero frontend rebuild passes at discovery hash
   `0ee124ca63263d6c3d101405261703a80784b0f90cadffcc0ee6d0da00959262`;
   hardware qualification and pinning remain pending.
+- `tools/run_fw550_init.sh` composes the shared Vulkan-PS5 guarded runner for
+  two consecutive full-frontend init launches. It requires explicit ELF and
+  cleanup SHA-256 pins, uploads the committed `init\n` sidecar under the exact
+  production remote path, verifies all three artifacts after upload, runs
+  cleanup first, scopes klog to the launched PID, requires the stable
+  `eden-ps5: INIT PASS` oracle, checks the kernel `KillApp` lifecycle and exact
+  process absence, then repeats immediately. The production game path emits a
+  separate `eden-ps5: GAME PASS` only after `ShutdownMainProcess`. The shared
+  runner's sidecar upload and fail-closed hash/missing-file behavior is covered
+  by Vulkan-PS5 CTest. The current rebuilt discovery ELF is
+  `f20a4ca8a55720c55f3c5311a8a0fff4d600320c832d4191a150950883476a9f`;
+  it remains unqualified while FW 5.50 ports 8080, 2121, and 3232 are closed.
 
 ## Milestones and gates
 
