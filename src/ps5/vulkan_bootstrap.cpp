@@ -21,6 +21,8 @@
 #include <cstdint>
 #include <cstdio>
 
+#include "vulkan_quad_indexed_comp_spv.h"
+
 namespace {
 
 constexpr std::uint32_t ImageCount = 3;
@@ -52,6 +54,13 @@ struct BootstrapState {
     VmaAllocation readback_allocation = VK_NULL_HANDLE;
     void* upload_mapping = nullptr;
     void* readback_mapping = nullptr;
+    VkDescriptorSetLayout descriptor_layout = VK_NULL_HANDLE;
+    VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
+    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+    VkShaderModule shader_module = VK_NULL_HANDLE;
+    VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
+    VkPipeline compute_pipeline = VK_NULL_HANDLE;
     bool fence_pending = false;
 };
 
@@ -137,13 +146,16 @@ VkResult RunVmaProbe(BootstrapState& state) {
     constexpr VmaAllocationCreateFlags readback_flags =
         VMA_ALLOCATION_CREATE_MAPPED_BIT |
         VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-    VK_REQUIRE(CreateVmaBuffer(state, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    VK_REQUIRE(CreateVmaBuffer(state,
+                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                VMA_MEMORY_USAGE_AUTO_PREFER_HOST, upload_flags,
                                state.upload_buffer, state.upload_allocation,
                                &state.upload_mapping));
     VK_REQUIRE(CreateVmaBuffer(state,
                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-                                   VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, 0,
                                state.device_buffer, state.device_allocation, nullptr));
     VK_REQUIRE(CreateVmaBuffer(state, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -200,6 +212,264 @@ VkResult RunVmaProbe(BootstrapState& state) {
     vkFreeCommandBuffers(state.device, state.command_pool, 1, &probe_command);
     std::printf("eden-ps5-bootstrap: VMA upload/device/readback verified bytes=%llu\n",
                 static_cast<unsigned long long>(VmaProbeSize));
+    return VK_SUCCESS;
+}
+
+VkResult CreateEdenComputePipeline(BootstrapState& state) {
+    const std::array bindings{
+        VkDescriptorSetLayoutBinding{
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        },
+        VkDescriptorSetLayoutBinding{
+            .binding = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        },
+    };
+    const VkDescriptorSetLayoutCreateInfo descriptor_layout_info{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = static_cast<std::uint32_t>(bindings.size()),
+        .pBindings = bindings.data(),
+    };
+    VK_REQUIRE(vkCreateDescriptorSetLayout(state.device, &descriptor_layout_info, nullptr,
+                                           &state.descriptor_layout));
+
+    const VkDescriptorPoolSize pool_size{
+        .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .descriptorCount = 2,
+    };
+    const VkDescriptorPoolCreateInfo pool_info{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = 1,
+        .poolSizeCount = 1,
+        .pPoolSizes = &pool_size,
+    };
+    VK_REQUIRE(vkCreateDescriptorPool(state.device, &pool_info, nullptr,
+                                      &state.descriptor_pool));
+    const VkDescriptorSetAllocateInfo set_info{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = state.descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &state.descriptor_layout,
+    };
+    VK_REQUIRE(vkAllocateDescriptorSets(state.device, &set_info, &state.descriptor_set));
+
+    const std::array buffer_infos{
+        VkDescriptorBufferInfo{state.upload_buffer, 0, 4 * sizeof(std::uint32_t)},
+        VkDescriptorBufferInfo{state.device_buffer, 0, 6 * sizeof(std::uint32_t)},
+    };
+    const std::array writes{
+        VkWriteDescriptorSet{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = state.descriptor_set,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .pBufferInfo = &buffer_infos[0],
+        },
+        VkWriteDescriptorSet{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = state.descriptor_set,
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .pBufferInfo = &buffer_infos[1],
+        },
+    };
+    vkUpdateDescriptorSets(state.device, static_cast<std::uint32_t>(writes.size()),
+                           writes.data(), 0, nullptr);
+
+    const VkPushConstantRange push_range{
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = 3 * sizeof(std::uint32_t),
+    };
+    const VkPipelineLayoutCreateInfo pipeline_layout_info{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &state.descriptor_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &push_range,
+    };
+    VK_REQUIRE(vkCreatePipelineLayout(state.device, &pipeline_layout_info, nullptr,
+                                      &state.pipeline_layout));
+
+    const VkShaderModuleCreateInfo shader_info{
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(VULKAN_QUAD_INDEXED_COMP_SPV),
+        .pCode = VULKAN_QUAD_INDEXED_COMP_SPV,
+    };
+    VK_REQUIRE(vkCreateShaderModule(state.device, &shader_info, nullptr,
+                                    &state.shader_module));
+    const VkPipelineCacheCreateInfo cache_info{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+    };
+    VK_REQUIRE(vkCreatePipelineCache(state.device, &cache_info, nullptr,
+                                     &state.pipeline_cache));
+    const VkPipelineShaderStageCreateInfo stage_info{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+        .module = state.shader_module,
+        .pName = "main",
+    };
+    const VkComputePipelineCreateInfo pipeline_info{
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage = stage_info,
+        .layout = state.pipeline_layout,
+    };
+    VK_REQUIRE(vkCreateComputePipelines(state.device, state.pipeline_cache, 1,
+                                        &pipeline_info, nullptr,
+                                        &state.compute_pipeline));
+    return VK_SUCCESS;
+}
+
+VkResult DispatchEdenCompute(BootstrapState& state, std::uint32_t base_vertex) {
+    constexpr std::array<std::uint32_t, 4> Input{3, 5, 7, 11};
+    auto* upload_words = static_cast<std::uint32_t*>(state.upload_mapping);
+    auto* readback_words = static_cast<std::uint32_t*>(state.readback_mapping);
+    for (std::size_t index = 0; index < Input.size(); ++index) {
+        upload_words[index] = Input[index];
+    }
+    for (std::size_t index = 0; index < 6; ++index) {
+        readback_words[index] = 0;
+    }
+    VK_REQUIRE(vmaFlushAllocation(state.allocator, state.upload_allocation, 0,
+                                  Input.size() * sizeof(std::uint32_t)));
+
+    VkCommandBuffer command = VK_NULL_HANDLE;
+    const VkCommandBufferAllocateInfo command_info{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = state.command_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    VK_REQUIRE(vkAllocateCommandBuffers(state.device, &command_info, &command));
+    const VkCommandBufferBeginInfo begin_info{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    VK_REQUIRE(vkBeginCommandBuffer(command, &begin_info));
+    const std::array to_compute{
+        VkBufferMemoryBarrier{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask = 0,
+            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer = state.upload_buffer,
+            .offset = 0,
+            .size = 4 * sizeof(std::uint32_t),
+        },
+        VkBufferMemoryBarrier{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask = 0,
+            .dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer = state.device_buffer,
+            .offset = 0,
+            .size = 6 * sizeof(std::uint32_t),
+        },
+    };
+    vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
+                         static_cast<std::uint32_t>(to_compute.size()),
+                         to_compute.data(), 0, nullptr);
+    vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      state.compute_pipeline);
+    vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                            state.pipeline_layout, 0, 1, &state.descriptor_set,
+                            0, nullptr);
+    const std::array<std::uint32_t, 3> push_constants{base_vertex, 2, 0};
+    vkCmdPushConstants(command, state.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT,
+                       0, sizeof(push_constants), push_constants.data());
+    vkCmdDispatch(command, 1, 1, 1);
+    const VkBufferMemoryBarrier to_copy{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .buffer = state.device_buffer,
+        .offset = 0,
+        .size = 6 * sizeof(std::uint32_t),
+    };
+    vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 1,
+                         &to_copy, 0, nullptr);
+    const VkBufferCopy copy{.size = 6 * sizeof(std::uint32_t)};
+    vkCmdCopyBuffer(command, state.device_buffer, state.readback_buffer, 1, &copy);
+    VK_REQUIRE(vkEndCommandBuffer(command));
+    VK_REQUIRE(vkResetFences(state.device, 1, &state.fence));
+    const VkSubmitInfo submit_info{
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &command,
+    };
+    VK_REQUIRE(vkQueueSubmit(state.queue, 1, &submit_info, state.fence));
+    VK_REQUIRE(vkWaitForFences(state.device, 1, &state.fence, VK_TRUE,
+                               WaitTimeoutNs));
+    VK_REQUIRE(vmaInvalidateAllocation(state.allocator, state.readback_allocation, 0,
+                                       6 * sizeof(std::uint32_t)));
+    constexpr std::array<std::uint32_t, 6> Swizzle{3, 5, 7, 3, 7, 11};
+    for (std::size_t index = 0; index < Swizzle.size(); ++index) {
+        const std::uint32_t expected = Swizzle[index] + base_vertex;
+        if (readback_words[index] != expected) {
+            std::printf(
+                "eden-ps5-bootstrap: compute mismatch word=%zu expected=%u actual=%u\n",
+                index, expected, readback_words[index]);
+            return VK_ERROR_VALIDATION_FAILED_EXT;
+        }
+    }
+    vkFreeCommandBuffers(state.device, state.command_pool, 1, &command);
+    return VK_SUCCESS;
+}
+
+VkResult RunEdenComputeProbe(BootstrapState& state) {
+    VK_REQUIRE(CreateEdenComputePipeline(state));
+    VK_REQUIRE(DispatchEdenCompute(state, 100));
+
+    std::array<std::uint8_t, 256> cache_data{};
+    std::size_t cache_size = cache_data.size();
+    VK_REQUIRE(vkGetPipelineCacheData(state.device, state.pipeline_cache,
+                                      &cache_size, cache_data.data()));
+    if (cache_size < sizeof(VkPipelineCacheHeaderVersionOne)) {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+    vkDestroyPipeline(state.device, state.compute_pipeline, nullptr);
+    state.compute_pipeline = VK_NULL_HANDLE;
+    vkDestroyPipelineCache(state.device, state.pipeline_cache, nullptr);
+    state.pipeline_cache = VK_NULL_HANDLE;
+
+    const VkPipelineCacheCreateInfo cache_info{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+        .initialDataSize = cache_size,
+        .pInitialData = cache_data.data(),
+    };
+    VK_REQUIRE(vkCreatePipelineCache(state.device, &cache_info, nullptr,
+                                     &state.pipeline_cache));
+    const VkPipelineShaderStageCreateInfo stage_info{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+        .module = state.shader_module,
+        .pName = "main",
+    };
+    const VkComputePipelineCreateInfo pipeline_info{
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage = stage_info,
+        .layout = state.pipeline_layout,
+    };
+    VK_REQUIRE(vkCreateComputePipelines(state.device, state.pipeline_cache, 1,
+                                        &pipeline_info, nullptr,
+                                        &state.compute_pipeline));
+    VK_REQUIRE(DispatchEdenCompute(state, 200));
+    std::printf(
+        "eden-ps5-bootstrap: Eden quad-index compute verified cache_bytes=%zu reload=1\n",
+        cache_size);
     return VK_SUCCESS;
 }
 
@@ -388,6 +658,7 @@ VkResult RunBootstrap(BootstrapState& state) {
     VK_REQUIRE(vkCreateFence(device, &fence_info, nullptr, &fence));
     std::printf("eden-ps5-bootstrap: synchronization created\n");
     VK_REQUIRE(RunVmaProbe(state));
+    VK_REQUIRE(RunEdenComputeProbe(state));
 
     for (std::uint32_t frame = 0; frame < FrameCount; ++frame) {
         VK_REQUIRE(vkWaitForFences(device, 1, &fence, VK_TRUE, WaitTimeoutNs));
@@ -449,6 +720,24 @@ int main() {
     }
     if (state.acquired != VK_NULL_HANDLE) {
         vkDestroySemaphore(state.device, state.acquired, nullptr);
+    }
+    if (state.compute_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(state.device, state.compute_pipeline, nullptr);
+    }
+    if (state.pipeline_cache != VK_NULL_HANDLE) {
+        vkDestroyPipelineCache(state.device, state.pipeline_cache, nullptr);
+    }
+    if (state.shader_module != VK_NULL_HANDLE) {
+        vkDestroyShaderModule(state.device, state.shader_module, nullptr);
+    }
+    if (state.pipeline_layout != VK_NULL_HANDLE) {
+        vkDestroyPipelineLayout(state.device, state.pipeline_layout, nullptr);
+    }
+    if (state.descriptor_pool != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(state.device, state.descriptor_pool, nullptr);
+    }
+    if (state.descriptor_layout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(state.device, state.descriptor_layout, nullptr);
     }
     if (state.command_pool != VK_NULL_HANDLE) {
         vkDestroyCommandPool(state.device, state.command_pool, nullptr);

@@ -43,12 +43,35 @@ if (NOT EDEN_PS5_VMA_INCLUDE_DIR)
         "EDEN_PS5_VMA_INCLUDE_DIR")
 endif()
 
+find_program(EDEN_PS5_GLSLANG_VALIDATOR glslangValidator
+    REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+set(_eden_ps5_quad_shader
+    "${PROJECT_SOURCE_DIR}/src/video_core/host_shaders/vulkan_quad_indexed.comp")
+set(_eden_ps5_generated_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(_eden_ps5_quad_shader_header
+    "${_eden_ps5_generated_dir}/vulkan_quad_indexed_comp_spv.h")
+add_custom_command(
+    OUTPUT "${_eden_ps5_quad_shader_header}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_eden_ps5_generated_dir}"
+    COMMAND "${EDEN_PS5_GLSLANG_VALIDATOR}"
+        -V --quiet -DUseUniformBlock=1
+        --variable-name VULKAN_QUAD_INDEXED_COMP_SPV
+        -o "${_eden_ps5_quad_shader_header}"
+        "${_eden_ps5_quad_shader}"
+        --target-env spirv1.3
+    DEPENDS "${_eden_ps5_quad_shader}"
+    VERBATIM)
+add_custom_target(eden-ps5-host-shaders
+    DEPENDS "${_eden_ps5_quad_shader_header}")
+
 add_executable(eden-ps5-vulkan-bootstrap vulkan_bootstrap.cpp)
+add_dependencies(eden-ps5-vulkan-bootstrap eden-ps5-host-shaders)
 target_compile_features(eden-ps5-vulkan-bootstrap PRIVATE cxx_std_20)
 target_compile_options(eden-ps5-vulkan-bootstrap PRIVATE
     -Wall -Wextra -Wpedantic -Werror -Wno-missing-field-initializers)
 target_include_directories(eden-ps5-vulkan-bootstrap PRIVATE
-    "${PROJECT_SOURCE_DIR}/src" "${EDEN_PS5_VMA_INCLUDE_DIR}")
+    "${PROJECT_SOURCE_DIR}/src" "${EDEN_PS5_VMA_INCLUDE_DIR}"
+    "${_eden_ps5_generated_dir}")
 target_link_libraries(eden-ps5-vulkan-bootstrap PRIVATE
     VulkanPS5::ICD SceSystemService)
 set_target_properties(eden-ps5-vulkan-bootstrap PROPERTIES SUFFIX ".elf")

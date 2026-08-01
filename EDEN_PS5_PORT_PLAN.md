@@ -229,6 +229,16 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   VMA allocations at teardown, 600 presentations, and immediate relaunch. The
   next renderer step is the real `MemoryAllocator`/scheduler/shader-cache path,
   not another allocation harness.
+- The in-progress compute sub-gate now builds Eden's production
+  `vulkan_quad_indexed.comp` with the host shader tool, binds its actual
+  descriptor and push-constant interface, checks GPU-generated quad indices
+  through VMA readback, and recreates its Vulkan pipeline from serialized
+  cache bytes. FW 5.50 exposed and hardware-confirmed a Vulkan partial-range
+  descriptor-state bug; Vulkan-PS5 `01a49cb` fixes it. The subsequent
+  1,024-thread no-store result isolated OpenAGC's all-ones
+  `COMPUTE_RESOURCE_LIMITS`; OpenAGC `2be2b1c` derives the gfx10 wave-count
+  policy and is generic/Prospero-build clean. The corrected exact ELF remains
+  pending FW 5.50 execution because the endpoint is currently unreachable.
 
 ## Milestones and gates
 
