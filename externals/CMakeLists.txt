@@ -65,7 +65,17 @@ AddJsonPackage(unordered-dense)
 if (IOS)
     set(HTTPLIB_USE_BROTLI_IF_AVAILABLE OFF)
 endif()
-AddJsonPackage(httplib)
+if (PLATFORM_PS5 AND NOT (ENABLE_WEB_SERVICE OR ENABLE_UPDATE_CHECKER))
+    # The staged PS5 frontend has no HTTPS consumer. Avoid treating a host
+    # OpenSSL config as a target dependency during the Prospero cross-build;
+    # web-enabled PS5 builds must instead provide the pacbrew OpenSSL package.
+    AddJsonPackage(NAME httplib OPTIONS
+        "HTTPLIB_REQUIRE_OPENSSL OFF"
+        "HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF"
+        "HTTPLIB_DISABLE_MACOSX_AUTOMATIC_ROOT_CERTIFICATES ON")
+else()
+    AddJsonPackage(httplib)
+endif()
 
 if (YUZU_STATIC_ROOM)
     return()
@@ -140,6 +150,14 @@ if(ENABLE_CUBEB)
 endif()
 
 if (NOT ANDROID)
+    if (PLATFORM_PS5)
+        # The PS5 frontend owns its native Vulkan surface and does not use a
+        # desktop SDL window system. Keep SDL3's controller/event support, but
+        # explicitly select its Unix-console policy so it does not require
+        # host X11 or Wayland development packages while cross-compiling.
+        set(SDL_UNIX_CONSOLE_BUILD ON CACHE BOOL "" FORCE)
+    endif()
+
     if (NOT YUZU_USE_BUNDLED_SDL3)
         if (NOT WIN32)
             # Yuzu itself needs: Atomic Audio Events Joystick Haptic Sensor Threads Timers

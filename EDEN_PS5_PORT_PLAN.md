@@ -260,6 +260,15 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   `video_core` still build, while the Prospero configuration now advances to
   SDL3's unsupported Unix desktop-window check. That SDL platform selection is
   the next full-build dependency gate.
+- The PS5 dependency policy now explicitly selects SDL3's Unix-console mode:
+  Eden retains controller/event support while its native PS5 frontend remains
+  responsible for Vulkan surfaces, so no X11 or Wayland target enters the
+  cross-build. `AddJsonPackage` now also honors its documented per-call option
+  override, allowing the web-disabled PS5 build to compile cpp-httplib without
+  importing host OpenSSL; web-enabled builds still require a proper pacbrew
+  OpenSSL target. Host configuration and `video_core` remain clean, and full
+  Prospero configuration now reaches the missing FFmpeg target, the next
+  dependency/package gate.
 
 ## Milestones and gates
 

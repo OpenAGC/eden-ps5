@@ -675,6 +675,12 @@ function(AddJsonPackage)
     get_json_object("${JSON_NAME}")
     parse_object(${object})
 
+    if (JSON_OPTIONS)
+        set(package_options ${JSON_OPTIONS})
+    else()
+        set(package_options ${options})
+    endif()
+
     unset(EXTRA_ARGS)
     if (JSON_MODULE_PATH)
         list(APPEND EXTRA_ARGS MODULE_PATH)
@@ -709,7 +715,7 @@ function(AddJsonPackage)
             HASH "${hash}"
             REPO "${repo}"
             PATCHES "${patches}"
-            OPTIONS "${options}"
+            OPTIONS "${package_options}"
             FIND_PACKAGE_ARGUMENTS "${find_args}"
             BUNDLED_PACKAGE "${bundled}"
             FORCE_BUNDLED_PACKAGE "${JSON_FORCE_BUNDLED_PACKAGE}"
