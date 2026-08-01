@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <tuple>
 #include <utility>
 
@@ -36,6 +37,10 @@ public:
 
     /// Wait for the next event on the main thread.
     void WaitEvent();
+
+    void SetPresentedFrameLimit(u32 limit);
+    u32 GetPresentedFrameCount() const;
+    void OnFrameDisplayed() override;
 
     // Sets the window icon from yuzu.bmp
     void SetWindowIcon();
@@ -91,6 +96,9 @@ protected:
 
     /// Keeps track of how often to update the title bar during gameplay
     u32 last_time = 0;
+
+    std::atomic<u32> presented_frames = 0;
+    std::atomic<u32> presented_frame_limit = 0;
 
     /// Input subsystem to use with this window.
     InputCommon::InputSubsystem* input_subsystem;

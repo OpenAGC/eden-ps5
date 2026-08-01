@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cerrno>
+#include <charconv>
 #include <cstdio>
 
 namespace Eden::PS5 {
@@ -23,8 +24,10 @@ LaunchConfigError ParseLaunchConfig(std::string_view text, LaunchConfig& config)
         return LaunchConfigError::Malformed;
     }
 
-    const std::string_view path =
+    const std::string_view body =
         text.substr(GamePrefix.size(), text.size() - GamePrefix.size() - 1);
+    const std::size_t option_offset = body.find('\n');
+    const std::string_view path = body.substr(0, option_offset);
     if (path.empty() || path.size() > MaxGamePathBytes || path.front() != '/') {
         return LaunchConfigError::Malformed;
     }
@@ -36,6 +39,22 @@ LaunchConfigError ParseLaunchConfig(std::string_view text, LaunchConfig& config)
 
     config.mode = LaunchMode::Game;
     config.game_path.assign(path);
+    if (option_offset != std::string_view::npos) {
+        constexpr std::string_view FramePrefix = "frames=";
+        const std::string_view option = body.substr(option_offset + 1);
+        if (!option.starts_with(FramePrefix)) {
+            return LaunchConfigError::Malformed;
+        }
+        const std::string_view value = option.substr(FramePrefix.size());
+        std::uint32_t frame_limit = 0;
+        const auto [end, error] =
+            std::from_chars(value.data(), value.data() + value.size(), frame_limit);
+        if (error != std::errc{} || end != value.data() + value.size() || frame_limit == 0 ||
+            frame_limit > MaxPresentedFrameLimit) {
+            return LaunchConfigError::Malformed;
+        }
+        config.presented_frame_limit = frame_limit;
+    }
     return LaunchConfigError::None;
 }
 

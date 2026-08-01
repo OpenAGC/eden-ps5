@@ -113,6 +113,35 @@ bool EmuWindow_SDL3::IsShown() const {
     return is_shown;
 }
 
+void EmuWindow_SDL3::SetPresentedFrameLimit(u32 limit) {
+    presented_frames.store(0, std::memory_order_relaxed);
+    presented_frame_limit.store(limit, std::memory_order_release);
+}
+
+u32 EmuWindow_SDL3::GetPresentedFrameCount() const {
+    return presented_frames.load(std::memory_order_acquire);
+}
+
+void EmuWindow_SDL3::OnFrameDisplayed() {
+    const u32 limit = presented_frame_limit.load(std::memory_order_acquire);
+    if (limit == 0) {
+        return;
+    }
+    u32 count = presented_frames.load(std::memory_order_relaxed);
+    while (count < limit &&
+           !presented_frames.compare_exchange_weak(count, count + 1, std::memory_order_acq_rel,
+                                                   std::memory_order_relaxed)) {
+    }
+    if (count + 1 != limit) {
+        return;
+    }
+    SDL_Event quit{};
+    quit.type = SDL_EVENT_QUIT;
+    if (!SDL_PushEvent(&quit)) {
+        LOG_ERROR(Frontend, "Failed to enqueue the frame-limit shutdown event: {}", SDL_GetError());
+    }
+}
+
 void EmuWindow_SDL3::OnResize() {
     int width, height;
     SDL_GetWindowSizeInPixels(render_window, &width, &height);

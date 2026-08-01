@@ -19,13 +19,19 @@ TEST_CASE("PS5 launch configuration parses exact modes", "[ps5]") {
             Eden::PS5::LaunchConfigError::None);
     REQUIRE(config.mode == Eden::PS5::LaunchMode::Game);
     REQUIRE(config.game_path == "/data/homebrew/games/2048.nro");
+    REQUIRE(config.presented_frame_limit == 0);
+
+    REQUIRE(Eden::PS5::ParseLaunchConfig("game\n/data/homebrew/games/2048.nro\nframes=600\n",
+                                         config) == Eden::PS5::LaunchConfigError::None);
+    REQUIRE(config.presented_frame_limit == 600);
 }
 
 TEST_CASE("PS5 launch configuration fails closed", "[ps5]") {
     Eden::PS5::LaunchConfig config{};
     for (const std::string_view malformed :
          {"", "init", "init\nextra\n", "game\n", "game\nrelative.nro\n", "game\n/data/game.nro\r\n",
-          "capture\n"}) {
+          "game\n/data/game.nro\nframes=0\n", "game\n/data/game.nro\nframes=108001\n",
+          "game\n/data/game.nro\nframes=60\nextra\n", "capture\n"}) {
         REQUIRE(Eden::PS5::ParseLaunchConfig(malformed, config) ==
                 Eden::PS5::LaunchConfigError::Malformed);
     }

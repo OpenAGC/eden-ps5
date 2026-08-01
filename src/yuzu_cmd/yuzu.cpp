@@ -202,6 +202,7 @@ static int EdenMain(int argc, char** argv) {
 #endif
     std::string filepath;
 #ifdef __PROSPERO__
+    u32 presented_frame_limit = 0;
     if (argc == 1) {
         Eden::PS5::LaunchConfig launch_config{};
         const auto launch_error =
@@ -217,6 +218,7 @@ static int EdenMain(int argc, char** argv) {
             return 0;
         }
         filepath = std::move(launch_config.game_path);
+        presented_frame_limit = launch_config.presented_frame_limit;
         LOG_INFO(Frontend, "PS5 sidecar selected game: {}", filepath);
     }
 #endif
@@ -412,6 +414,9 @@ static int EdenMain(int argc, char** argv) {
         LOG_CRITICAL(Frontend, "Invalid renderer backend");
         return -1;
     }
+#ifdef __PROSPERO__
+    emu_window->SetPresentedFrameLimit(presented_frame_limit);
+#endif
 
 #ifdef _WIN32
     Common::Windows::SetCurrentTimerResolutionToMaximum();
@@ -505,7 +510,13 @@ static int EdenMain(int argc, char** argv) {
     void(system.Pause());
     system.ShutdownMainProcess();
 #ifdef __PROSPERO__
-    std::cout << "eden-ps5: GAME PASS" << std::endl;
+    const u32 presented_frames = emu_window->GetPresentedFrameCount();
+    if (presented_frame_limit != 0 && presented_frames != presented_frame_limit) {
+        LOG_CRITICAL(Frontend, "PS5 presented-frame oracle failed: expected={} actual={}",
+                     presented_frame_limit, presented_frames);
+        return -1;
+    }
+    std::cout << "eden-ps5: GAME PASS " << presented_frames << " frames" << std::endl;
 #endif
     return 0;
 }

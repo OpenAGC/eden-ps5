@@ -300,9 +300,10 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   ELF now reads `/data/homebrew/eden_ps5/eden.launch` before creating
   `Core::System` or any Vulkan object. A missing file and exact `init\n` select
   the no-game preflight. A game launch is exactly
-  `game\n<absolute-path>\n`. The complete file is capped at 1,032 bytes and the
-  path at 1,024 bytes; relative paths, controls, extra lines, malformed, I/O,
-  and oversized inputs fail closed. The exit callback now injects an SDL quit
+  `game\n<absolute-path>\n`, optionally followed by one exact
+  `frames=<1..108000>\n` line. The complete file is capped at 1,050 bytes and
+  the path at 1,024 bytes; relative paths, controls, unknown/extra lines,
+  malformed numeric limits, I/O, and oversized inputs fail closed. The exit callback now injects an SDL quit
   event on PS5 so Eden reaches `Pause` and `ShutdownMainProcess` instead of
   calling `exit` from the emulation callback. After C++ teardown and logger
   shutdown, the frontend requests app termination through
@@ -324,6 +325,19 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   by Vulkan-PS5 CTest. The current rebuilt discovery ELF is
   `f20a4ca8a55720c55f3c5311a8a0fff4d600320c832d4191a150950883476a9f`;
   it remains unqualified while FW 5.50 ports 8080, 2121, and 3232 are closed.
+- `EmuWindow_SDL3::OnFrameDisplayed` now provides the qualification frame
+  oracle. When the optional sidecar limit is nonzero, an atomic counter queues
+  the same SDL quit event after the exact requested composite/present count;
+  there is no wall-clock stop thread and teardown remains on the main frontend
+  path. The counter saturates at its limit, and the post-shutdown verdict
+  compares the observed count before printing its exact frame oracle. The guarded
+  `tools/run_fw550_2048.sh` pins and re-verifies the local
+  `2048.nro` (`cd7e7f343830920196590d99c82a9f1ab8a375eeaeb943fa6c671aa68250a20d`),
+  uploads a committed 600-frame game sidecar, requires `GAME PASS 600 frames` only after
+  `ShutdownMainProcess`, and repeats immediately. Parser CTest and the complete
+  Release Prospero frontend build pass; the current discovery ELF hash is
+  `5bdedb4c7f342fa82adc0b073bc12a34beca3e6eeaf2f16872a019be04fad019`.
+  The 2048 result is not claimed until the FW 5.50 guarded run executes.
 
 ## Milestones and gates
 
