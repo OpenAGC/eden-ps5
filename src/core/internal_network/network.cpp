@@ -416,6 +416,11 @@ int TranslateTypeToNative(Type type) {
 // Some of those protocols may not be supported on some platforms
 // It doesn't really matter, except that some homebrew may not work correctly
 // Official software uses TCP & UDP mainly, SCTP is used by some homebrew as well
+#ifdef IPPROTO_DCCP
+#define NETWORK_PROTOCOL_TRANSLATE_DCCP NETWORK_PROTOCOL_TRANSLATE_ELEM(DCCP)
+#else
+#define NETWORK_PROTOCOL_TRANSLATE_DCCP
+#endif
 #ifdef __FreeBSD__
 #define NETWORK_PROTOCOL_TRANSLATE_LIST \
     NETWORK_PROTOCOL_TRANSLATE_ELEM(IP) \
@@ -452,7 +457,7 @@ int TranslateTypeToNative(Type type) {
     NETWORK_PROTOCOL_TRANSLATE_ELEM(BLT) \
     NETWORK_PROTOCOL_TRANSLATE_ELEM(NSP) \
     NETWORK_PROTOCOL_TRANSLATE_ELEM(INP) \
-    NETWORK_PROTOCOL_TRANSLATE_ELEM(DCCP) \
+    NETWORK_PROTOCOL_TRANSLATE_DCCP \
     /*NETWORK_PROTOCOL_TRANSLATE_ELEM(3PC)*/ \
     NETWORK_PROTOCOL_TRANSLATE_ELEM(IDPR) \
     NETWORK_PROTOCOL_TRANSLATE_ELEM(XTP) \
@@ -544,7 +549,7 @@ int TranslateTypeToNative(Type type) {
     NETWORK_PROTOCOL_TRANSLATE_ELEM(UDP) \
     NETWORK_PROTOCOL_TRANSLATE_ELEM(IDP) \
     NETWORK_PROTOCOL_TRANSLATE_ELEM(TP) \
-    NETWORK_PROTOCOL_TRANSLATE_ELEM(DCCP) \
+    NETWORK_PROTOCOL_TRANSLATE_DCCP \
     NETWORK_PROTOCOL_TRANSLATE_ELEM(IPV6) \
     NETWORK_PROTOCOL_TRANSLATE_ELEM(ROUTING) \
     NETWORK_PROTOCOL_TRANSLATE_ELEM(FRAGMENT) \
@@ -618,6 +623,7 @@ int TranslateTypeToNative(Type type) {
     }
 }
 #undef NETWORK_PROTOCOL_TRANSLATE_LIST
+#undef NETWORK_PROTOCOL_TRANSLATE_DCCP
 
 SockAddrIn TranslateToSockAddrIn(sockaddr_in input, size_t input_len) {
     SockAddrIn result{};

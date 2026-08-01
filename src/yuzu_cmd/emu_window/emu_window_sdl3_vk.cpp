@@ -31,8 +31,6 @@ EmuWindow_SDL3_VK::EmuWindow_SDL3_VK(InputCommon::InputSubsystem* input_subsyste
                          Layout::ScreenUndocked::Height,
                          SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
 
-    const SDL_PropertiesID window_props = SDL_GetWindowProperties(render_window);
-
     SetWindowIcon();
 
     if (fullscreen) {
@@ -40,6 +38,12 @@ EmuWindow_SDL3_VK::EmuWindow_SDL3_VK(InputCommon::InputSubsystem* input_subsyste
         ShowCursor(false);
     }
 
+#ifdef __PROSPERO__
+    // SDL supplies the console event/controller layer. Vulkan-PS5 owns the
+    // native VideoOut surface and therefore needs no SDL window handle.
+    window_info.type = Core::Frontend::WindowSystemType::Ps5;
+#else
+    const SDL_PropertiesID window_props = SDL_GetWindowProperties(render_window);
     if (void* hwnd =
             SDL_GetPointerProperty(window_props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr)) {
         window_info.type = Core::Frontend::WindowSystemType::Windows;
@@ -84,6 +88,7 @@ EmuWindow_SDL3_VK::EmuWindow_SDL3_VK(InputCommon::InputSubsystem* input_subsyste
         LOG_CRITICAL(Frontend, "Unable to determine native window backend from SDL properties");
         std::exit(EXIT_FAILURE);
     }
+#endif
 
     OnResize();
     OnMinimalClientAreaChangeRequest(GetActiveConfig().min_client_area_size);

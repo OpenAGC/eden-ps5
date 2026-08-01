@@ -24,6 +24,18 @@ if (NOT TARGET VulkanPS5::ICD)
         "${CMAKE_CURRENT_BINARY_DIR}/vulkan-ps5" EXCLUDE_FROM_ALL)
 endif()
 
+if (NOT EDEN_PS5_BOOTSTRAP_ONLY)
+    if (NOT TARGET yuzu-cmd)
+        message(FATAL_ERROR
+            "The full PS5 frontend requires YUZU_CMD=ON")
+    endif()
+    target_link_libraries(yuzu-cmd PRIVATE VulkanPS5::ICD SceSystemService)
+    set_target_properties(yuzu-cmd PROPERTIES
+        OUTPUT_NAME "eden-ps5"
+        SUFFIX ".elf")
+    return()
+endif()
+
 set(EDEN_PS5_VMA_INCLUDE_DIR "" CACHE PATH
     "Directory containing Eden's pinned vk_mem_alloc.h")
 if (NOT EDEN_PS5_VMA_INCLUDE_DIR)

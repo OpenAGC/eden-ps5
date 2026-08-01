@@ -283,4 +283,8 @@ if (ANDROID)
     target_include_directories(yuzu-android PRIVATE android/app/src/main)
 endif()
 
+if (PLATFORM_PS5)
+    add_subdirectory(ps5)
+endif()
+
 include(GenerateDepHashes)

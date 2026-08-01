@@ -281,6 +281,20 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   and Eden's complete Release `video_core` target now cross-build for
   Prospero. A clean native macOS `video_core` build also passes, confirming the
   platform-specific selections do not regress the host path.
+- The full SDL3 command frontend now cross-builds and links as a production
+  Prospero PIE, `eden-ps5.elf`. SDL3 remains the event/controller frontend,
+  while `EmuWindow_SDL3_VK` selects Eden's PS5 window-system type so
+  Vulkan-PS5 owns the native VideoOut surface without an X11, Wayland, or SDL
+  native-window dependency. The complete link includes Eden core, scheduler,
+  shader recompiler, shader-cache dependencies, VMA renderer, FFmpeg,
+  OpenSSL, Vulkan-PS5, OpenAGC, and VideoOut. The Prospero SDK's narrower
+  FreeBSD libc required two capability-based network fixes: omit DCCP when
+  `IPPROTO_DCCP` is absent, and read an interface name directly from
+  `sockaddr_dl` because the SDK declares but does not export `link_ntoa` or
+  `link_ntoa_r`. The resulting unstripped 63 MiB ELF has discovery hash
+  `b5033930f2637cdb8e4bb90e1201d61b2afba301c5f28da90857308911594105`;
+  this is build evidence, not a hardware qualification pin. A native macOS
+  `core` rebuild passes after the shared network change.
 
 ## Milestones and gates
 
@@ -325,11 +339,15 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 
 ## Immediate next slice
 
-1. Refresh Vulkan-PS5's Eden compatibility inventory at revision
-   `612409c7ba`, emphasizing formats and commands actually used during startup.
-2. Add the PS5 CMake platform and a minimal `src/ps5` executable target.
-3. Build and install the pacbrew RmlUi package, with Lua disabled unless a
-   concrete UI requirement appears.
-4. Bring up SDL2 controller input plus a standalone RmlUi/Vulkan-PS5 screen.
-5. Extract a PS5-native emulation session from `yuzu_cmd` and Android lifecycle
-   behavior, then boot the first homebrew application.
+1. Restore FW 5.50 websrv/FTP/klog services and run the already-pinned
+   production-memory/compute bootstrap twice through the guarded runner,
+   including immediate relaunch and exact process-absence checks.
+2. Add a bounded PS5 launch-path sidecar and system-service termination path to
+   the full `eden-ps5.elf`; then run initialization/teardown without a game.
+3. Boot a small homebrew application through the real scheduler, shader cache,
+   renderer, WSI, and present path, closing only general-purpose Vulkan/OpenAGC
+   gaps exposed by that workload.
+4. Build and install the pacbrew RmlUi package and layer the controller-driven
+   launcher over the proven emulator lifecycle. Keep Dear ImGui diagnostic-only.
+5. Run the FW 5.50 regression matrix and CTS/deqp subset, then freeze identical
+   bytes for the deferred FW 11.60 endpoint replay.
