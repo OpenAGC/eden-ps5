@@ -1146,13 +1146,43 @@ whereas the passing graphics controls execute after it. The next oracle must
 put the fixed shader first, then repeat it after a separate priming submission,
 before changing meta-clear code again.
 
-1. Make the fixed-magenta pipeline the first graphics bind/draw after the
-   zero-initialization submission and read it back independently. Then repeat
-   the identical fixed draw after a separate priming graphics submission. If
-   only the first draw fails, repair OpenAGC's first graphics-default emission
-   and context synchronization; if both pass, capture and diff the first meta
-   draw's PM4 against the later passing direct helper. Only after that oracle
-   identifies the owner should the production clear be changed again. The
+That temporal diagnosis is now superseded by an exact alternating-color
+oracle. Vulkan-PS5 commit `ae9da26` makes a fixed-magenta draw the first
+graphics operation, verifies a separate zero reset, runs the production clear,
+then repeats the fixed draw. The initial cleanup-first ELF
+`c28109962ae8db810a77638324a5b695d0e8bc50685641749d6addada0332a7e`
+in `20260802T174750Z-format-attachments-run1.log` reads zero immediately after
+the first magenta draw, then reads magenta immediately after the following
+zero clear. The extended ELF
+`7426cf8c4dac8d136af8f76498c566baeb5b1d79f559c48bc2fb0a623a55c213`
+in `20260802T174913Z-format-attachments-run1.log` continues the sequence:
+production magenta reads zero, while the next magenta draw reads magenta.
+This proves that all three writes execute but each in-command consumer can
+overtake the preceding cache release; the submission-tail fence exposes the
+write only after that consumer has already copied stale data. It also
+invalidates the proposed graphics `CONTEXT_CONTROL` change, which was not
+applied.
+
+OpenAGC commit `7b60617` fixes the owner. Every command buffer now owns a
+dedicated four-byte GPU completion cell. An ordinary same-queue transition
+from a writing usage emits its existing Mesa-aligned ReleaseMem to that cell,
+then immediately waits for the monotonically increasing value before allowing
+the next consumer. Explicit v2 ownership release/acquire labels are unchanged,
+capacity preflight includes the exact seven-dword wait, begin/reset clears and
+flushes the cell, and packet tests verify the shared nonzero address and values.
+The focused suite passes 19,966 assertions; the full 19-test matrix passes; the
+Prospero build and Vulkan command-recording test pass. Cleanup-first FW
+5.500.008 ELF
+`9afb34077db63206712be1a6596ba34f41444e312a7fbbf036d13052ed96d9e0`
+in `20260802T175715Z-format-attachments-run1.log` passes the first fixed draw,
+all 3,686,400 bytes of the independent zero reset, the production
+`vkCmdClearAttachments`, and the second fixed draw. PID 183 self-exits, the
+runner independently finds no exact `eboot.bin`, and no extra compute partial
+flush is required for this path. Because the user is away from the console,
+these automated readback and lifecycle results do not qualify visible output.
+
+1. Rebuild the identical Eden ELF against OpenAGC `7b60617` and Vulkan-PS5
+   `ae9da26`, then run the cleanup-first automated renderer/readback gate. The
    eventual Vulkan cleanup must also remove eager prewarm, the unbounded
    render-pass/dynamic-rendering meta cache, probe-only helpers, and the
    single-layer restriction, with layered and state-restoration regressions.
