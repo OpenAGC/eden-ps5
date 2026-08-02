@@ -137,7 +137,10 @@ void EmuWindow_SDL3::AdvanceQualificationInputCycle() {
         return;
     }
     constexpr u64 StepIntervalMs = 50;
-    constexpr std::array<int, 4> DirectionKeys{
+    // B starts a new 2048 game after a completed board; the remaining keys
+    // exercise the default left-stick mapping without a separate input thread.
+    constexpr std::array<int, 5> QualificationKeys{
+        SDL_SCANCODE_S,
         SDL_SCANCODE_LEFT,
         SDL_SCANCODE_UP,
         SDL_SCANCODE_RIGHT,
@@ -155,10 +158,10 @@ void EmuWindow_SDL3::AdvanceQualificationInputCycle() {
     }
 
     qualification_input_held_key =
-        DirectionKeys[qualification_input_direction++ % DirectionKeys.size()];
+        QualificationKeys[qualification_input_direction++ % QualificationKeys.size()];
     OnKeyEvent(qualification_input_held_key, 1);
     ++qualification_input_press_count;
-    if (qualification_input_press_count <= DirectionKeys.size() ||
+    if (qualification_input_press_count <= QualificationKeys.size() ||
         qualification_input_press_count % 32 == 0) {
         LOG_INFO(Frontend, "PS5 qualification input cycle: presses={}",
                  qualification_input_press_count);
