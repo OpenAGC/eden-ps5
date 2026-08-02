@@ -23,12 +23,17 @@ fi
 
 run=1
 while [ "$run" -le 2 ]; do
+    required_pattern=
+    if [ "$run" -eq 2 ]; then
+        required_pattern='Total Pipeline Count: [1-9][0-9]*'
+    fi
     VULKAN_PS5_QUALIFICATION_ELF="$elf" \
     VULKAN_PS5_CLEANUP_ELF="$cleanup_elf" \
     VULKAN_PS5_QUALIFICATION_REMOTE_NAME=eden_ps5 \
     VULKAN_PS5_QUALIFICATION_LABEL="eden-2048-run${run}" \
     VULKAN_PS5_QUALIFICATION_PASS_PATTERN='^eden-ps5: GAME PASS 600 frames$' \
     VULKAN_PS5_QUALIFICATION_PASS_DESCRIPTION='2048 homebrew, 600 presented frames, and bounded teardown' \
+    VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN="$required_pattern" \
     VULKAN_PS5_WEBSRV_TIMEOUT=120 \
     VULKAN_PS5_SWAPCHAIN_EXPECTED_SHA256="$EDEN_PS5_EXPECTED_SHA256" \
     VULKAN_PS5_CLEANUP_EXPECTED_SHA256="$EDEN_PS5_CLEANUP_EXPECTED_SHA256" \

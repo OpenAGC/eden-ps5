@@ -334,8 +334,13 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   `tools/run_fw550_2048.sh` pins and re-verifies the local
   `2048.nro` (`cd7e7f343830920196590d99c82a9f1ab8a375eeaeb943fa6c671aa68250a20d`),
   uploads a committed 600-frame game sidecar, requires `GAME PASS 600 frames` only after
-  `ShutdownMainProcess`, and repeats immediately. Parser CTest and the complete
-  Release Prospero frontend build pass; the current discovery ELF hash is
+  `ShutdownMainProcess`, and repeats immediately. The second launch also
+  requires Eden's `Total Pipeline Count` diagnostic to be nonzero, proving
+  that the production shader/pipeline cache was populated and observed across
+  the repeated workload instead of accepting presentation alone. The shared
+  runner fails closed if that secondary oracle is missing. Parser CTest, the
+  shared runner's matching/missing-oracle coverage, and the complete Release
+  Prospero frontend build pass; the current discovery ELF hash is
   `5bdedb4c7f342fa82adc0b073bc12a34beca3e6eeaf2f16872a019be04fad019`.
   The 2048 result is not claimed until the FW 5.50 guarded run executes.
 
