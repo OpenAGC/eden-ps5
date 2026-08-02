@@ -221,6 +221,93 @@ crash, coredump, JIT protection error, or native allocation failure, and the
 runner proves no exact `eboot.bin` remains. This is still forced retirement,
 not orderly teardown or presentation evidence.
 
+Vulkan-PS5 commit `02a3859` stops treating generic Vulkan memory scopes as
+storage-image access. It preserves an exact read state until the next typed
+consumer, prepares descriptor images over their exact view ranges, and rejects
+generic barriers after native write states until OpenAGC exposes a same-state
+dependency primitive. The exact positive and fail-closed command regressions,
+the full 62-test host suite, the Vulkan-PS5 Prospero build, and Eden's strict
+integrated Prospero build pass.
+
+Cleanup-first FW 5.500.008 run
+`Vulkan-PS5/examples/qualification-logs/20260802T121701Z-swapchain-run1.log`
+with integrated ELF SHA-256
+`5f281b3f6f13fd0e41aabdc0c4a9384625c275e4373d504b689c8c569cc60dec`
+uses the same pinned cleanup and exact-process preflight. It supplies a sixth
+consecutive positive first JIT-transition sample, clears the formerly failing
+generic image barrier, and records two native draws. The next boundary is a
+1280x720 render-pass begin rejected solely because the framebuffer stores a
+different render-pass handle (`rp_match=0`), even though Vulkan permits a
+render pass compatible with the one used at framebuffer creation. The uncaught
+`vkEndCommandBuffer` exception triggers an app crash for PID 184;
+`canCoredump=false`, the kernel retires the process, and the independent exact
+postcheck finds no `eboot.bin`. This remains crash retirement, not teardown or
+presentation proof.
+
+Vulkan-PS5 commits `660ceb2` and `c9615a3` replaced render-pass handle
+identity with conservative compatibility and added a bounded hardware dump.
+Cleanup-first diagnostic run
+`Vulkan-PS5/examples/qualification-logs/20260802T124647Z-swapchain-run1.log`
+with ELF SHA-256
+`80bf3bddbf760a3784bf12f134b06df978dd4a9e1d87294fa976fd6451b4e406`
+proved that the framebuffer's retained creation-render-pass pointer had been
+freed: its header contained allocator metadata while the untouched fixed-array
+tail still described the expected first subpass. Vulkan permits the creation
+render pass to be destroyed while the framebuffer survives. Vulkan-PS5 commit
+`8dc2c2f` therefore stores an owned, pointer-free compatibility snapshot in
+each framebuffer, copies completed synthetic dynamic-rendering state, bounds
+the corruption diagnostic, and adds a regression which destroys render pass A
+before beginning the framebuffer with compatible render pass B. The focused
+test, full 62-test host suite, Vulkan-PS5 Prospero build, and strict integrated
+Eden build pass.
+
+Cleanup-first runs
+`Vulkan-PS5/examples/qualification-logs/20260802T125540Z-swapchain-run1.log`
+and `Vulkan-PS5/examples/qualification-logs/20260802T130046Z-swapchain-run1.log`
+with integrated ELF hashes
+`db931ce94a7816e98771248648ba1604151a140b0079539e476bcd51f4780571`
+and `64864e74cb018649c8ca91a765529b962b821c99ec47a91cff3fccc429c00015`
+clear render-pass begin, advance through all VI service acquisition calls, and
+compile 40 native shader stages without a Vulkan, OpenAGC, GPU, JIT, or native
+allocation failure. Both deliberately bounded launcher windows expire before
+the 600-frame oracle, retire their exact process, and find no remaining
+`eboot.bin`; they are progress evidence rather than teardown qualification.
+Vulkan-PS5 commit `af0ab3b` removes the obsolete per-push-constant hot-path
+diagnostic. The standard 600-frame runner now uses a bounded, configurable
+`EDEN_PS5_WEBSRV_TIMEOUT`, defaulting to 300 seconds for cold shader caches.
+
+Vulkan-PS5 commit `0696b18` adds eight-sample Prospero checkpoints around
+command-buffer end, native submission/fence wait, swapchain acquisition, and
+presentation. Cleanup-first run
+`Vulkan-PS5/examples/qualification-logs/20260802T130908Z-swapchain-run1.log`
+with integrated ELF SHA-256
+`73f2c78e669255f61af52e5c0907e00bc85f89d203a24cf2030ce27c1c357111`
+proves every sampled command end, submission, fence wait, acquisition, and
+native presentation succeeds; frames 0 through 7 rotate across all three
+swapchain images. This disproves the suspected post-compile hang: the workload
+is rendering and presenting, but the full 600-frame oracle exceeds the short
+diagnostic window.
+
+The scoped service-host-thread qualification uses committed sidecar
+`src/ps5/eden-2048-thread-budget.launch`, SHA-256
+`216b923630466a0be9cafae8d54b36617fe62309e0bbbdf65a3f566bda8eca67`,
+without changing guest-visible services or the existing 600-frame sidecar.
+Cleanup-first FW 5.500.008 run
+`Vulkan-PS5/examples/qualification-logs/20260802T131312Z-swapchain-run1.log`
+and target kernel log
+`Vulkan-PS5/examples/qualification-logs/20260802T131312Z-swapchain-run1-target.klog`
+use the same integrated ELF and pinned cleanup SHA-256
+`9fd6b41cf2ea87989c4217234c6f34c96a1ca5dc482355af1258539db77d4d76`.
+They pass all VI calls, record real draws, submit and present eight consecutive
+frames, call `ShutdownMainProcess`, emit `eden-ps5: GAME PASS 8 frames`, and
+exit inside 30 seconds. The runner proves PID 202 absent, reports no app crash
+or coredump, and accepts only the already-qualified raw-ELF VM baseline warning
+of `0x4000`; there is no OpenAGC/native allocation failure or additional leak.
+The Prospero frontend still forces `Settings::AudioEngine::Null` for this
+renderer slice, so audio does not consume an extra native service or worker.
+This completes the service host-thread budget gate; it does not replace the
+two-run 600-frame, relaunch, FW 11.60, or CTS/deqp completion gates.
+
 The earlier terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
@@ -810,33 +897,29 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 
 ## Immediate next slice
 
-1. Correct the public Vulkan-PS5/OpenAGC image transition that currently
-   rejects the exact sampled-read `SHADER_READ_ONLY_OPTIMAL` to storage-write
-   `GENERAL` barrier. Preserve declared prior-state validation and add a focused
-   command-level regression for the traced usage, owner, aspect, mip, and layer.
-2. Retain the construction checkpoints and JIT/flexible-memory diagnostics
-   until renderer startup is stable. Preserve bounded GPU-thread failure
-   propagation while fixing the root transition path, with neither a coredump
-   nor a live process/native allocation.
-3. Repeat the cleanup-first `2048.nro` workload twice on FW 5.50 through the
+1. Repeat the cleanup-first `2048.nro` 600-frame workload twice on FW 5.50
+   through the
    real scheduler, shader cache, renderer, WSI, and present path. Require
    visible frames, bounded teardown, and immediate relaunch on both runs.
-4. Qualify a small `libSceUserService`/`libScePad` probe, implement the native
+2. Use the bounded end/submit/acquire/present checkpoints to measure the
+   600-frame runtime, then remove them after the two-run gate is stable. Retain
+   JIT/flexible-memory failure diagnostics until renderer relaunch is proven.
+3. Qualify a small `libSceUserService`/`libScePad` probe, implement the native
    controller/event/lifecycle bridge, and remove SDL3 from the production
    Prospero target.
-5. Qualify the `libSceAudioOut` ABI with a standalone bounded-buffer probe,
+4. Qualify the `libSceAudioOut` ABI with a standalone bounded-buffer probe,
    then implement Eden's native AudioOut sink using the mGBA transport pattern.
    Keep null audio as an explicit fail-closed fallback; do not use SDL2_mixer
    for emulated audio.
-6. Remove the temporary construction checkpoints after stable renderer start,
+5. Remove the temporary construction checkpoints after stable renderer start,
    update the exact evidence and hashes, and commit that verified slice without
    staging unrelated diagnostic work.
-7. Refresh the Eden compatibility audit at revision `612409c7ba`, run the FW
+6. Refresh the Eden compatibility audit at revision `612409c7ba`, run the FW
    5.50 regression matrix and targeted CTS/deqp subset, and close any remaining
    format or command gaps demonstrated by those results.
-8. Build and install the pacbrew RmlUi package, make its SDL2 dependency
+7. Build and install the pacbrew RmlUi package, make its SDL2 dependency
    optional or isolate it from the production runtime, and layer the
    controller-driven launcher over the proven emulator lifecycle. Keep Dear
    ImGui diagnostic-only.
-9. Freeze the final ELF/library hashes and replay the identical bytes and full
+8. Freeze the final ELF/library hashes and replay the identical bytes and full
    advertised-feature gate on FW 11.60.
