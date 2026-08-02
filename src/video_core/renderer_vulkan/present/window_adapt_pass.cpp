@@ -16,6 +16,11 @@
 #include "video_core/vulkan_common/vulkan_device.h"
 #include "video_core/vulkan_common/vulkan_memory_allocator.h"
 
+#ifdef __PROSPERO__
+#include <atomic>
+#include <cstdio>
+#endif
+
 namespace Vulkan {
 
 WindowAdaptPass::WindowAdaptPass(const Device& device, VkFormat frame_format, vk::Sampler&& sampler_, vk::ShaderModule&& fragment_shader_)
@@ -35,6 +40,23 @@ void WindowAdaptPass::Draw(const Device& device, RasterizerVulkan& rasterizer, S
                            std::list<Layer>& layers,
                            std::span<const Tegra::FramebufferConfig> configs,
                            const Layout::FramebufferLayout& layout, Frame* dst) {
+
+#ifdef __PROSPERO__
+    static std::atomic<u32> qualification_draw_count{0};
+    const u32 qualification_sequence =
+        qualification_draw_count.fetch_add(1, std::memory_order_relaxed);
+    const bool qualification_control = qualification_sequence < 8u;
+    const bool qualification_skip_layers = qualification_sequence == 0u;
+    if (qualification_control) {
+        std::fprintf(stderr,
+                     "eden-ps5: window-adapt control sequence=%u magenta-clear=1 "
+                     "skip-layers=%u\n",
+                     qualification_sequence, qualification_skip_layers);
+    }
+#else
+    constexpr bool qualification_control = false;
+    constexpr bool qualification_skip_layers = false;
+#endif
 
     const VkFramebuffer host_framebuffer{*dst->framebuffer};
     const VkRenderPass renderpass{*render_pass};
@@ -70,9 +92,12 @@ void WindowAdaptPass::Draw(const Device& device, RasterizerVulkan& rasterizer, S
     }
 
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
-        const f32 bg_red = Settings::values.bg_red.GetValue() / 255.0f;
-        const f32 bg_green = Settings::values.bg_green.GetValue() / 255.0f;
-        const f32 bg_blue = Settings::values.bg_blue.GetValue() / 255.0f;
+        const f32 bg_red =
+            qualification_control ? 1.0f : Settings::values.bg_red.GetValue() / 255.0f;
+        const f32 bg_green =
+            qualification_control ? 0.0f : Settings::values.bg_green.GetValue() / 255.0f;
+        const f32 bg_blue =
+            qualification_control ? 1.0f : Settings::values.bg_blue.GetValue() / 255.0f;
         const VkClearAttachment clear_attachment{
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
             .colorAttachment = 0,
@@ -94,7 +119,7 @@ void WindowAdaptPass::Draw(const Device& device, RasterizerVulkan& rasterizer, S
         BeginRenderPass(cmdbuf, renderpass, host_framebuffer, render_area);
         cmdbuf.ClearAttachments({clear_attachment}, {clear_rect});
 
-        for (size_t i = 0; i < layer_count; i++) {
+        for (size_t i = 0; i < layer_count && !qualification_skip_layers; i++) {
             cmdbuf.BindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipelines[i]);
             cmdbuf.PushConstants(graphics_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT,
                                  push_constants[i]);
