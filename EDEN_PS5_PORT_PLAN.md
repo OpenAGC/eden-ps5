@@ -290,9 +290,10 @@ with integrated ELF SHA-256
 `73f2c78e669255f61af52e5c0907e00bc85f89d203a24cf2030ce27c1c357111`
 proves every sampled command end, submission, fence wait, acquisition, and
 native presentation succeeds; frames 0 through 7 rotate across all three
-swapchain images. This disproves the suspected post-compile hang: the workload
-is rendering and presenting, but the full 600-frame oracle exceeds the short
-diagnostic window.
+swapchain images. This disproves a failure inside those sampled host calls, but
+does not prove that their scanout contains visible guest pixels. Later direct
+observation found black output, so the earlier inference that successful native
+presentation alone proved visible rendering is withdrawn.
 
 The scoped service-host-thread qualification uses committed sidecar
 `src/ps5/eden-2048-thread-budget.launch`, SHA-256
@@ -333,6 +334,43 @@ It again clears every VI call, presents frames 0 through 7, emits
 exactly one `0x4000` VM-resource warning: the established raw-ELF teardown
 baseline, not zero-VM-leak evidence. No native allocation or OpenAGC failure is
 present in the passing run.
+
+The active 600-frame audit commits Eden `e0fbf33d77` and Vulkan-PS5
+`bd77da1`. The guarded runner now requires the exact FW `5.500.008` line, a
+success-only 600-native-present marker, the bounded guest PASS, run-two
+pipeline evidence, and final scoped plus global process absence. It rejects
+allocation, mapping, JIT-protection, GPU-thread, and presentation failures,
+and its failure trap reruns the pinned cleanup ELF. The qualification-only
+sidecar enables a main-thread SDL input cycle without adding a worker; its
+SHA-256 is
+`e5c10f0d91bcb683f8e9f41a1bce44228d07317ff1f07236fcfabf702f4a4bac`.
+The host launch-config tests pass 40 assertions, the full Vulkan-PS5 suite
+passes 62 tests, and both Prospero integration builds pass.
+
+Cleanup-first FW 5.500.008 runs
+`Vulkan-PS5/examples/qualification-logs/20260802T145232Z-swapchain-run1.log`
+and
+`Vulkan-PS5/examples/qualification-logs/20260802T145623Z-swapchain-run1.log`
+used integrated ELF SHA-256 values
+`2d02767227317c9bbcbb02a440b7c2227b3ec6bf05843f58fa92abb91dfe042a`
+and
+`cf34ada745127f3f65eec4a780cbc0a9fc300833d3a82dcb65d9b047fb97bc57`
+respectively. Both advance the qualification input counter beyond 500 presses,
+record successful native presentation for frames 0 through 7, then miss the
+first 100-success milestone and time out at the bounded 60-second gate. The
+second ELF includes Eden `abdef11698`, which adds the NRO's documented B-button
+restart input before directional moves; the result is unchanged. Inspection of
+the NRO's public source confirms that it redraws on every `appletMainLoop()`
+iteration, so a completed board does not explain the missing frames. Direct
+hardware observation during the second run reported black output. Therefore
+these runs prove neither visible presentation nor a 600-frame pass and the
+two-run gate remains open. Neither log contains a Dynarmic `mprotect`, native
+allocation, OpenAGC, GPU-thread, or present-call failure. Each failure path
+reran the pinned cleanup ELF, and repeated independent global checks found no
+exact `eboot.bin`; a final manual cleanup was also performed before the console
+reboot. The next hardware attempt must start from the rebooted device, remain a
+single diagnostic run until visible guest pixels are confirmed, and still run
+the pinned cleanup plus exact-name absence check before launch.
 
 The earlier terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
