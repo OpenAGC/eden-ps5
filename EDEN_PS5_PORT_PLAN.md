@@ -66,6 +66,43 @@ address `0x303404010`, recorded in the paired `.klog`; the kernel retires PID
 warning. Thread-budget advancement is proven, but clean teardown, leak-free
 qualification, and runner PASS remain open.
 
+OpenAGC commit `5ff3eea9f3c3413afb8bb39f4ddff135d179f232`
+replaces the global 16-slot graphics user-SGPR check with the gfx1013 stage
+contract: 32 slots for graphics and 16 for compute. It also validates the
+compiler's encoded `PGM_RSRC2.USER_SGPR` allocation, protects fused-stage
+continuation/layout slots, and replays sparse pointer-free inline push
+constants by their exact used mask. The exact Eden `0xfffff0ff`/29-entry
+reflection, dynamic `GS_31`, `GS_32` rejection, containing application push
+ranges, and failure cases pass 19,809 assertions; all 19 generic CTest entries
+and a fresh Prospero library build pass. This is host/build qualification only
+until the first presentation pipeline is reached again on hardware.
+
+The first source-integrated ELF containing that OpenAGC commit has SHA-256
+`dc2e4cc259597a7d4faff9048675d681533177979583dc816a52cfd10595370c`.
+Cleanup-first FW 5.50 run
+`Vulkan-PS5/examples/qualification-logs/20260802T101532Z-swapchain-run1.log`
+again records `available=15 selected=1`, completes rasterizer construction,
+passes the former VI constructor boundary, and reaches
+`CreateManagedDisplayLayer`. It stops earlier than presentation pipeline
+creation when the 32 MiB Dynarmic cache cannot transition from RW to RX:
+`mprotect` returns `EPERM`, followed by an instruction-read protection fault.
+The paired `.klog` records `canCoredump=false`, complete PID retirement, and a
+4 KiB VM-resource warning. An exact post-run process query found no
+`eboot.bin`; nevertheless this is a failed crash lifecycle, not clean teardown,
+and it does not hardware-qualify the 29-SGPR correction.
+
+The diagnosed allocator incorrectly combined the original executable JIT-shm
+handle with a same-address RW mapping and later `mprotect`. PS5 JIT shared
+memory is an alias-based design, while Dynarmic embeds identical write/execute
+addresses throughout generated code. The active correction therefore follows
+the payload-SDK LLVM MCJIT path: page-aligned anonymous memory starts RW and is
+serialized through checked RW/RX `mprotect` transitions at the same address.
+Every Prospero allocation, protection, or unmap failure terminates through the
+bounded, non-coredumping SystemService path without executing an invalid
+mapping. Host Dynarmic and `eden.ps5_thread_budget` builds/tests pass,
+and the source-integrated Prospero ELF rebuilds; cleanup-first hardware replay
+and leak-free teardown remain the next gate.
+
 ## Scope
 
 This plan targets PS5 homebrew built with `ps5-payload-sdk`. It does not port
@@ -570,12 +607,15 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   removes the `dsp`/Opus startup boundary and reaches the same checkpoint in
   `20260802T081021Z-swapchain-run1`. The one-worker/SDL-only host-input policy
   then clears the VI thread boundary in `20260802T085539Z-swapchain-run1`; the
-  W^X JIT-shm and 32 MiB per-core cache policy then clear both the deterministic
-  guest execute fault and the 64 KiB flexible-memory exhaustion boundary. The
-  narrowed presentation resource policy and Vulkan-PS5 `GENERAL` render-pass
-  support then clear the guest image-format boundary. The current production
-  boundary is primitive-shader user-SGPR reflection during first presentation
-  pipeline creation in `20260802T093051Z-swapchain-run1`.
+  32 MiB per-core cache policy clears the 16 MiB prelude-capacity and 64 MiB
+  flexible-memory exhaustion boundaries. The narrowed presentation resource
+  policy and Vulkan-PS5 `GENERAL` render-pass support then clear the guest
+  image-format boundary. OpenAGC `5ff3eea` closes the primitive-shader
+  reflection rejection in host/build qualification, but the first integrated
+  replay stopped earlier at the unsupported JIT-shm/mprotect hybrid. The
+  current production gate is cleanup-first FW 5.50 proof of the ordinary
+  anonymous same-address W^X allocator, followed by the still-unproven
+  29-SGPR presentation pipeline.
 
 ## Milestones and gates
 

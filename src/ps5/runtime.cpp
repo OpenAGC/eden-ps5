@@ -44,3 +44,13 @@ extern "C" int sceSystemServiceKillApp(int app_id, int how, int reason, int core
 }
 
 } // namespace Eden::PS5
+
+extern "C" [[noreturn]] void edenPs5TerminateApplicationFromJitFailure(
+    const char* operation, const void* base, std::size_t size, int error) {
+    std::fprintf(stderr,
+                 "eden-ps5 dynarmic %s failed: base=%p size=0x%zx errno=%d; terminating "
+                 "without executing an invalid JIT mapping\n",
+                 operation, base, size, error);
+    std::fflush(stderr);
+    Eden::PS5::TerminateApplication(EXIT_FAILURE);
+}

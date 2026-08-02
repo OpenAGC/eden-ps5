@@ -27,6 +27,7 @@
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <mutex>
 
 #include "common/assert.h"
 #include "dynarmic/mcl/bit.hpp"
@@ -67,16 +68,17 @@ constexpr size_t PRELUDE_COMMIT_SIZE = 16 * 1024 * 1024;
 
 #if defined(__PROSPERO__)
 constexpr size_t PROSPERO_PAGE_SIZE = 0x4000;
-constexpr int PROSPERO_CPU_READ_WRITE_EXECUTE = 0x07;
 
-extern "C" {
-int sceKernelJitCreateSharedMemory(uintptr_t name, size_t length, uint64_t max_protection,
-                                   int* descriptor);
-int sceKernelMunmap(void* address, size_t length);
-}
+extern "C" [[noreturn]] void edenPs5TerminateApplicationFromJitFailure(
+    const char* operation, const void* base, size_t size, int error);
 
 constexpr size_t AlignUpProspero(size_t value) noexcept {
     return (value + PROSPERO_PAGE_SIZE - 1) / PROSPERO_PAGE_SIZE * PROSPERO_PAGE_SIZE;
+}
+
+[[noreturn]] void FailProsperoJitOperation(const char* operation, const void* base, size_t size,
+                                           int error) {
+    edenPs5TerminateApplicationFromJitFailure(operation, base, size, error);
 }
 #endif
 
@@ -111,43 +113,31 @@ public:
 #if defined(__PROSPERO__)
         if (size > std::numeric_limits<size_t>::max() - DYNARMIC_PAGE_SIZE -
                        (PROSPERO_PAGE_SIZE - 1)) {
-            using Xbyak::Error;
-            XBYAK_THROW(Xbyak::ERR_CANT_ALLOC);
+            FailProsperoJitOperation("code-cache size overflow", nullptr, size, EOVERFLOW);
         }
         size = AlignUpProspero(size + DYNARMIC_PAGE_SIZE);
 
-        int descriptor = -1;
-        const int create_result = sceKernelJitCreateSharedMemory(
-            0, size, PROSPERO_CPU_READ_WRITE_EXECUTE, &descriptor);
-        if (create_result != 0 || descriptor < 0) {
-            std::fprintf(stderr,
-                         "eden-ps5 dynarmic JIT-shm creation failed: size=0x%zx result=0x%x "
-                         "descriptor=%d\n",
-                         size, static_cast<unsigned int>(create_result), descriptor);
-            using Xbyak::Error;
-            XBYAK_THROW(Xbyak::ERR_CANT_ALLOC);
-        }
-
-        void* mapping = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor, 0);
-        const int map_errno = errno;
-        const int close_result = close(descriptor);
+        int flags = MAP_PRIVATE;
+#    if defined(MAP_ANONYMOUS)
+        flags |= MAP_ANONYMOUS;
+#    elif defined(MAP_ANON)
+        flags |= MAP_ANON;
+#    else
+#        error "Prospero requires anonymous mmap support for Dynarmic JIT memory"
+#    endif
+        // Dynarmic stores executable pointers while it emits code, so its write and execute
+        // addresses must be identical. Use the same ordinary anonymous RW -> RX path as the
+        // payload-SDK LLVM MCJIT example. JIT shared memory requires separate aliases and is
+        // not compatible with that pointer model without systematic address translation.
+        void* mapping = mmap(nullptr, size, PROT_READ | PROT_WRITE, flags, -1, 0);
         if (mapping == MAP_FAILED) {
-            std::fprintf(stderr,
-                         "eden-ps5 dynarmic JIT-shm mapping failed: size=0x%zx errno=%d\n",
-                         size, map_errno);
-            using Xbyak::Error;
-            XBYAK_THROW(Xbyak::ERR_CANT_ALLOC);
+            FailProsperoJitOperation("anonymous code-cache mmap", nullptr, size, errno);
         }
-        if (close_result != 0) {
-            const int close_errno = errno;
-            sceKernelMunmap(mapping, size);
-            std::fprintf(stderr,
-                         "eden-ps5 dynarmic JIT-shm descriptor close failed: size=0x%zx "
-                         "errno=%d\n",
-                         size, close_errno);
-            using Xbyak::Error;
-            XBYAK_THROW(Xbyak::ERR_CANT_ALLOC);
-        }
+        std::fprintf(stderr,
+                     "eden-ps5 dynarmic anonymous W^X code cache mapped RW: base=%p "
+                     "size=0x%zx\n",
+                     static_cast<void*>(static_cast<uint8_t*>(mapping) + DYNARMIC_PAGE_SIZE),
+                     size - DYNARMIC_PAGE_SIZE);
         std::memcpy(mapping, &size, sizeof(size_t));
         return static_cast<uint8_t*>(mapping) + DYNARMIC_PAGE_SIZE;
 #else
@@ -185,13 +175,10 @@ public:
         std::memcpy(&size, p - DYNARMIC_PAGE_SIZE, sizeof(size_t));
 #if defined(__PROSPERO__)
         void* const mapping = p - DYNARMIC_PAGE_SIZE;
-        const int unmap_result = sceKernelMunmap(mapping, size);
+        const int unmap_result = munmap(mapping, size);
         if (unmap_result != 0) {
-            std::fprintf(stderr,
-                         "eden-ps5 dynarmic JIT-shm unmap failed: size=0x%zx result=0x%x\n",
-                         size, static_cast<unsigned int>(unmap_result));
+            FailProsperoJitOperation("code-cache unmap", mapping, size, errno);
         }
-        ASSERT(unmap_result == 0);
 #else
         munmap(p - DYNARMIC_PAGE_SIZE, size);
 #endif
@@ -215,7 +202,13 @@ void ProtectMemory(const void* base, size_t size, bool is_executable) {
     DWORD oldProtect = 0;
     VirtualProtect(const_cast<void*>(base), size, is_executable ? PAGE_EXECUTE_READ : PAGE_READWRITE, &oldProtect);
 #    else
+#        if defined(__PROSPERO__)
+    static std::mutex protection_mutex;
+    const std::scoped_lock lock{protection_mutex};
+    constexpr size_t pageSize = PROSPERO_PAGE_SIZE;
+#        else
     static const size_t pageSize = sysconf(_SC_PAGESIZE);
+#        endif
     const size_t iaddr = reinterpret_cast<size_t>(base);
     const size_t roundAddr = iaddr & ~(pageSize - static_cast<size_t>(1));
     const int mode = is_executable ? (PROT_READ | PROT_EXEC) : (PROT_READ | PROT_WRITE);
@@ -223,10 +216,9 @@ void ProtectMemory(const void* base, size_t size, bool is_executable) {
     const int result = mprotect(reinterpret_cast<void*>(roundAddr), protect_size, mode);
     if (result != 0) {
 #        if defined(__PROSPERO__)
-        std::fprintf(stderr,
-                     "eden-ps5 dynarmic code-cache mprotect failed: base=%p size=0x%zx "
-                     "mode=0x%x errno=%d\n",
-                     reinterpret_cast<void*>(roundAddr), protect_size, mode, errno);
+        FailProsperoJitOperation(is_executable ? "code-cache RW->RX mprotect"
+                                               : "code-cache RX->RW mprotect",
+                                 reinterpret_cast<void*>(roundAddr), protect_size, errno);
 #        endif
     }
     ASSERT(result == 0);
