@@ -22,7 +22,11 @@
 EmuWindow_SDL3::EmuWindow_SDL3(InputCommon::InputSubsystem* input_subsystem_, Core::System& system_)
     : input_subsystem{input_subsystem_}, system{system_} {
     input_subsystem->Initialize();
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD)) {
+    SDL_InitFlags init_flags = SDL_INIT_EVENTS | SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD;
+#ifndef __PROSPERO__
+    init_flags |= SDL_INIT_VIDEO;
+#endif
+    if (!SDL_Init(init_flags)) {
         LOG_CRITICAL(Frontend, "Failed to initialize SDL3: {}, Exiting...", SDL_GetError());
         exit(1);
     }
@@ -143,9 +147,13 @@ void EmuWindow_SDL3::OnFrameDisplayed() {
 }
 
 void EmuWindow_SDL3::OnResize() {
+#ifdef __PROSPERO__
+    UpdateCurrentFramebufferLayout(Layout::ScreenUndocked::Width, Layout::ScreenUndocked::Height);
+#else
     int width, height;
     SDL_GetWindowSizeInPixels(render_window, &width, &height);
     UpdateCurrentFramebufferLayout(width, height);
+#endif
 }
 
 void EmuWindow_SDL3::ShowCursor(bool show_cursor) {
@@ -273,7 +281,9 @@ void EmuWindow_SDL3::WaitEvent() {
                                        Common::g_scm_desc,
                                        results.average_game_fps,
                                        results.emulation_speed * 100.0);
-        SDL_SetWindowTitle(render_window, title.c_str());
+        if (render_window != nullptr) {
+            SDL_SetWindowTitle(render_window, title.c_str());
+        }
         last_time = current_time;
     }
 }
@@ -296,5 +306,7 @@ void EmuWindow_SDL3::SetWindowIcon() {
 }
 
 void EmuWindow_SDL3::OnMinimalClientAreaChangeRequest(std::pair<u32, u32> minimal_size) {
-    SDL_SetWindowMinimumSize(render_window, minimal_size.first, minimal_size.second);
+    if (render_window != nullptr) {
+        SDL_SetWindowMinimumSize(render_window, minimal_size.first, minimal_size.second);
+    }
 }

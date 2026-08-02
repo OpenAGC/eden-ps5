@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <bitset>
 #include <chrono>
+#include <cstdio>
 #include <optional>
 #include <thread>
 #include <ankerl/unordered_dense.h>
@@ -746,6 +747,9 @@ Device::Device(VkInstance instance_, vk::PhysicalDevice physical_, VkSurfaceKHR 
 
     // Initialize GPU logging if enabled
     InitializeGPULogging();
+#ifdef __PROSPERO__
+    std::fputs("eden-ps5: INIT CHECKPOINT device\n", stderr);
+#endif
 }
 
 Device::~Device() {

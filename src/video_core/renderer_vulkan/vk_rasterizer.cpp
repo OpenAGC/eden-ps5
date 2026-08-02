@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <memory>
 #include <mutex>
 
@@ -51,6 +52,14 @@ using VideoCommon::ImageViewType;
 
 
 namespace {
+void InitCheckpoint(const char* name) {
+#ifdef __PROSPERO__
+    std::fprintf(stderr, "eden-ps5: INIT CHECKPOINT rasterizer-%s\n", name);
+#else
+    (void)name;
+#endif
+}
+
 struct DrawParams {
     u32 base_instance;
     u32 num_instances;
@@ -202,25 +211,38 @@ RasterizerVulkan::RasterizerVulkan(Core::Frontend::EmuWindow& emu_window_, Tegra
                                    StateTracker& state_tracker_, Scheduler& scheduler_)
     : gpu{gpu_}, device_memory{device_memory_}, device{device_},
       memory_allocator{memory_allocator_}, state_tracker{state_tracker_}, scheduler{scheduler_},
-      staging_pool(device, memory_allocator, scheduler), descriptor_pool(device, scheduler),
-      guest_descriptor_queue(device), compute_pass_descriptor_queue(device),
-      blit_image(device, scheduler, state_tracker, descriptor_pool), render_pass_cache(device),
+      staging_pool(device, memory_allocator, scheduler),
+      descriptor_pool((InitCheckpoint("staging-pool"), device), scheduler),
+      guest_descriptor_queue((InitCheckpoint("descriptor-pool"), device)),
+      compute_pass_descriptor_queue((InitCheckpoint("guest-descriptor-queue"), device)),
+      blit_image((InitCheckpoint("compute-pass-descriptor-queue"), device), scheduler,
+                 state_tracker, descriptor_pool),
+      render_pass_cache((InitCheckpoint("blit-image"), device)),
       texture_cache_runtime{
-          device,     scheduler,         memory_allocator, staging_pool,
+          (InitCheckpoint("render-pass-cache"), device), scheduler, memory_allocator, staging_pool,
           blit_image, render_pass_cache, descriptor_pool,  compute_pass_descriptor_queue},
-      texture_cache(texture_cache_runtime, device_memory),
-      buffer_cache_runtime(device, memory_allocator, scheduler, staging_pool,
+      texture_cache((InitCheckpoint("texture-cache-runtime"), texture_cache_runtime),
+                    device_memory),
+      buffer_cache_runtime((InitCheckpoint("texture-cache"), device), memory_allocator, scheduler,
+                           staging_pool,
                            guest_descriptor_queue, compute_pass_descriptor_queue, descriptor_pool),
-      buffer_cache(device_memory, buffer_cache_runtime),
-      query_cache_runtime(this, device_memory, buffer_cache, device, memory_allocator, scheduler,
+      buffer_cache((InitCheckpoint("buffer-cache-runtime"), device_memory), buffer_cache_runtime),
+      query_cache_runtime((InitCheckpoint("buffer-cache"), this), device_memory, buffer_cache,
+                          device, memory_allocator, scheduler,
                           staging_pool, compute_pass_descriptor_queue, descriptor_pool, texture_cache),
-      query_cache(gpu, *this, device_memory, query_cache_runtime),
-      pipeline_cache(device_memory, device, scheduler, descriptor_pool, guest_descriptor_queue,
+      query_cache((InitCheckpoint("query-cache-runtime"), gpu), *this, device_memory,
+                  query_cache_runtime),
+      pipeline_cache((InitCheckpoint("query-cache"), device_memory), device, scheduler,
+                     descriptor_pool, guest_descriptor_queue,
                      render_pass_cache, buffer_cache, texture_cache, gpu.ShaderNotify()),
-      accelerate_dma(buffer_cache, texture_cache, scheduler),
-      fence_manager(*this, gpu, texture_cache, buffer_cache, query_cache, device, scheduler),
-      wfi_event(device.GetLogical().CreateEvent()) {
+      accelerate_dma((InitCheckpoint("pipeline-cache"), buffer_cache), texture_cache, scheduler),
+      fence_manager((InitCheckpoint("accelerate-dma"), *this), gpu, texture_cache, buffer_cache,
+                    query_cache, device, scheduler),
+      wfi_event((InitCheckpoint("fence-manager"), device.GetLogical().CreateEvent())) {
     scheduler.SetQueryCache(query_cache);
+#ifdef __PROSPERO__
+    std::fputs("eden-ps5: INIT CHECKPOINT rasterizer\n", stderr);
+#endif
 }
 
 RasterizerVulkan::~RasterizerVulkan() {

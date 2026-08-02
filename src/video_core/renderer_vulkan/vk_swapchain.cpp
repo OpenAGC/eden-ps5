@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <limits>
 #include <vector>
 
@@ -125,6 +126,9 @@ Swapchain::Swapchain(
     , scheduler{scheduler_}
 {
     Create(surface, width_, height_);
+#ifdef __PROSPERO__
+    std::fputs("eden-ps5: INIT CHECKPOINT swapchain\n", stderr);
+#endif
 }
 
 Swapchain::~Swapchain() = default;

@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <mutex>
+#include <cstdio>
 #include <thread>
 #include <utility>
 
@@ -50,6 +51,9 @@ Scheduler::Scheduler(const Device& device_, StateTracker& state_tracker_)
     AcquireNewChunk();
     AllocateWorkerCommandBuffer();
     worker_thread = std::jthread([this](std::stop_token token) { WorkerThread(token); });
+#ifdef __PROSPERO__
+    std::fputs("eden-ps5: INIT CHECKPOINT scheduler\n", stderr);
+#endif
 }
 
 Scheduler::~Scheduler() = default;

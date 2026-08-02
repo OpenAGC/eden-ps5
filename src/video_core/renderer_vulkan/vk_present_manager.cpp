@@ -4,6 +4,8 @@
 // SPDX-FileCopyrightText: Copyright 2023 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstdio>
+
 #include "common/settings.h"
 #include "common/thread.h"
 #include "core/frontend/emu_window.h"
@@ -144,6 +146,9 @@ PresentManager::PresentManager(const vk::Instance& instance_,
     if (use_present_thread) {
         present_thread = std::jthread([this](std::stop_token token) { PresentThread(token); });
     }
+#ifdef __PROSPERO__
+    std::fputs("eden-ps5: INIT CHECKPOINT present-manager\n", stderr);
+#endif
 }
 
 PresentManager::~PresentManager() = default;

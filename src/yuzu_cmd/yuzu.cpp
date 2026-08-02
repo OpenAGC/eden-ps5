@@ -12,6 +12,7 @@
 #include <fmt/ostream.h>
 
 #include "common/logging.h"
+#include "common/fs/path_util.h"
 #include "common/scm_rev.h"
 #include "common/settings.h"
 #include "common/string_util.h"
@@ -343,6 +344,12 @@ static int EdenMain(int argc, char** argv) {
             optind++;
         }
     }
+
+#ifdef __PROSPERO__
+    constexpr std::string_view Ps5UserDirectory = "/data/homebrew/eden_ps5/user";
+    Common::FS::SetAppDirectory(std::string{Ps5UserDirectory});
+    Common::FS::CreateEdenPaths();
+#endif
 
     SdlConfig config{config_path};
 

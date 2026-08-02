@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cstdio>
 #include <cstdlib>
 #include <limits>
 #include <optional>
@@ -261,6 +262,9 @@ namespace Vulkan {
                 }
             }
         }
+#ifdef __PROSPERO__
+        std::fputs("eden-ps5: INIT CHECKPOINT memory-allocator\n", stderr);
+#endif
     }
 
     MemoryAllocator::~MemoryAllocator() = default;

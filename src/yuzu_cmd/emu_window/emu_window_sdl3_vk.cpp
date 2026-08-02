@@ -26,6 +26,7 @@ EmuWindow_SDL3_VK::EmuWindow_SDL3_VK(InputCommon::InputSubsystem* input_subsyste
                                                  Common::g_build_name,
                                                  Common::g_scm_branch,
                                                  Common::g_scm_desc);
+#ifndef __PROSPERO__
     render_window =
         SDL_CreateWindow(window_title.c_str(), Layout::ScreenUndocked::Width,
                          Layout::ScreenUndocked::Height,
@@ -37,6 +38,10 @@ EmuWindow_SDL3_VK::EmuWindow_SDL3_VK(InputCommon::InputSubsystem* input_subsyste
         Fullscreen();
         ShowCursor(false);
     }
+#else
+    (void)window_title;
+    (void)fullscreen;
+#endif
 
 #ifdef __PROSPERO__
     // SDL supplies the console event/controller layer. Vulkan-PS5 owns the

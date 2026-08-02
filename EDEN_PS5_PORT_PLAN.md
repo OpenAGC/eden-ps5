@@ -2,25 +2,34 @@
 
 ## Active construction diagnostic (2026-08-02)
 
-The unnormalized-sampler fix and OpenAGC runtime API 55 compute-scratch path
-remove the two successive `VK_ERROR_FEATURE_NOT_PRESENT` failures exposed by
-`BlitImageHelper` and Eden's 36,864-byte-per-wave ASTC decoder. The pinned
-source-integrated Prospero ELF
-`8e4937d4b2680c1ef237317e5e313d52323a30ec97910320ed8471ad5b1deca4`
-was replayed cleanup-first on FW `5.500.008`; log
-`Vulkan-PS5/examples/qualification-logs/20260802T071153Z-swapchain-run1.log`
-contains no compute-pipeline rejection and advances through
-`rasterizer-texture-cache-runtime` and `rasterizer-texture-cache`.
+The unnormalized-sampler fix, OpenAGC runtime API 55 compute-scratch path, and
+Vulkan-PS5 consecutive descriptor-binding traversal close the three successive
+`RasterizerVulkan` construction blockers. The last failure was Eden's valid
+`VkDescriptorUpdateTemplateEntry` for two storage buffers spanning bindings 0
+and 1; Vulkan-PS5 incorrectly required the whole entry to fit binding 0. The
+shared descriptor cursor now carries template updates, ordinary writes, and
+copies across compatible consecutive bindings while handling sparse and
+zero-count bindings, nonzero array offsets, and unaligned template payloads.
 
-The final `eden-ps5: INIT CHECKPOINT rasterizer` oracle is still absent. The
-next exposed failure occurs while constructing `buffer_cache_runtime` and is
-reported upward as `VK_ERROR_INITIALIZATION_FAILED`, followed by the existing
-partial-construction mutex teardown failure. The immediate slice therefore
-continues with exact attribution inside `BufferCacheRuntime`; scratch-ring GPU
-execution remains a separate guarded readback qualification gate and must not
-be inferred from pipeline creation alone. The bounded runner observed the
-texture-cache checkpoint but correctly rejected the run because this later
-failure entered the coredump path.
+The final source-integrated Prospero ELF
+`4eae3b998f9a92664d41b86325a62bc8f9d2186a8c592e471ac180038923e490`
+was replayed cleanup-first on FW `5.500.008`. Log
+`Vulkan-PS5/examples/qualification-logs/20260802T074820Z-swapchain-run1.log`
+reaches the buffer-cache runtime/cache, query-cache runtime/cache, pipeline
+cache, DMA acceleration, fence manager, and final
+`eden-ps5: INIT CHECKPOINT rasterizer` markers. The bounded runner therefore
+records a scoped PASS for complete `RasterizerVulkan` member construction, and
+the former partial-construction mutex-lock failure is absent.
+
+This proves constructor completion and pipeline acceptance only. It does not
+yet prove descriptor GPU execution, scratch-ring readback, visible rendering,
+presentation, or orderly teardown. After SDL reports `dsp: No such audio
+device`, the same run fails later with `std::__1::system_error: thread
+constructor failed: Resource temporarily unavailable` and enters the coredump
+path. The immediate slice now attributes that exact thread creation/resource
+limit, selects a safe PS5 audio fallback, and proves failure cleanup before
+continuing into scheduler, shader-cache, renderer, WSI, and presentation
+qualification.
 
 ## Scope
 
@@ -437,10 +446,12 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   suitability, OpenAGC initialization, and PSBC SPIR-V-to-ACO compilation in
   `20260802T051216Z-swapchain-run1`. That artifact is
   `d7aacb715a7ec61e83d0fcecfd2d5965529d03d5cd062ab739c5bd74fe7945e3`.
-  The next active failure is a still-unidentified
-  `VK_ERROR_FEATURE_NOT_PRESENT`; capability support is not claimed until the
-  precise rejected operation is diagnosed, implemented through public
-  OpenAGC APIs, host-tested, and replayed through the cleanup-first gate.
+  Subsequent guarded slices closed unnormalized-sampler, API 55 compute-scratch,
+  and consecutive descriptor-binding gaps. The current pinned artifact
+  `4eae3b998f9a92664d41b86325a62bc8f9d2186a8c592e471ac180038923e490`
+  reaches the final rasterizer checkpoint in
+  `20260802T074820Z-swapchain-run1`; its next production failure is the later
+  audio/thread resource error recorded in the active diagnostic above.
 
 ## Milestones and gates
 
@@ -485,22 +496,22 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 
 ## Immediate next slice
 
-1. Run the current cleanup-first FW 5.50 diagnostic build with the fine-grained
-   `RasterizerVulkan` member-construction checkpoints. Attribute the existing
-   `VK_ERROR_FEATURE_NOT_PRESENT` to the exact Vulkan call and object rather
-   than inferring the missing feature from constructor order alone.
-2. Close the demonstrated general-purpose Vulkan-PS5/OpenAGC gap, add a host
-   regression for that exact path, remove the temporary checkpoints, and prove
-   failed-initialization teardown no longer reaches the invalid mutex-lock
-   exception or leaves a process/native allocation behind.
-3. Repeat the guarded `2048.nro` workload twice on FW 5.50 through the real
-   scheduler, shader cache, renderer, WSI, and present path. Continue from the
-   next production failure until visible rendering, bounded presentation,
-   teardown, and immediate relaunch all pass.
-4. Refresh the Eden compatibility audit at revision `612409c7ba`, run the FW
+1. Attribute `thread constructor failed: Resource temporarily unavailable`
+   after SDL's missing `dsp` device to the exact thread creation and PS5
+   resource limit, then select and test a safe PS5 audio fallback.
+2. Add the applicable frontend/platform regression and fix. Retain the
+   construction checkpoints until renderer startup is stable, and prove the
+   failure path leaves neither a coredump nor a live process/native allocation.
+3. Repeat the cleanup-first `2048.nro` workload twice on FW 5.50 through the
+   real scheduler, shader cache, renderer, WSI, and present path. Require
+   visible frames, bounded teardown, and immediate relaunch on both runs.
+4. Remove the temporary construction checkpoints after stable renderer start,
+   update the exact evidence and hashes, and commit that verified slice without
+   staging unrelated diagnostic work.
+5. Refresh the Eden compatibility audit at revision `612409c7ba`, run the FW
    5.50 regression matrix and targeted CTS/deqp subset, and close any remaining
    format or command gaps demonstrated by those results.
-5. Build and install the pacbrew RmlUi package and layer the controller-driven
+6. Build and install the pacbrew RmlUi package and layer the controller-driven
    launcher over the proven emulator lifecycle. Keep Dear ImGui diagnostic-only.
-6. Freeze the final ELF/library hashes and replay the identical bytes and full
+7. Freeze the final ELF/library hashes and replay the identical bytes and full
    advertised-feature gate on FW 11.60.
