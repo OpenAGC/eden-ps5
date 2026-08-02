@@ -1098,27 +1098,39 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 
 The 2026-08-02/03 cleanup-first FW 5.500.008 investigation now proves that
 legacy-compatible color meta pipelines create, record, submit, and self-exit
-without an API error, but the immediate readback remains zero. OpenAGC now
-accepts a declared depth/stencil format without a bound target only when all
-depth/stencil tests, writes, bounds, stencil operations, and shader depth or
-stencil exports are inactive; its 19,949-assertion runtime suite and
-Vulkan-PS5 command-recording regression pass. The retained hardware logs
-`20260802T164237Z`, `20260802T165158Z`, `20260802T165848Z`, and
-`20260802T170147Z` show that the earlier later-control PASS labels inherited
-magenta and were not independent write proofs. After inserting an explicit
-zero reset, both the cached meta pipeline and a static push-constant control
-read back zero. The active discriminator is therefore color-write to transfer-
-read synchronization/visibility across submissions, not shader, NGG, push-
-constant, cache-identity, or front-face construction. Every run used the
-pinned cleanup ELF and ended with exact `eboot.bin` absence. Because the user
-is away from the console, automated readback/process evidence may continue,
-but visible presentation must remain unverified until direct observation is
-available.
+without an API error, but the first color-target write to the new image still
+reads zero. OpenAGC commit `ed7b9df` adds the Mesa GFX10.3 color-writer release
+sequence (`FLUSH_AND_INV_CB_META` followed by
+`FLUSH_AND_INV_CB_DATA_TS` and forward-sequenced GCR `0x703`); all 19,953
+exact host assertions pass. Cleanup-first ELF SHA-256
+`65b3b427f7c3750eff5b962cdbd7e00097deadfc5ecd47885ff3012897c2952c`
+in log `20260802T170935Z-format-attachments-run1.log` is unchanged: the first
+clear is zero and PID 150 is absent afterward. The independent reset run
+`20260802T171114Z-format-attachments-run1.log` proves that a fixed shader drawn
+in the same command after a compute zero reset is also zero, while the next
+submission's direct native fixed-pipeline helper writes exact magenta from
+that confirmed-zero image. Log `20260802T171642Z-format-attachments-run1.log`
+then proves that the direct legacy-compatible meta pipeline also writes exact
+magenta when run without another reset. Shader export, NGG, push constants,
+color-target binding, and color-to-transfer readback are therefore qualified;
+the remaining defect is a first-use or same-submit initialization/ordering
+dependency. Acquire-only and full CB-flush experiments for
+`UNDEFINED -> RenderTarget` in logs `20260802T172046Z` and
+`20260802T172202Z` did not change the zero result and were reverted. Every run
+used the pinned cleanup ELF and ended with exact `eboot.bin` absence. Because
+the user is away from the console, automated readback/process evidence may
+continue, but visible presentation must remain unverified until direct
+observation is available.
 
-1. Make `vkCmdClearAttachments` use a legacy pipeline compatible with the
-   active render pass and subpass, including correct MRT slot exports and the
-   complete active attachment set. Require the same-image hardware regression
-   to pass before another Eden launch.
+1. Split the regression into two cleanup-first submissions: initialize/touch
+   the optimal image and prove zero readback in submission A, then perform only
+   the direct meta clear and readback in submission B. If B passes, implement
+   explicit image backing/metadata initialization with a real inter-submit
+   dependency; if it fails, capture and diff the direct helper PM4 against the
+   first clear. Then remove the probe-only helper, eager prewarm, unbounded
+   render-pass cache, and single-layer clear restriction, add layered and
+   state-restoration regressions, and require the production
+   `vkCmdClearAttachments` oracle to pass before another Eden launch.
 2. Repeat the cleanup-first `2048.nro` 600-frame workload twice on FW 5.50
    through the
    real scheduler, shader cache, renderer, WSI, and present path. Require
