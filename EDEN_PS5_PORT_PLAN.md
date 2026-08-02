@@ -50,8 +50,14 @@ pipeline compiler worker and disables the unused CemuHook UDP and custom
 Joy-Con HID scanner workers while retaining SDL3 controller input, the null
 audio sink, and VI's normal dedicated VSync thread. Other platforms retain
 their existing worker counts and input backends. The focused host test
-`eden.ps5_thread_budget` passes, as do the host `core`/`video_core` builds and
-the source-integrated Prospero `yuzu-cmd` build.
+`eden.ps5_thread_budget` rebuilds from current source and passes all six cases
+and 20 assertions, as do the host `core`/`video_core` builds and the
+source-integrated Prospero `yuzu-cmd` build. The completion audit also confirms
+that `src/core/hle/service` and `src/core/hle/kernel/kernel.cpp` have no diff
+from Eden revision `612409c7ba`: service launch order, all six socket service
+registrations, both BSD companion workers, all three VI services, and the
+dedicated VSync thread therefore retain their original guest-visible
+semantics.
 
 FW `5.500.008` artifact
 `98fc5b71589c07a09cdea3440b8790fa22c0e43b4a51398abf46b239b5c930b3`
@@ -308,6 +314,26 @@ renderer slice, so audio does not consume an extra native service or worker.
 This completes the service host-thread budget gate; it does not replace the
 two-run 600-frame, relaunch, FW 11.60, or CTS/deqp completion gates.
 
+The completion audit rebuilt the current source-integrated `yuzu-cmd` target
+at Eden `77f1636c69`, producing ELF SHA-256
+`78326dd461d4c2e060eaa783791462549de81824068dd17345735a61bddaa35f`.
+The first cleanup-first replay,
+`Vulkan-PS5/examples/qualification-logs/20260802T132420Z-swapchain-run1.log`,
+failed closed at the already-known intermittent first Dynarmic RW-to-RX
+transition (`mprotect`, `errno=1`) before executing the invalid mapping; the
+guarded runner found PID 205 absent. This is a negative W^X sample, not a VI or
+service-budget regression. After another cleanup-ELF launch and exact-name
+absence check, the identical ELF passed in
+`Vulkan-PS5/examples/qualification-logs/20260802T132557Z-swapchain-run1.log`
+with scoped kernel log
+`Vulkan-PS5/examples/qualification-logs/20260802T132557Z-swapchain-run1-target.klog`.
+It again clears every VI call, presents frames 0 through 7, emits
+`GAME PASS 8 frames`, and completes the bounded kernel exit lifecycle with PID
+208 absent. The scoped kernel log contains no crash or coredump marker and
+exactly one `0x4000` VM-resource warning: the established raw-ELF teardown
+baseline, not zero-VM-leak evidence. No native allocation or OpenAGC failure is
+present in the passing run.
+
 The earlier terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
@@ -335,8 +361,8 @@ extent against the view's minified mip dimensions, and propagate the view mip
 through color/depth render-pass and clear bindings. Command-level regression
 now records a mip-1/slice-1 render pass, clear, and draw. OpenAGC passes all 19
 CTest entries and 19,830 assertions; Vulkan-PS5 passes all 62 host tests; both
-Prospero builds pass. Hardware qualification of this correction, followed by
-orderly failure propagation or sustained draw/presentation, is the active
+Prospero builds pass. The cleanup-first draw and presentation runs recorded
+above later hardware-qualified this correction; it is no longer the active
 gate.
 
 ## Scope
@@ -835,8 +861,8 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   `20260802T051216Z-swapchain-run1`. That artifact is
   `d7aacb715a7ec61e83d0fcecfd2d5965529d03d5cd062ab739c5bd74fe7945e3`.
   Subsequent guarded slices closed unnormalized-sampler, API 55 compute-scratch,
-  and consecutive descriptor-binding gaps. The current pinned artifact
-  `4eae3b998f9a92664d41b86325a62bc8f9d2186a8c592e471ac180038923e490`
+  and consecutive descriptor-binding gaps. The historical construction
+  artifact `4eae3b998f9a92664d41b86325a62bc8f9d2186a8c592e471ac180038923e490`
   reaches the final rasterizer checkpoint in
   `20260802T074820Z-swapchain-run1`. Follow-up candidate
   `847db1f2b0e66eaa19a43bcc35afb3e2f39de215c1babf4c7313d157def1f72e`
@@ -847,11 +873,12 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   flexible-memory exhaustion boundaries. The narrowed presentation resource
   policy and Vulkan-PS5 `GENERAL` render-pass support then clear the guest
   image-format boundary. OpenAGC `5ff3eea` closes the primitive-shader
-  reflection rejection in host/build qualification, but the first integrated
-  replay stopped earlier at the unsupported JIT-shm/mprotect hybrid. The
-  current production gate is cleanup-first FW 5.50 proof of the ordinary
-  anonymous same-address W^X allocator, followed by the still-unproven
-  29-SGPR presentation pipeline.
+  reflection rejection in host/build qualification; its first integrated
+  replay stopped earlier at the unsupported JIT-shm/mprotect hybrid. Later
+  cleanup-first runs hardware-qualified the same-address W^X success path and
+  the 29-SGPR presentation pipeline through eight presented frames. The
+  current production gate is the two-run 600-frame FW 5.50 workload and
+  immediate relaunch recorded in the immediate next slice.
 
 ## Milestones and gates
 
