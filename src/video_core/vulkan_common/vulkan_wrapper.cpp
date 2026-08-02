@@ -692,9 +692,13 @@ ImageView Device::CreateImageView(const VkImageViewCreateInfo& ci) const {
     const VkResult result = dld->vkCreateImageView(handle, &ci, nullptr, &object);
 #if defined(__PROSPERO__)
     if (result != VK_SUCCESS) {
-        std::fprintf(stderr, "eden-ps5: vkCreateImageView failed: result=%d format=%d view=%d\n",
+        std::fprintf(stderr,
+                     "eden-ps5: vkCreateImageView failed: result=%d format=%d view=%d "
+                     "aspect=0x%x base_mip=%u levels=%u base_layer=%u layers=%u\n",
                      static_cast<int>(result), static_cast<int>(ci.format),
-                     static_cast<int>(ci.viewType));
+                     static_cast<int>(ci.viewType), ci.subresourceRange.aspectMask,
+                     ci.subresourceRange.baseMipLevel, ci.subresourceRange.levelCount,
+                     ci.subresourceRange.baseArrayLayer, ci.subresourceRange.layerCount);
     }
 #endif
     Check(result);
