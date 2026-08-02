@@ -113,7 +113,7 @@ failure. It reaches six 29-user-SGPR NGG pipeline compilations without the
 former OpenAGC `0x8089000b` rejection, hardware-clearing the graphics 32-slot
 pipeline-creation gate. Draw and presentation proof remain open.
 
-The next terminal boundary is `vkCreateImageView`: Vulkan format 51
+The next terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
 emulated time 5.83 seconds. The process then remains live until the guarded
@@ -121,8 +121,22 @@ web request expires at 120 seconds. The failure branch captures its `.klog`
 before retiring PID 162, so it proves no kernel crash, coredump, or allocation
 failure before the forced retirement but cannot prove clean teardown or a
 leak-free exit. The runner's kill reported PID 162 absent, and an independent
-exact-name postcheck also found no `eboot.bin` process. Correct image-view
-validation/creation and orderly failure propagation are the active gates.
+exact-name postcheck also found no `eboot.bin` process.
+
+The failure was a legal 2D depth-slice view of a 3D image created with
+`VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT`, not a format-support failure. The
+Mesa RADV gfx10 path confirms the required encoding model: retain the original
+3D allocation base, encode a 2D-array resource descriptor, and select the
+requested depth slices with its base/last-array fields. OpenAGC commit
+`30e830c` adds that ABI-safe image flag and descriptor path with minified-depth
+range validation and single-mip enforcement. Its generic suite passes all 19
+CTest entries and 19,827 assertions, and its Prospero build passes. Vulkan-PS5
+commit `2f23dd2` maps and validates the Vulkan contract, accepts both compatible
+2D and 2D-array views, and adds the format/image/view regressions. Its focused
+`vulkan_ps5.image_cube_array` test and full 62-test host suite pass, as does the
+full Prospero build. Hardware qualification of this correction, followed by
+orderly failure propagation or sustained draw/presentation, is the active
+gate.
 
 ## Scope
 
