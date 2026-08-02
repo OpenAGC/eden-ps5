@@ -1341,6 +1341,39 @@ swapchain samples; later diagnostic samples are also zero. Therefore the
 committed-state defect is proven and fixed, but it is not the final Eden black
 screen owner and no visible Eden output is claimed.
 
+Case I extends H with Eden's exact diagnostic sequence: sixteen sparse 1x1
+source copies at buffer offsets 0-60, the scaling blit, then sixteen sparse
+destination copies at offsets 64-124 in the same 128-byte buffer. ELF
+`fb17860994c7378c1adc7bf579d15a2048ceac8d25118ba987141fb13f320add`
+passes H and both I halves with exact magenta in
+`20260802T234715Z-swapchain-run1.log`; PID 302 and the global exact process
+name are absent after cleanup. The longer aggregate exited later, so this is
+focused H/I evidence rather than a complete A-I gate. Vulkan-PS5 commit
+`4044adb` retains the regression. The sparse source read before blit is
+therefore not the black-screen owner.
+
+A bounded transition journal on Eden ELF
+`a8d51af581a9f431495f07f32adba40b1ef55498a42f4e7da159169ba663de28`
+completes eight frames in `20260802T234847Z-swapchain-run1.log` with PID 305
+and the global exact process name absent. It shows the production source is
+already committed as ColorTarget when the consumer records, the barrier
+encodes ColorTarget-to-CopySource without the committed-state fallback, and
+the blit records successfully with the same CopySource/CopyDestination state
+pair as H/I. The material remaining difference is virtual placement: Eden's
+first source/destination are around `0x31e000000`/`0x310e00000`, after the
+4 GiB guest reservation, while standalone matrix resources are around the
+already-qualified `0x2...` band. Earlier direct GPU scanout clears also stayed
+zero, so high virtual placement of the Garlic/display target is the leading
+candidate; this is not yet proof of an address-encoding defect.
+
+An attempted fixed 64 GiB guest reservation is rejected evidence: ELF
+`b3122a9a6137a99985651f84a424577139ad1676322650fa1c972957d2a8d2a1`
+made the console unreachable in `20260802T235346Z-swapchain-run1.log`, so
+cleanup and exact process absence could not be verified. The source change was
+immediately reverted and must not be relaunched. Future address probes must
+use a bounded reservation-discovery or low display-allocation strategy rather
+than an unproven fixed 4 GiB mapping.
+
 The Prospero Dynarmic code cache remains fail-closed: every allocation,
 demotion, RW-to-RX, RX-to-RW, and unmap failure enters the noreturn PS5
 termination path before invalid code can execute. Hardware logs have shown an
@@ -1359,12 +1392,13 @@ process name were absent after cleanup. This persistent relaunch failure is
 now an active owner of the eventual two-run gate, not merely a historical
 observation.
 
-1. Compare the now-passing H sequence with Eden at the next unmeasured
-   production boundary: the exact two-command-buffer contents and transition
-   journal, scheduler submission grouping, descriptor/cache lifetime, and the
-   diagnostic sample point relative to native submission completion. Add one
-   bounded oracle per demonstrated difference. Do not advance the long gate
-   until Eden's sequence-zero swapchain readback is exact magenta.
+1. Qualify virtual-address sensitivity without another broad fixed mapping:
+   first add a bounded OpenAGC/display probe that discovers a free target range
+   or reproduces Eden's post-guest allocation order, then compare low and high
+   Garlic scanout writes with exact readback. Audit the gfx1013 sampled-image
+   and color-target base encoding against Mesa before changing production
+   placement. Do not advance the long gate until Eden's sequence-zero
+   swapchain readback is exact magenta.
 2. After sequence-zero scanout is proven, repeat the cleanup-first `2048.nro`
    600-frame workload twice on FW 5.50
    through the
