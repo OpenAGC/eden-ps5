@@ -13,6 +13,37 @@ revision `e78b64eaf8`, OpenAGC revision `6a9b7bcac3`, and openagc-psbc revision
 `ef8a98cb5e`, plus SDL2 2.30.12 and the pinned Mesa/Zink integration recorded in
 the adjacent projects.
 
+## Active completion goal
+
+Finish general-purpose Vulkan-PS5 support required by Eden at revision
+`612409c7ba` and by other Vulkan applications. Completion requires all of the
+following evidence; a startup-only probe or a single visible frame is not the
+finish line:
+
+- Refresh `Vulkan-PS5/analysis/eden-compatibility.md` against this exact Eden
+  revision and the current OpenAGC, openagc-psbc, and Vulkan-PS5 revisions.
+- Complete and qualify the uncompressed and BC format matrix actually required
+  by Eden. Keep D24, ASTC, ETC/EAC, and unsupported storage-image combinations
+  fail-closed until a native implementation or an explicit, tested conversion
+  path exists.
+- Implement the clear, color/depth/stencil attachment clear, blit, resolve,
+  transfer, synchronization, and other command forms observed in real Eden
+  workloads through public OpenAGC APIs. Vulkan-PS5 must not regain a private
+  PM4, raw-address, firmware-selection, allocation, or submission path.
+- Complete the full Prospero application build, PS5 surface/native-window WSI,
+  and standard Vulkan entrypoint integration without Eden-specific driver
+  workarounds.
+- Prove Eden's production VMA allocator, shader cache, pipeline creation,
+  command recording, rendering, presentation, failure cleanup, orderly
+  teardown, and immediate relaunch with real workloads.
+- Add host regression coverage and hardware oracles for every capability slice,
+  update the relevant documentation, and create a scoped commit after each
+  verified meaningful change.
+- Qualify the final pinned identical ELF and library bytes first on FW 5.50 and
+  then on FW 11.60 with bounded waits, clean logs, zero leaked processes or
+  native allocations, and a targeted Vulkan CTS/deqp set. Until that endpoint
+  evidence exists, Vulkan-PS5 remains explicitly non-conformant.
+
 ## Frontend decision
 
 Use RmlUi for the production PS5 interface. Keep Dear ImGui optional and
@@ -432,16 +463,22 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 
 ## Immediate next slice
 
-1. Rebuild the full frontend with the qualified sparse page-table path and run
-   the guarded 600-frame `2048.nro` workload twice on FW 5.50. Record the next
-   real scheduler, shader-cache, renderer, WSI, or presentation failure rather
-   than adding another startup-only harness.
-2. Close only the general-purpose Vulkan-PS5/OpenAGC gap demonstrated by that
-   production workload, then repeat clean teardown and immediate relaunch.
-3. Boot a small representative application through the real scheduler, shader cache,
-   renderer, WSI, and present path, closing only general-purpose Vulkan/OpenAGC
-   gaps exposed by that workload.
-4. Build and install the pacbrew RmlUi package and layer the controller-driven
+1. Run the current cleanup-first FW 5.50 diagnostic build with the fine-grained
+   `RasterizerVulkan` member-construction checkpoints. Attribute the existing
+   `VK_ERROR_FEATURE_NOT_PRESENT` to the exact Vulkan call and object rather
+   than inferring the missing feature from constructor order alone.
+2. Close the demonstrated general-purpose Vulkan-PS5/OpenAGC gap, add a host
+   regression for that exact path, remove the temporary checkpoints, and prove
+   failed-initialization teardown no longer reaches the invalid mutex-lock
+   exception or leaves a process/native allocation behind.
+3. Repeat the guarded `2048.nro` workload twice on FW 5.50 through the real
+   scheduler, shader cache, renderer, WSI, and present path. Continue from the
+   next production failure until visible rendering, bounded presentation,
+   teardown, and immediate relaunch all pass.
+4. Refresh the Eden compatibility audit at revision `612409c7ba`, run the FW
+   5.50 regression matrix and targeted CTS/deqp subset, and close any remaining
+   format or command gaps demonstrated by those results.
+5. Build and install the pacbrew RmlUi package and layer the controller-driven
    launcher over the proven emulator lifecycle. Keep Dear ImGui diagnostic-only.
-5. Run the FW 5.50 regression matrix and CTS/deqp subset, then freeze identical
-   bytes for the deferred FW 11.60 endpoint replay.
+6. Freeze the final ELF/library hashes and replay the identical bytes and full
+   advertised-feature gate on FW 11.60.
