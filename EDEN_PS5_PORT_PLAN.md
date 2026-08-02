@@ -1257,30 +1257,50 @@ sequence-zero intermediate readback also leaves scanout zero (ELF
 `20260802T224359Z-swapchain-run1.log`, PID 258 absent), eliminating that
 readback as the cause. All temporary Eden and WSI controls have been removed.
 
-A dedicated cleanup-first `vulkan_ps5_scanout_matrix_probe` now qualifies five
+A dedicated cleanup-first `vulkan_ps5_scanout_matrix_probe` now qualifies six
 generic paths with exact full-image 1920x1080 readback: (A) BGRA Garlic source
 to an ordinary scaled destination, (B) RGBA Garlic source to mutable scanout
 through a scaling blit, (C) a fixed-fragment draw directly to scanout, (D) a
 BGRA Garlic source reused by a later submission and blitted to scanout, and
 (E) a first-use Eden-style BGRA UNORM Garlic intermediate produced through a
 `MAY_ALIAS`, `GENERAL` render pass and then blitted to scanout in a later
-submission. The restored A-D baseline ELF
+submission, and (F) the same producer/blit contract backed by the exact type-0
+Onion memory and `TRANSFER_SRC|COLOR_ATTACHMENT` usage selected by Eden's VMA
+allocation. The restored A-D baseline ELF
 `e28c6da8d9e05def5c6ff1ddcba960f07526a7c3ade2944ce7f50a872fc0978b`
 passes in `20260802T225010Z-swapchain-run1.log` with PID 264 absent. The
 extended A-E ELF
 `f9a8dc161add27f6e7ee97ffcf3cae85deb6aee0b3293bfd2e9c3140df69eae6`
 passes in `20260802T225413Z-swapchain-run1.log` with PID 266 and the global
-exact-name check absent. A preliminary nonzero-memory-offset variation is
+exact-name check absent. The A-F ELF
+`08e71ef77656b2b5b258383eef91f472e1a20a66fe9e6e5e664410dcbe419e8b`
+passes every exact readback in `20260802T230614Z-swapchain-run1.log`, with PID
+273 and the global exact-name check absent. The user also visually confirmed
+magenta presentation from the diagnostic matrix; this is visible standalone
+scanout evidence, not yet visible Eden game output. A preliminary
+nonzero-memory-offset variation is
 invalid evidence: it failed source-image creation before graphics work (ELF
 `46a29b...`, `20260802T224607Z-swapchain-run1.log`, PID 261 absent). Source
 audit confirms that placed-image view descriptors include `memory_offset`; the
 failed variation is not a placement diagnosis.
 
-The remaining owner is an Eden-production difference in exact native image
-parameters, recorded image state, allocation/placement, or command sequence,
-not generic scanout allocation, native presentation, GPU scaling blits, direct
-scanout draws, cross-submit reuse, the format correction alone, qualification
-readback, or the isolated Eden-style intermediate render pass.
+Bounded native-blit logging then compares the passing matrix and failing Eden
+production call. Eden ELF
+`5bf7a1c3066aa571abdb8a8355dbf3cdaa5ba3061f041513d506e0c0169ac6e1`
+completes eight frames in `20260802T230201Z-swapchain-run1.log` with exact
+sequence-zero intermediate magenta and zero scanout; PID 270 is absent. Its
+source differs from matrix E by type-0 Onion placement and usage `0x11`, but
+matrix F reproduces those values and passes. The extended native-state matrix
+ELF `924e80d9aa58d9399089c817007f062c800635d95fc44a2b31b02f33dab3166e`
+also passes in `20260802T230901Z-swapchain-run1.log`, with source state
+`usage=1 owner=1`, destination state `usage=2 owner=1`, PID 275 absent, and all
+logged image descriptors otherwise matching Eden's production blit. Forcing
+Garlic is therefore not a demonstrated fix. The remaining owner is an
+Eden-production command-sequence, cross-command state, VMA multi-placement, or
+cache/descriptor-lifetime difference, not generic scanout allocation, Onion
+sampling alone, native presentation, GPU scaling blits, direct scanout draws,
+cross-submit reuse, the format correction, qualification readback, or the
+isolated Eden-style intermediate render pass.
 
 The Prospero Dynarmic code cache remains fail-closed: every allocation,
 demotion, RW-to-RX, RX-to-RW, and unmap failure enters the noreturn PS5
@@ -1291,14 +1311,21 @@ memory and invalid-mapping diagnostics. A shell regex regression covers the
 initial-demotion, both protection directions, unmap, and overflow messages and
 does not match a healthy cache-ready message. This strengthens the 600-frame
 gate but does not claim that the intermittent firmware failure is resolved.
+The diagnostic Eden ELF
+`30a2743c6e16288c9f4e9cc3422e4bf794aaf11feb2e1b7204ea00de5a641576`
+then hit this exact fail-closed `EPERM` twice consecutively before graphics in
+`20260802T230942Z-swapchain-run1.log` and
+`20260802T231044Z-swapchain-run1.log`; PIDs 277 and 280 and the global exact
+process name were absent after cleanup. This persistent relaunch failure is
+now an active owner of the eventual two-run gate, not merely a historical
+observation.
 
-1. Add bounded Prospero-only native-blit recording for Eden and matrix case E:
-   logical and native formats, flags, usage, tiling, extents, subresources,
-   requested layouts, recorded AGC state/owner, memory type/offset/alignment,
-   GPU address, and the selected meta pipeline/target state. Compare the exact
-   records and add one focused matrix case for each material difference. Do
-   not advance the long gate until Eden's sequence-zero scanout readback is
-   exact magenta.
+1. Compare Eden and matrix F at the next unmeasured production boundary:
+   actual cross-command AGC state/owner, VMA's shared multi-image placement,
+   and descriptor/cache lifetime. Add one focused probe per demonstrated
+   difference, and remove the bounded native-blit logger after it identifies
+   the owner. Do not advance the long gate until Eden's sequence-zero scanout
+   readback is exact magenta.
 2. After sequence-zero scanout is proven, repeat the cleanup-first `2048.nro`
    600-frame workload twice on FW 5.50
    through the
