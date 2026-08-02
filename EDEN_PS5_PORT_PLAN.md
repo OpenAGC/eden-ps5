@@ -409,6 +409,23 @@ next Eden launch, add an exact B8G8R8A8 UNORM optimal-image `GENERAL`
 render/clear/readback regression below the frontend and fix that failure at its
 owning layer.
 
+Vulkan-PS5 commits `79e89d6` and `0dcc4b2` add that lower-layer regression
+and a transfer-clear discriminator. Cleanup-first FW 5.500.008 run
+`Vulkan-PS5/examples/qualification-logs/20260802T153944Z-format-attachments-run1.log`
+used post-commit ELF SHA-256
+`0381b48b521c68ea81137f09cd3b439a724b0b2f359240a2bc4cdae2f2e6e330`.
+The explicit full-rect magenta `vkCmdClearAttachments` draw records, submits,
+and fences successfully but reads back zero at the first sampled pixel. The
+control then clears the same optimal, device-local B8G8R8A8 UNORM image with
+`vkCmdClearColorImage` and passes exact magenta checks at the first, center,
+and last pixels through the same image-to-buffer copy, mapped allocation, and
+invalidation path. PID 108 self-exits and the runner independently finds no
+matching `eboot.bin`. This isolates the active defect to OpenAGC's graphics
+color-target write path; allocation, transfer writes, image-to-buffer copy,
+host visibility, and BGRA interpretation are now directly qualified. Fix and
+regress the graphics target binding/export/cache state before rebuilding or
+launching Eden again.
+
 The earlier terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
