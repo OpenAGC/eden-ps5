@@ -489,6 +489,23 @@ the emitted PM4 streams, to separate cached meta-pipeline construction from
 the bypass replay itself. Do not return to Eden qualification until this exact
 regression passes.
 
+Vulkan-PS5's unexported native color-target control now performs that exact
+discriminator without exposing an OpenAGC handle through the public Vulkan
+ABI. Cleanup-first FW 5.500.008 run
+`Vulkan-PS5/examples/qualification-logs/20260802T161848Z-format-attachments-run1.log`
+used ELF SHA-256
+`6afc4d5a8bb262b67497b9dfd6c1e66c94dc839b302079ce6d58f24734245207`.
+The ordinary Vulkan draw and the direct native replay of its known-good legacy
+pipeline both write exact magenta at all three samples. The ordinary
+push-constant draw and transfer clear also pass, while only the cached meta
+attachment pipeline still produces zero. PID 123 self-exits, and independent
+checks find neither `eboot.bin` nor `eboot.elf`. This eliminates the direct
+bind/viewport/scissor/color-target/draw bypass and confines the defect to meta
+pipeline construction. Replace the invalid dynamic-rendering meta pipeline
+with an active-render-pass/subpass-compatible legacy pipeline, bind the full
+subpass attachment set, and retain an MRT slot regression before returning to
+Eden.
+
 The earlier terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
@@ -1079,27 +1096,31 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 
 ## Immediate next slice
 
-1. Repeat the cleanup-first `2048.nro` 600-frame workload twice on FW 5.50
+1. Make `vkCmdClearAttachments` use a legacy pipeline compatible with the
+   active render pass and subpass, including correct MRT slot exports and the
+   complete active attachment set. Require the same-image hardware regression
+   to pass before another Eden launch.
+2. Repeat the cleanup-first `2048.nro` 600-frame workload twice on FW 5.50
    through the
    real scheduler, shader cache, renderer, WSI, and present path. Require
    visible frames, bounded teardown, and immediate relaunch on both runs.
-2. Use the bounded end/submit/acquire/present checkpoints to measure the
+3. Use the bounded end/submit/acquire/present checkpoints to measure the
    600-frame runtime, then remove them after the two-run gate is stable. Retain
    JIT/flexible-memory failure diagnostics until renderer relaunch is proven.
-3. Qualify a small `libSceUserService`/`libScePad` probe, implement the native
+4. Qualify a small `libSceUserService`/`libScePad` probe, implement the native
    controller/event/lifecycle bridge, and remove SDL3 from the production
    Prospero target.
-4. Qualify the `libSceAudioOut` ABI with a standalone bounded-buffer probe,
+5. Qualify the `libSceAudioOut` ABI with a standalone bounded-buffer probe,
    then implement Eden's native AudioOut sink using the mGBA transport pattern.
    Keep null audio as an explicit fail-closed fallback; do not use SDL2_mixer
    for emulated audio.
-5. Remove the temporary construction checkpoints after stable renderer start,
+6. Remove the temporary construction checkpoints after stable renderer start,
    update the exact evidence and hashes, and commit that verified slice without
    staging unrelated diagnostic work.
-6. Refresh the Eden compatibility audit at revision `612409c7ba`, run the FW
+7. Refresh the Eden compatibility audit at revision `612409c7ba`, run the FW
    5.50 regression matrix and targeted CTS/deqp subset, and close any remaining
    format or command gaps demonstrated by those results.
-7. Build and install the pacbrew RmlUi package, make its SDL2 dependency
+8. Build and install the pacbrew RmlUi package, make its SDL2 dependency
    optional or isolate it from the production runtime, and layer the
    controller-driven launcher over the proven emulator lifecycle. Keep Dear
    ImGui diagnostic-only.
