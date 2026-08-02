@@ -506,13 +506,30 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   retirement with no panic, fault, assertion, or stale process.
 - The first full `2048.nro` launch after the page-table gate reached Dynarmic
   construction and failed with `Xbyak::Error: can't alloc` because the generic
-  allocator requested a 512 MiB executable `mmap` on Prospero. Dynarmic now
-  obtains its executable cache from a tracked 16 KiB-aligned flexible-memory
-  mapping, stores the exact mapping size for teardown, uses RWX protection,
-  and caps each Prospero A32/A64 JIT cache at 64 MiB. Host `core` and the full
-  Prospero frontend build pass. FW 5.50 then advanced through JIT creation and
-  loaded `2048.nro`; the failing-before log is
-  `20260802T050354Z-swapchain-run1`.
+  allocator requested a 512 MiB executable `mmap` on Prospero. The interim
+  flexible-memory cache subsequently proved unsuitable: FW 5.50 accepted the
+  RWX request but faulted on the first instruction fetch at `0x303404010`, the
+  exact Dynarmic dispatcher address. Prospero now enables Dynarmic's existing
+  no-execute support, creates each cache with `sceKernelJitCreateSharedMemory`,
+  maps one RW address, and performs checked RW-to-RX/RX-to-RW transitions
+  around emission and patching. Create, map, descriptor-close, protection, and
+  unmap failures are diagnosed and fail closed. The per-core A32/A64 cache is
+  16 MiB because JIT shared memory remains physically charged to the native
+  app; four 64 MiB caches left no headroom even for a later 64 KiB sparse page
+  table chunk (`0x8002000c`). Ordinary flexible-buffer failures now report the
+  exact requested/aligned size and kernel result.
+
+  Cleanup-first FW 5.50 run `20260802T090402Z-swapchain-run1` proved the W^X
+  transition removed the execute fault and reached guest execution. Run
+  `20260802T090810Z-swapchain-run1` pinned the 64 KiB out-of-memory boundary.
+  Artifact `6b49e812f4589d66af38d3119521c5edc51d68e1c3625d873758d5ab391e1373`
+  with the 16 MiB caches then crossed that boundary, created the managed VI
+  display layer, initialized HID and NVDRV, and stopped at the next independent
+  `VK_ERROR_FORMAT_NOT_SUPPORTED` boundary in
+  `20260802T090914Z-swapchain-run1`. The full Prospero frontend build, native
+  host `core`/`video_core` builds, and `eden.ps5_thread_budget` CTest pass. This
+  is discovery evidence, not a clean-run qualification: the format exception
+  still triggers the coredump/forced-retirement path.
 - Eden's Vulkan instance creation now forwards the API version negotiated from
   `vkEnumerateInstanceVersion` instead of hard-coding Vulkan 1.3. This keeps
   the application honest against Vulkan-PS5's current Vulkan 1.2 contract.
@@ -530,8 +547,11 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   removes the `dsp`/Opus startup boundary and reaches the same checkpoint in
   `20260802T081021Z-swapchain-run1`. The one-worker/SDL-only host-input policy
   then clears the VI thread boundary in `20260802T085539Z-swapchain-run1`; the
-  current production boundary is the deterministic guest execute fault
-  recorded in the active diagnostic above.
+  W^X JIT-shm and 16 MiB per-core cache policy then clear both the deterministic
+  guest execute fault and the 64 KiB flexible-memory exhaustion boundary. The
+  current production boundary is the guest NVDRV image-format request ending
+  in `VK_ERROR_FORMAT_NOT_SUPPORTED` in
+  `20260802T090914Z-swapchain-run1`.
 
 ## Milestones and gates
 
@@ -577,14 +597,14 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 
 ## Immediate next slice
 
-1. Diagnose the deterministic `CPUCore_0` execute fault at `0x303404010` now
-   that the service host-thread boundary is cleared. Preserve the one-worker
-   pipeline budget, full service/BSD IPC concurrency, SDL3 input, normal VI
-   VSync behavior, and null audio while identifying the invalid guest/JIT
-   executable mapping.
-2. Retain the construction checkpoints until renderer startup is stable, and
-   make the new failure path fail closed with neither a coredump nor a live
-   process/native allocation.
+1. Trace the guest NVDRV image request that currently ends in
+   `VK_ERROR_FORMAT_NOT_SUPPORTED` after HID/NVDRV initialization. Record the
+   exact guest format, usage, tiling, and public Vulkan-PS5/OpenAGC call that
+   rejects it; add only a general-purpose format path justified by that trace.
+2. Retain the construction checkpoints and JIT/flexible-memory diagnostics
+   until renderer startup is stable. Convert the current uncaught format
+   exception into a bounded failure while fixing the root format path, with
+   neither a coredump nor a live process/native allocation.
 3. Repeat the cleanup-first `2048.nro` workload twice on FW 5.50 through the
    real scheduler, shader cache, renderer, WSI, and present path. Require
    visible frames, bounded teardown, and immediate relaunch on both runs.

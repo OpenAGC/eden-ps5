@@ -7,6 +7,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #else
+#include <cstdio>
 #include <sys/mman.h>
 #endif
 
@@ -46,8 +47,15 @@ void* AllocateMemoryPages(std::size_t size) noexcept {
         return nullptr;
     const std::size_t aligned_size = AlignUp(size, ProsperoPageSize);
     void* base = nullptr;
-    if (sceKernelMapFlexibleMemory(&base, aligned_size, ProsperoCpuReadWrite, 0) != 0)
+    const int result =
+        sceKernelMapFlexibleMemory(&base, aligned_size, ProsperoCpuReadWrite, 0);
+    if (result != 0) {
+        std::fprintf(stderr,
+                     "eden-ps5 virtual buffer allocation failed: requested=0x%zx "
+                     "aligned=0x%zx result=0x%x\n",
+                     size, aligned_size, static_cast<unsigned int>(result));
         base = nullptr;
+    }
 #else
     void* base = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
     if (base == MAP_FAILED)

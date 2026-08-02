@@ -13,6 +13,7 @@
 #    include <windows.h>
 #else
 #    include <sys/mman.h>
+#    include <unistd.h>
 #endif
 
 #ifdef __APPLE__
@@ -22,6 +23,7 @@
 #endif
 
 #include <array>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <limits>
@@ -68,8 +70,8 @@ constexpr size_t PROSPERO_PAGE_SIZE = 0x4000;
 constexpr int PROSPERO_CPU_READ_WRITE_EXECUTE = 0x07;
 
 extern "C" {
-int sceKernelMapFlexibleMemory(void** address, size_t length, int protection, int flags);
-int sceKernelReleaseFlexibleMemory(void* address, size_t length);
+int sceKernelJitCreateSharedMemory(uintptr_t name, size_t length, uint64_t max_protection,
+                                   int* descriptor);
 int sceKernelMunmap(void* address, size_t length);
 }
 
@@ -114,13 +116,35 @@ public:
         }
         size = AlignUpProspero(size + DYNARMIC_PAGE_SIZE);
 
-        void* mapping = nullptr;
-        const int result = sceKernelMapFlexibleMemory(
-            &mapping, size, PROSPERO_CPU_READ_WRITE_EXECUTE, 0);
-        if (result != 0 || mapping == nullptr) {
+        int descriptor = -1;
+        const int create_result = sceKernelJitCreateSharedMemory(
+            0, size, PROSPERO_CPU_READ_WRITE_EXECUTE, &descriptor);
+        if (create_result != 0 || descriptor < 0) {
             std::fprintf(stderr,
-                         "eden-ps5 dynarmic code-cache allocation failed: size=0x%zx result=0x%x\n",
-                         size, static_cast<unsigned int>(result));
+                         "eden-ps5 dynarmic JIT-shm creation failed: size=0x%zx result=0x%x "
+                         "descriptor=%d\n",
+                         size, static_cast<unsigned int>(create_result), descriptor);
+            using Xbyak::Error;
+            XBYAK_THROW(Xbyak::ERR_CANT_ALLOC);
+        }
+
+        void* mapping = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor, 0);
+        const int map_errno = errno;
+        const int close_result = close(descriptor);
+        if (mapping == MAP_FAILED) {
+            std::fprintf(stderr,
+                         "eden-ps5 dynarmic JIT-shm mapping failed: size=0x%zx errno=%d\n",
+                         size, map_errno);
+            using Xbyak::Error;
+            XBYAK_THROW(Xbyak::ERR_CANT_ALLOC);
+        }
+        if (close_result != 0) {
+            const int close_errno = errno;
+            sceKernelMunmap(mapping, size);
+            std::fprintf(stderr,
+                         "eden-ps5 dynarmic JIT-shm descriptor close failed: size=0x%zx "
+                         "errno=%d\n",
+                         size, close_errno);
             using Xbyak::Error;
             XBYAK_THROW(Xbyak::ERR_CANT_ALLOC);
         }
@@ -161,12 +185,13 @@ public:
         std::memcpy(&size, p - DYNARMIC_PAGE_SIZE, sizeof(size_t));
 #if defined(__PROSPERO__)
         void* const mapping = p - DYNARMIC_PAGE_SIZE;
-        const int release_result = sceKernelReleaseFlexibleMemory(mapping, size);
-        if (release_result != 0 && sceKernelMunmap(mapping, size) != 0) {
+        const int unmap_result = sceKernelMunmap(mapping, size);
+        if (unmap_result != 0) {
             std::fprintf(stderr,
-                         "eden-ps5 dynarmic code-cache release failed: size=0x%zx result=0x%x\n",
-                         size, static_cast<unsigned int>(release_result));
+                         "eden-ps5 dynarmic JIT-shm unmap failed: size=0x%zx result=0x%x\n",
+                         size, static_cast<unsigned int>(unmap_result));
         }
+        ASSERT(unmap_result == 0);
 #else
         munmap(p - DYNARMIC_PAGE_SIZE, size);
 #endif
@@ -194,7 +219,17 @@ void ProtectMemory(const void* base, size_t size, bool is_executable) {
     const size_t iaddr = reinterpret_cast<size_t>(base);
     const size_t roundAddr = iaddr & ~(pageSize - static_cast<size_t>(1));
     const int mode = is_executable ? (PROT_READ | PROT_EXEC) : (PROT_READ | PROT_WRITE);
-    mprotect(reinterpret_cast<void*>(roundAddr), size + (iaddr - roundAddr), mode);
+    const size_t protect_size = size + (iaddr - roundAddr);
+    const int result = mprotect(reinterpret_cast<void*>(roundAddr), protect_size, mode);
+    if (result != 0) {
+#        if defined(__PROSPERO__)
+        std::fprintf(stderr,
+                     "eden-ps5 dynarmic code-cache mprotect failed: base=%p size=0x%zx "
+                     "mode=0x%x errno=%d\n",
+                     reinterpret_cast<void*>(roundAddr), protect_size, mode, errno);
+#        endif
+    }
+    ASSERT(result == 0);
 #    endif
 }
 #endif

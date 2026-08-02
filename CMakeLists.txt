@@ -27,6 +27,14 @@ if (NOT DEFINED ARCHITECTURE)
     message(FATAL_ERROR "Architecture didn't make it out of scope, did you delete DetectArchitecture.cmake?")
 endif()
 
+if (PLATFORM_PS5)
+    # Prospero enforces W^X for generated code even when flexible memory accepts
+    # an RWX maximum-protection mask. Dynarmic must toggle its cache between
+    # writable and executable states around code generation.
+    set(DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT ON CACHE BOOL
+        "Enable Dynarmic W^X code-cache protection on Prospero" FORCE)
+endif()
+
 option(EDEN_PS5_BOOTSTRAP_ONLY
     "Build only the Prospero Vulkan lifecycle bootstrap" ${PLATFORM_PS5})
 set(EDEN_PS5_VULKAN_PS5_SOURCE_DIR "" CACHE PATH

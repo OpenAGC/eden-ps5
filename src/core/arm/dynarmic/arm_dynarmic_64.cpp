@@ -269,7 +269,9 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
 
     // Code cache size
 #if defined(__PROSPERO__)
-    config.code_cache_size = std::uint32_t(64_MiB);
+    // JIT shared memory is physically budgeted on Prospero. Keep four CPU cores below the
+    // native-app ceiling while retaining enough cache for homebrew workloads.
+    config.code_cache_size = std::uint32_t(16_MiB);
 #elif defined(ARCHITECTURE_arm64) || defined(__sun__) || defined(__NetBSD__) ||                    \
     defined(__DragonFly__) || defined(__OpenBSD__)
     config.code_cache_size = std::uint32_t(128_MiB);
