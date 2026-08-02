@@ -99,9 +99,30 @@ the payload-SDK LLVM MCJIT path: page-aligned anonymous memory starts RW and is
 serialized through checked RW/RX `mprotect` transitions at the same address.
 Every Prospero allocation, protection, or unmap failure terminates through the
 bounded, non-coredumping SystemService path without executing an invalid
-mapping. Host Dynarmic and `eden.ps5_thread_budget` builds/tests pass,
-and the source-integrated Prospero ELF rebuilds; cleanup-first hardware replay
-and leak-free teardown remain the next gate.
+mapping. Host Dynarmic and `eden.ps5_thread_budget` builds/tests pass, and the
+source-integrated Prospero ELF rebuilds.
+
+Eden commit `29cc79b55d47fb158d4564ddca219ae7d1cc187c` contains that
+allocator and produces source-integrated ELF SHA-256
+`9990d879aa606846e48abad527d42032147c62b12977de77199c1154de81824f`.
+Cleanup-first FW 5.50 run
+`Vulkan-PS5/examples/qualification-logs/20260802T103800Z-swapchain-run1.log`
+maps all four 32 MiB anonymous caches RW, executes after their RX transitions,
+and contains neither the former `mprotect` failure nor a native allocation
+failure. It reaches six 29-user-SGPR NGG pipeline compilations without the
+former OpenAGC `0x8089000b` rejection, hardware-clearing the graphics 32-slot
+pipeline-creation gate. Draw and presentation proof remain open.
+
+The next terminal boundary is `vkCreateImageView`: Vulkan format 51
+(`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
+`VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
+emulated time 5.83 seconds. The process then remains live until the guarded
+web request expires at 120 seconds. The failure branch captures its `.klog`
+before retiring PID 162, so it proves no kernel crash, coredump, or allocation
+failure before the forced retirement but cannot prove clean teardown or a
+leak-free exit. The runner's kill reported PID 162 absent, and an independent
+exact-name postcheck also found no `eboot.bin` process. Correct image-view
+validation/creation and orderly failure propagation are the active gates.
 
 ## Scope
 
