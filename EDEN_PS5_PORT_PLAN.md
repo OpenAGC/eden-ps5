@@ -1116,21 +1116,29 @@ color-target binding, and color-to-transfer readback are therefore qualified;
 the remaining defect is a first-use or same-submit initialization/ordering
 dependency. Acquire-only and full CB-flush experiments for
 `UNDEFINED -> RenderTarget` in logs `20260802T172046Z` and
-`20260802T172202Z` did not change the zero result and were reverted. Every run
-used the pinned cleanup ELF and ended with exact `eboot.bin` absence. Because
-the user is away from the console, automated readback/process evidence may
-continue, but visible presentation must remain unverified until direct
-observation is available.
+`20260802T172202Z` did not change the zero result and were reverted.
+Vulkan-PS5 commit `3870834` then split the oracle into two submissions. Its
+cleanup-first ELF SHA-256
+`f4a35ad357337b92c866c25a2fb83beb2c00709954eb1db323683f7816f0feca`
+and log `20260802T172755Z-format-attachments-run1.log` prove all 3,686,400
+baseline bytes are zero after submission A; submission B contains only the
+production attachment clear and readback but remains zero; the next ordinary
+fixed-shader draw writes exact magenta. PID 171 is absent afterward. This
+eliminates first-use allocation and cross-submission initialization: the
+active defect is specifically the production meta-clear replay/state path.
+Every run used the pinned cleanup ELF and ended with exact `eboot.bin`
+absence. Because the user is away from the console, automated readback/process
+evidence may continue, but visible presentation must remain unverified until
+direct observation is available.
 
-1. Split the regression into two cleanup-first submissions: initialize/touch
-   the optimal image and prove zero readback in submission A, then perform only
-   the direct meta clear and readback in submission B. If B passes, implement
-   explicit image backing/metadata initialization with a real inter-submit
-   dependency; if it fails, capture and diff the direct helper PM4 against the
-   first clear. Then remove the probe-only helper, eager prewarm, unbounded
-   render-pass cache, and single-layer clear restriction, add layered and
-   state-restoration regressions, and require the production
-   `vkCmdClearAttachments` oracle to pass before another Eden launch.
+1. Replace the production color-clear branch's recursive `vkCmdBindPipeline` /
+   `vkCmdPushConstants` / `vkCmdDraw` replay with the hardware-proven direct
+   native sequence, generalized for every clear rectangle, array layer, MRT
+   slot, and complete compatible attachment set. Remove the probe-only helper,
+   eager prewarm, unbounded render-pass cache, and single-layer restriction;
+   add layered, repeated-render-pass, and state-restoration regressions. Require
+   the two-submission production `vkCmdClearAttachments` oracle to pass before
+   another Eden launch.
 2. Repeat the cleanup-first `2048.nro` 600-frame workload twice on FW 5.50
    through the
    real scheduler, shader cache, renderer, WSI, and present path. Require
