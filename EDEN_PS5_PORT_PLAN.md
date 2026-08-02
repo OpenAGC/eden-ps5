@@ -1257,7 +1257,7 @@ sequence-zero intermediate readback also leaves scanout zero (ELF
 `20260802T224359Z-swapchain-run1.log`, PID 258 absent), eliminating that
 readback as the cause. All temporary Eden and WSI controls have been removed.
 
-A dedicated cleanup-first `vulkan_ps5_scanout_matrix_probe` now qualifies six
+A dedicated cleanup-first `vulkan_ps5_scanout_matrix_probe` now qualifies eight
 generic paths with exact full-image 1920x1080 readback: (A) BGRA Garlic source
 to an ordinary scaled destination, (B) RGBA Garlic source to mutable scanout
 through a scaling blit, (C) a fixed-fragment draw directly to scanout, (D) a
@@ -1266,7 +1266,10 @@ BGRA Garlic source reused by a later submission and blitted to scanout, and
 `MAY_ALIAS`, `GENERAL` render pass and then blitted to scanout in a later
 submission, and (F) the same producer/blit contract backed by the exact type-0
 Onion memory and `TRANSFER_SRC|COLOR_ATTACHMENT` usage selected by Eden's VMA
-allocation. The restored A-D baseline ELF
+allocation, (G) three Eden-style Onion images placed at VMA-equivalent offsets
+in one allocation with separate semaphore-ordered producer and consumer
+submissions, and (H) the decisive ordering case where the consumer command
+buffer is recorded before its producer is submitted. The restored A-D baseline ELF
 `e28c6da8d9e05def5c6ff1ddcba960f07526a7c3ade2944ce7f50a872fc0978b`
 passes in `20260802T225010Z-swapchain-run1.log` with PID 264 absent. The
 extended A-E ELF
@@ -1295,12 +1298,48 @@ ELF `924e80d9aa58d9399089c817007f062c800635d95fc44a2b31b02f33dab3166e`
 also passes in `20260802T230901Z-swapchain-run1.log`, with source state
 `usage=1 owner=1`, destination state `usage=2 owner=1`, PID 275 absent, and all
 logged image descriptors otherwise matching Eden's production blit. Forcing
-Garlic is therefore not a demonstrated fix. The remaining owner is an
+Garlic is therefore not a demonstrated fix. At that checkpoint the remaining
+candidate set was an
 Eden-production command-sequence, cross-command state, VMA multi-placement, or
 cache/descriptor-lifetime difference, not generic scanout allocation, Onion
 sampling alone, native presentation, GPU scaling blits, direct scanout draws,
 cross-submit reuse, the format correction, qualification readback, or the
 isolated Eden-style intermediate render pass.
+
+Matrix G passes all three shared-allocation images and 6,220,800 exact pixels
+in `20260802T231736Z-swapchain-run1.log` (ELF
+`56a7fe0b5251660a7027861b1f139a221203a177c23b6908d07b0753c6d7aa04`,
+PID 283 and the global exact process name absent). Pre-fix H then reproduces
+the real cross-command failure after A-G pass: OpenAGC reports a transition
+state mismatch followed by `agcQueueSubmit` `0x80890003` in
+`20260802T232313Z-swapchain-run1.log`; cleanup retires PID 288. The root cause
+is that Vulkan-PS5 discarded the barrier's concrete Vulkan prior state and
+encoded the consumer from its stale record-time OpenAGC state, while render
+pass `finalLayout=GENERAL` also lowered the concrete color-target endpoint to
+ShaderRead prematurely.
+
+OpenAGC commit `cf9843d` adds a public, fail-closed v2 committed-state
+transition: record-time mismatch is allowed only for that explicit flag and
+submit-time validation must match the globally committed prior state. Its host
+suite passes 19,993 assertions with zero failures. Vulkan-PS5 commit `364771b`
+uses the declared `oldLayout`/source access when concrete, selects the public
+committed-state path only when a separately recorded command needs it, and
+preserves ColorTarget through a render pass ending in `GENERAL` until the
+application's next explicit barrier. Fixed matrix ELF
+`4d742eb1efa5f0785e22ac8118b9f3af091799d813ea330aec041608abcdd2ef`
+passes H first and then the complete A-H exact-readback matrix in
+`20260802T233527Z-swapchain-run1.log`; PID 297 and the global exact process
+name are absent. The temporary native-blit logger was removed before the
+production rebuild.
+
+Eden ELF `3152f85a293574f7f3a94b9226a5ebe541a03185100bd7ac70301f75ff9c3412`
+then completes the cleanup-first eight-frame `2048.nro` checkpoint in
+`20260802T233817Z-swapchain-run1.log` and exits with PID 299 and the global
+exact process name absent. Dynarmic's RW-to-RX transition succeeds on this
+attempt, but sequence zero still has exact intermediate magenta and zero
+swapchain samples; later diagnostic samples are also zero. Therefore the
+committed-state defect is proven and fixed, but it is not the final Eden black
+screen owner and no visible Eden output is claimed.
 
 The Prospero Dynarmic code cache remains fail-closed: every allocation,
 demotion, RW-to-RX, RX-to-RW, and unmap failure enters the noreturn PS5
@@ -1320,12 +1359,12 @@ process name were absent after cleanup. This persistent relaunch failure is
 now an active owner of the eventual two-run gate, not merely a historical
 observation.
 
-1. Compare Eden and matrix F at the next unmeasured production boundary:
-   actual cross-command AGC state/owner, VMA's shared multi-image placement,
-   and descriptor/cache lifetime. Add one focused probe per demonstrated
-   difference, and remove the bounded native-blit logger after it identifies
-   the owner. Do not advance the long gate until Eden's sequence-zero scanout
-   readback is exact magenta.
+1. Compare the now-passing H sequence with Eden at the next unmeasured
+   production boundary: the exact two-command-buffer contents and transition
+   journal, scheduler submission grouping, descriptor/cache lifetime, and the
+   diagnostic sample point relative to native submission completion. Add one
+   bounded oracle per demonstrated difference. Do not advance the long gate
+   until Eden's sequence-zero swapchain readback is exact magenta.
 2. After sequence-zero scanout is proven, repeat the cleanup-first `2048.nro`
    600-frame workload twice on FW 5.50
    through the
