@@ -1237,7 +1237,11 @@ and bound its color target using the stale logical UNORM format. The current
 candidate derives the destination blit format from the native scanout
 descriptor, uses SRGB consistently for the meta pipeline and target binding,
 and preserves logical formats for ordinary images. Focused WSI and command
-recording regressions pass, as does the full Prospero driver build. The rebuilt
+recording regressions pass, as does the full Prospero driver build. The WSI
+regression now records Eden's actual 1280x720-to-surface linear blit from an
+ordinary UNORM image into a mutable logical-UNORM/native-SRGB scanout image and
+requires successful command-buffer finalization; this closes the earlier
+helper-only coverage gap without substituting a same-size copy. The rebuilt
 Eden ELF is
 `7dc8c40268852d87d51e9a191c433aed31513e78cc92be93d36959bc184e9885`.
 Hardware readback remains pending: the pinned cleanup ELF hash verified, but
