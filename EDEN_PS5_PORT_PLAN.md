@@ -1229,28 +1229,58 @@ passes the bounded eight-frame lifecycle in
 still exact magenta while the swapchain sample remains zero. The filter change
 was reverted, eliminating linear filtering as the zero-write owner.
 
-The next Vulkan-PS5 defect is a logical/native scanout-format mismatch. Eden's
-mutable swapchain images are logically `VK_FORMAT_B8G8R8A8_UNORM`, while
-`vk_ps5_enable_image_scanout` changes their native descriptor to
-`AGC_FORMAT_BGRA8_SRGB`. The scaling blit previously created its meta pipeline
-and bound its color target using the stale logical UNORM format. The current
-candidate derives the destination blit format from the native scanout
-descriptor, uses SRGB consistently for the meta pipeline and target binding,
-and preserves logical formats for ordinary images. Focused WSI and command
-recording regressions pass, as does the full Prospero driver build. The WSI
-regression now records Eden's actual 1280x720-to-surface linear blit from an
-ordinary UNORM image into a mutable logical-UNORM/native-SRGB scanout image and
-requires successful command-buffer finalization; this closes the earlier
-helper-only coverage gap without substituting a same-size copy. The rebuilt
-Eden ELF is
-`7dc8c40268852d87d51e9a191c433aed31513e78cc92be93d36959bc184e9885`.
-Hardware readback remains pending: the pinned cleanup ELF hash verified, but
-the loader at `10.0.1.41:8080` was unreachable on 2026-08-03, so the launch was
-correctly withheld. This candidate is not yet PS5-qualified and makes no
-visible-presentation claim. An independent audit found the same latent format
-mismatch in resolve-to-scanout, but Eden's current presentation path uses
-`vkCmdBlitImage`; resolve hardening is therefore a follow-up, not the owner of
-the current black output.
+The scanout-aware `vkCmdBlitImage` format fix is necessary hardening but is not
+sufficient to repair Eden's black output. Cleanup-first FW 5.500.008
+qualification of Eden ELF SHA-256
+`7dc8c40268852d87d51e9a191c433aed31513e78cc92be93d36959bc184e9885`
+in `20260802T222130Z-swapchain-run1.log` reads exact magenta from the 1280x720
+intermediate image (`ff00ffff`) while the 1920x1080 scanout image remains
+exactly zero. The bounded runner retired PID 239 and independently found no
+exact `eboot.bin` process.
+
+Three cleanup-first controls rule out the immediate alternatives. A direct GPU
+`vkCmdClearColorImage` to the scanout image also leaves scanout zero (ELF
+`62829490634e8d5300c25e1ae5f52ede3bf0481a1a3f50d1c11a8f9010866acb`,
+`20260802T222604Z-swapchain-run1.log`, PID 242 absent). A CPU-invalidated sample
+of the mapped scanout allocation after native present is likewise zero (ELF
+`94490709391777f2ff9ec8f73b8b32228a3a13466a0e396dc501b7e245aa0671`,
+`20260802T222854Z-swapchain-run1.log`, PID 245 absent), so this is not solely a
+stale image-to-buffer readback. Conversely, a temporary CPU write of magenta
+to that same mapped allocation, followed by flush and native present, reads
+exact magenta (ELF
+`4c8b8c7a6278bc1a871c47514c62f3da25f691955147b5f642a41f232c8b7eb7`,
+`20260802T223204Z-swapchain-run1.log`, PID 247 absent). That control proves the
+mapped scanout allocation and present chain can carry nonzero pixels; it is
+not a rendering fix and makes no visible-output claim. Bypassing Eden's
+sequence-zero intermediate readback also leaves scanout zero (ELF
+`7e37c8dc9131793033665eefde9dcca890b86ece8252a930ab3b5016e91cf717`,
+`20260802T224359Z-swapchain-run1.log`, PID 258 absent), eliminating that
+readback as the cause. All temporary Eden and WSI controls have been removed.
+
+A dedicated cleanup-first `vulkan_ps5_scanout_matrix_probe` now qualifies five
+generic paths with exact full-image 1920x1080 readback: (A) BGRA Garlic source
+to an ordinary scaled destination, (B) RGBA Garlic source to mutable scanout
+through a scaling blit, (C) a fixed-fragment draw directly to scanout, (D) a
+BGRA Garlic source reused by a later submission and blitted to scanout, and
+(E) a first-use Eden-style BGRA UNORM Garlic intermediate produced through a
+`MAY_ALIAS`, `GENERAL` render pass and then blitted to scanout in a later
+submission. The restored A-D baseline ELF
+`e28c6da8d9e05def5c6ff1ddcba960f07526a7c3ade2944ce7f50a872fc0978b`
+passes in `20260802T225010Z-swapchain-run1.log` with PID 264 absent. The
+extended A-E ELF
+`f9a8dc161add27f6e7ee97ffcf3cae85deb6aee0b3293bfd2e9c3140df69eae6`
+passes in `20260802T225413Z-swapchain-run1.log` with PID 266 and the global
+exact-name check absent. A preliminary nonzero-memory-offset variation is
+invalid evidence: it failed source-image creation before graphics work (ELF
+`46a29b...`, `20260802T224607Z-swapchain-run1.log`, PID 261 absent). Source
+audit confirms that placed-image view descriptors include `memory_offset`; the
+failed variation is not a placement diagnosis.
+
+The remaining owner is an Eden-production difference in exact native image
+parameters, recorded image state, allocation/placement, or command sequence,
+not generic scanout allocation, native presentation, GPU scaling blits, direct
+scanout draws, cross-submit reuse, the format correction alone, qualification
+readback, or the isolated Eden-style intermediate render pass.
 
 The Prospero Dynarmic code cache remains fail-closed: every allocation,
 demotion, RW-to-RX, RX-to-RW, and unmap failure enters the noreturn PS5
@@ -1262,15 +1292,15 @@ initial-demotion, both protection directions, unmap, and overflow messages and
 does not match a healthy cache-ready message. This strengthens the 600-frame
 gate but does not claim that the intermittent firmware failure is resolved.
 
-1. Rerun the scanout-aware scaling `vkCmdBlitImage` candidate through the
-   cleanup-first presented-frame readback gate when the PS5 is reachable.
-   Require the exact magenta sequence-zero intermediate and swapchain samples
-   to match before returning to the long Eden workload. The eventual Vulkan
-   cleanup must also remove
-   eager prewarm, the unbounded render-pass/dynamic-rendering meta cache,
-   probe-only helpers, and the single-layer restriction, with layered and
-   state-restoration regressions.
-2. Repeat the cleanup-first `2048.nro` 600-frame workload twice on FW 5.50
+1. Add bounded Prospero-only native-blit recording for Eden and matrix case E:
+   logical and native formats, flags, usage, tiling, extents, subresources,
+   requested layouts, recorded AGC state/owner, memory type/offset/alignment,
+   GPU address, and the selected meta pipeline/target state. Compare the exact
+   records and add one focused matrix case for each material difference. Do
+   not advance the long gate until Eden's sequence-zero scanout readback is
+   exact magenta.
+2. After sequence-zero scanout is proven, repeat the cleanup-first `2048.nro`
+   600-frame workload twice on FW 5.50
    through the
    real scheduler, shader cache, renderer, WSI, and present path. Require
    visible frames, bounded teardown, and immediate relaunch on both runs.
