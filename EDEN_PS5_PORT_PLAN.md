@@ -150,6 +150,20 @@ for the image's type/flags/extent and the exact mip/layer interval; focused host
 tests and both Prospero builds pass. The next cleanup-first run must capture
 that diagnostic before any further image-view semantic change.
 
+Cleanup-first diagnostic run
+`Vulkan-PS5/examples/qualification-logs/20260802T112522Z-swapchain-run1.log`
+with integrated ELF SHA-256
+`8a09bc3ce245e1d296f4bdd60f1f62509bf2033065bf043f57ab20ef8f6c6fa8`
+provides a second consecutive positive JIT-transition sample and again retires
+with no matching PID. The failing view request is exactly color aspect, mip 0,
+one mip, base layer 0, and one layer; therefore the original nonzero depth-slice
+range theory does not explain this call. No base-mip or base-layer driver
+rejection fires, narrowing the remaining choices to image/view format or type
+compatibility and native OpenAGC view creation. Vulkan-PS5 commit `11cc8ba`
+adds those final Prospero-only rejection-stage diagnostics; its focused image
+and pipeline tests and full Prospero build pass. A cleanup-first capture with
+that commit is the immediate next action.
+
 The next terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
