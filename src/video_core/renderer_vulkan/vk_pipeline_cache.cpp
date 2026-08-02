@@ -31,6 +31,7 @@
 #include "video_core/renderer_vulkan/maxwell_to_vk.h"
 #include "video_core/renderer_vulkan/pipeline_helper.h"
 #include "video_core/renderer_vulkan/pipeline_statistics.h"
+#include "video_core/renderer_vulkan/pipeline_worker_budget.h"
 #include "video_core/renderer_vulkan/vk_compute_pipeline.h"
 #include "video_core/renderer_vulkan/vk_descriptor_pool.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
@@ -312,9 +313,12 @@ size_t GetTotalPipelineWorkers() {
     }
     return std::min(max_core_threads, desired);
 #elif defined(__PROSPERO__)
-    // Preserve enough process thread slots for CPU, services, audio, and
-    // presentation workers on the constrained homebrew runtime.
-    return std::min(max_core_threads, size_t{4});
+    // Reserve native thread slots for service, timing, and presentation workers
+    // without reducing service-side IPC concurrency.
+    const size_t selected = ResolvePipelineWorkerCount(max_core_threads, true);
+    LOG_INFO(Render_Vulkan, "Prospero pipeline worker budget: available={} selected={}",
+             max_core_threads, selected);
+    return selected;
 #else
     return max_core_threads;
 #endif

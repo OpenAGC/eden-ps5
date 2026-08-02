@@ -27,6 +27,7 @@
 #include "core/loader/loader.h"
 #include "frontend_common/config.h"
 #include "input_common/main.h"
+#include "input_common/host_thread_budget.h"
 #include "network/network.h"
 #ifdef __PROSPERO__
 #include "ps5/launch_config.h"
@@ -402,6 +403,18 @@ static int EdenMain(int argc, char** argv) {
 
     Core::System system{};
     system.Initialize();
+
+#ifdef __PROSPERO__
+    constexpr auto input_worker_policy =
+        InputCommon::ResolveHostInputWorkerPolicy(true);
+    Settings::values.enable_joycon_driver = input_worker_policy.enable_custom_hid;
+    Settings::values.enable_procon_driver = input_worker_policy.enable_custom_hid;
+    if (!input_worker_policy.enable_udp) {
+        Settings::values.udp_input_servers = "";
+    }
+    LOG_INFO(Frontend, "Prospero input worker policy: custom_hid={} udp={} sdl=true",
+             input_worker_policy.enable_custom_hid, input_worker_policy.enable_udp);
+#endif
 
     InputCommon::InputSubsystem input_subsystem{};
 

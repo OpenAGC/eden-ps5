@@ -43,14 +43,28 @@ uses `/data/homebrew/eden_ps5/user`, contains no SDL `dsp` error, clears the
 former Opus thread-creation boundary, and again reaches the final rasterizer
 checkpoint.
 
-The next failure is now attributed precisely: `Services::Services` creates
-host processes for audio, FS, LDN, NV services, and BSD sockets; after the BSD
-network-not-initialized messages, construction of the sixth host process for
-VI throws `std::__1::system_error: thread constructor failed: Resource
-temporarily unavailable` on `SceCloudClientAppMain`. The run enters the
-coredump path. The immediate slice therefore addresses the service host-thread
-budget and VI creation before continuing into scheduler, shader-cache,
-renderer, WSI, presentation, and orderly teardown qualification.
+The service-thread audit found that BSD also retains two companion IPC workers.
+Removing those workers would change blocking socket behavior, so the active
+policy leaves every service and BSD worker intact. Instead, Prospero uses one
+pipeline compiler worker and disables the unused CemuHook UDP and custom
+Joy-Con HID scanner workers while retaining SDL3 controller input, the null
+audio sink, and VI's normal dedicated VSync thread. Other platforms retain
+their existing worker counts and input backends. The focused host test
+`eden.ps5_thread_budget` passes, as do the host `core`/`video_core` builds and
+the source-integrated Prospero `yuzu-cmd` build.
+
+FW `5.500.008` artifact
+`98fc5b71589c07a09cdea3440b8790fa22c0e43b4a51398abf46b239b5c930b3`
+was replayed cleanup-first in
+`Vulkan-PS5/examples/qualification-logs/20260802T085539Z-swapchain-run1.log`.
+It records `available=15 selected=1` and
+`custom_hid=false udp=false sdl=true`, clears VI and the former uncaught
+`thread constructor failed`, and progresses through network/user clock update
+calls. The new boundary is a deterministic `CPUCore_0` SIGSEGV at execute
+address `0x303404010`, recorded in the paired `.klog`; the kernel retires PID
+137 but enters crash cleanup and reports the established raw-ELF `0x4000` VM
+warning. Thread-budget advancement is proven, but clean teardown, leak-free
+qualification, and runner PASS remain open.
 
 ## Scope
 
@@ -514,9 +528,10 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   `20260802T074820Z-swapchain-run1`. Follow-up candidate
   `847db1f2b0e66eaa19a43bcc35afb3e2f39de215c1babf4c7313d157def1f72e`
   removes the `dsp`/Opus startup boundary and reaches the same checkpoint in
-  `20260802T081021Z-swapchain-run1`; its next production failure is the VI host
-  process exceeding the available service thread budget, as recorded in the
-  active diagnostic above.
+  `20260802T081021Z-swapchain-run1`. The one-worker/SDL-only host-input policy
+  then clears the VI thread boundary in `20260802T085539Z-swapchain-run1`; the
+  current production boundary is the deterministic guest execute fault
+  recorded in the active diagnostic above.
 
 ## Milestones and gates
 
@@ -562,14 +577,14 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 
 ## Immediate next slice
 
-1. Fix the now-attributed Prospero service host-thread budget: VI is the exact
-   failed creation after audio, FS, LDN, NV-services, and BSD-socket host
-   processes. Consolidate or cap service threads without changing guest-visible
-   service semantics, add a regression, and retain the null audio sink during
-   this renderer qualification slice.
+1. Diagnose the deterministic `CPUCore_0` execute fault at `0x303404010` now
+   that the service host-thread boundary is cleared. Preserve the one-worker
+   pipeline budget, full service/BSD IPC concurrency, SDL3 input, normal VI
+   VSync behavior, and null audio while identifying the invalid guest/JIT
+   executable mapping.
 2. Retain the construction checkpoints until renderer startup is stable, and
-   prove the failure path leaves neither a coredump nor a live process/native
-   allocation.
+   make the new failure path fail closed with neither a coredump nor a live
+   process/native allocation.
 3. Repeat the cleanup-first `2048.nro` workload twice on FW 5.50 through the
    real scheduler, shader cache, renderer, WSI, and present path. Require
    visible frames, bounded teardown, and immediate relaunch on both runs.
