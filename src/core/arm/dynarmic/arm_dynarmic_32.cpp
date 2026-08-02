@@ -17,10 +17,10 @@ namespace Core {
 using namespace Common::Literals;
 
 DynarmicCallbacks32::DynarmicCallbacks32(ArmDynarmic32& parent, Kernel::KProcess* process)
-    : m_parent{parent}, m_memory(process->GetMemory())
-    , m_process(process), m_debugger_enabled{parent.m_system.DebuggerEnabled()}
-    , m_check_memory_access{m_debugger_enabled || !Settings::values.cpuopt_ignore_memory_aborts.GetValue()}
-{}
+    : m_parent{parent}, m_memory(process->GetMemory()), m_process(process),
+      m_debugger_enabled{parent.m_system.DebuggerEnabled()},
+      m_check_memory_access{m_debugger_enabled ||
+                            !Settings::values.cpuopt_ignore_memory_aborts.GetValue()} {}
 
 u8 DynarmicCallbacks32::MemoryRead8(u32 vaddr) {
     CheckMemoryAccess(vaddr, 1, Kernel::DebugWatchpointType::Read);
@@ -73,19 +73,19 @@ void DynarmicCallbacks32::MemoryWrite64(u32 vaddr, u64 value) {
 
 bool DynarmicCallbacks32::MemoryWriteExclusive8(u32 vaddr, u8 value, u8 expected) {
     return CheckMemoryAccess(vaddr, 1, Kernel::DebugWatchpointType::Write) &&
-            m_memory.WriteExclusive8(vaddr, value, expected);
+           m_memory.WriteExclusive8(vaddr, value, expected);
 }
 bool DynarmicCallbacks32::MemoryWriteExclusive16(u32 vaddr, u16 value, u16 expected) {
     return CheckMemoryAccess(vaddr, 2, Kernel::DebugWatchpointType::Write) &&
-            m_memory.WriteExclusive16(vaddr, value, expected);
+           m_memory.WriteExclusive16(vaddr, value, expected);
 }
 bool DynarmicCallbacks32::MemoryWriteExclusive32(u32 vaddr, u32 value, u32 expected) {
     return CheckMemoryAccess(vaddr, 4, Kernel::DebugWatchpointType::Write) &&
-            m_memory.WriteExclusive32(vaddr, value, expected);
+           m_memory.WriteExclusive32(vaddr, value, expected);
 }
 bool DynarmicCallbacks32::MemoryWriteExclusive64(u32 vaddr, u64 value, u64 expected) {
     return CheckMemoryAccess(vaddr, 8, Kernel::DebugWatchpointType::Write) &&
-            m_memory.WriteExclusive64(vaddr, value, expected);
+           m_memory.WriteExclusive64(vaddr, value, expected);
 }
 
 void DynarmicCallbacks32::ExceptionRaised(u32 pc, Dynarmic::A32::Exception exception) {
@@ -102,8 +102,8 @@ void DynarmicCallbacks32::ExceptionRaised(u32 pc, Dynarmic::A32::Exception excep
 
         m_parent.LogBacktrace(m_process);
         LOG_CRITICAL(Core_ARM,
-                        "ExceptionRaised(exception = {}, pc = {:08X}, code = {:08X}, thumb = {})",
-                        exception, pc, m_memory.Read32(pc), m_parent.IsInThumbMode());
+                     "ExceptionRaised(exception = {}, pc = {:08X}, code = {:08X}, thumb = {})",
+                     exception, pc, m_memory.Read32(pc), m_parent.IsInThumbMode());
     }
 }
 
@@ -136,8 +136,7 @@ bool DynarmicCallbacks32::CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWat
     }
 
     if (!m_memory.IsValidVirtualAddressRange(addr, size)) {
-        LOG_CRITICAL(Core_ARM, "Stopping execution due to unmapped memory access at {:#x}",
-                        addr);
+        LOG_CRITICAL(Core_ARM, "Stopping execution due to unmapped memory access at {:#x}", addr);
         m_parent.m_jit->HaltExecution(PrefetchAbort);
         return false;
     }
@@ -170,23 +169,29 @@ void ArmDynarmic32::MakeJit(Common::PageTable* page_table) {
     config.define_unpredictable_behaviour = true;
 
     if (page_table) {
+#if !defined(__PROSPERO__)
         constexpr size_t PageBits = 12;
         constexpr size_t NumPageTableEntries = 1 << (32 - PageBits);
         constexpr size_t PageLog2Stride = 5;
         static_assert(1 << PageLog2Stride == sizeof(Common::PageTable::PageEntryData));
 
-        config.page_table = reinterpret_cast<std::array<std::uint8_t*, NumPageTableEntries>*>(page_table->entries.data());
+        config.page_table = reinterpret_cast<std::array<std::uint8_t*, NumPageTableEntries>*>(
+            page_table->entries.data());
         config.page_table_pointer_mask_bits = Common::PageTable::ATTRIBUTE_BITS;
         config.page_table_log2_stride = PageLog2Stride;
         config.absolute_offset_page_table = true;
         config.detect_misaligned_access_via_page_table = 16 | 32 | 64 | 128;
         config.only_detect_misalignment_via_page_table_on_page_boundary = true;
+#else
+        config.page_table = nullptr;
+#endif
 
-        config.fastmem_pointer = page_table->fastmem_arena ?
-            std::optional<uintptr_t>{uintptr_t(page_table->fastmem_arena)} :
-            std::nullopt;
+        config.fastmem_pointer =
+            page_table->fastmem_arena
+                ? std::optional<uintptr_t>{uintptr_t(page_table->fastmem_arena)}
+                : std::nullopt;
 
-        config.fastmem_exclusive_access = config.fastmem_pointer  != std::nullopt;
+        config.fastmem_exclusive_access = config.fastmem_pointer != std::nullopt;
         config.recompile_on_exclusive_fastmem_failure = true;
     }
 
@@ -199,7 +204,8 @@ void ArmDynarmic32::MakeJit(Common::PageTable* page_table) {
     config.enable_cycle_counting = !m_uses_wall_clock;
 
     // Code cache size
-#if defined(ARCHITECTURE_arm64) || defined(__sun__) || defined(__NetBSD__) || defined(__DragonFly__) || defined(__OpenBSD__)
+#if defined(ARCHITECTURE_arm64) || defined(__sun__) || defined(__NetBSD__) ||                      \
+    defined(__DragonFly__) || defined(__OpenBSD__)
     config.code_cache_size = std::uint32_t(128_MiB);
 #else
     config.code_cache_size = std::uint32_t(512_MiB);
@@ -368,10 +374,9 @@ void ArmDynarmic32::RewindBreakpointInstruction() {
 
 ArmDynarmic32::ArmDynarmic32(System& system, bool uses_wall_clock, Kernel::KProcess* process,
                              DynarmicExclusiveMonitor& exclusive_monitor, std::size_t core_index)
-    : ArmInterface{uses_wall_clock}, m_system{system}, m_exclusive_monitor{exclusive_monitor}
-    , m_cb(std::make_optional<DynarmicCallbacks32>(*this, process))
-    , m_cp15(std::make_shared<DynarmicCP15>(*this)), m_core_index{core_index}
-{
+    : ArmInterface{uses_wall_clock}, m_system{system}, m_exclusive_monitor{exclusive_monitor},
+      m_cb(std::make_optional<DynarmicCallbacks32>(*this, process)),
+      m_cp15(std::make_shared<DynarmicCP15>(*this)), m_core_index{core_index} {
     auto& page_table_impl = process->GetPageTable().GetBasePageTable().GetImpl();
     MakeJit(&page_table_impl);
 }

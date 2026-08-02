@@ -7,6 +7,9 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
+#include <new>
+#include <utility>
 
 #include "common/common_types.h"
 #include "common/typed_address.h"
@@ -139,8 +142,118 @@ struct PageTable {
         u64 addr;
         u64 padding;
     };
-    VirtualBuffer<PageEntryData> entries;
     static_assert(sizeof(PageEntryData) == 32);
+
+#if defined(__PROSPERO__)
+    class SparseEntries final {
+    public:
+        SparseEntries() = default;
+
+        ~SparseEntries() noexcept {
+            Release();
+        }
+
+        SparseEntries(const SparseEntries&) = delete;
+        SparseEntries& operator=(const SparseEntries&) = delete;
+
+        SparseEntries(SparseEntries&& other) noexcept
+            : chunks{std::move(other.chunks)}, entry_count{std::exchange(other.entry_count, 0)},
+              chunk_count{std::exchange(other.chunk_count, 0)} {}
+
+        SparseEntries& operator=(SparseEntries&& other) noexcept {
+            if (this != std::addressof(other)) {
+                Release();
+                chunks = std::move(other.chunks);
+                entry_count = std::exchange(other.entry_count, 0);
+                chunk_count = std::exchange(other.chunk_count, 0);
+            }
+            return *this;
+        }
+
+        void resize(std::size_t count) {
+            if (count == entry_count)
+                return;
+            Release();
+            entry_count = count;
+            chunk_count = (count + EntriesPerChunk - 1) / EntriesPerChunk;
+            if (chunk_count == 0)
+                return;
+            chunks = std::make_unique<std::atomic<PageEntryData*>[]>(chunk_count);
+            for (std::size_t index = 0; index < chunk_count; ++index)
+                chunks[index].store(nullptr, std::memory_order_relaxed);
+        }
+
+        [[nodiscard]] PageEntryData& operator[](std::size_t index) noexcept {
+            return Get(index);
+        }
+
+        [[nodiscard]] const PageEntryData& operator[](std::size_t index) const noexcept {
+            return Get(index);
+        }
+
+        [[nodiscard]] std::size_t size() const noexcept {
+            return entry_count;
+        }
+
+        [[nodiscard]] PageEntryData* data() noexcept {
+            return nullptr;
+        }
+
+        [[nodiscard]] const PageEntryData* data() const noexcept {
+            return nullptr;
+        }
+
+    private:
+        static constexpr std::size_t ChunkBytes = 0x10000;
+        static constexpr std::size_t EntriesPerChunk = ChunkBytes / sizeof(PageEntryData);
+        static_assert(ChunkBytes % sizeof(PageEntryData) == 0);
+
+        [[nodiscard]] PageEntryData& Get(std::size_t index) const noexcept {
+            const std::size_t chunk_index = index / EntriesPerChunk;
+            PageEntryData* chunk = chunks[chunk_index].load(std::memory_order_acquire);
+            if (!chunk) {
+                auto* candidate = static_cast<PageEntryData*>(AllocateMemoryPages(ChunkBytes));
+                for (std::size_t entry = 0; entry < EntriesPerChunk; ++entry)
+                    ::new (static_cast<void*>(candidate + entry)) PageEntryData{};
+
+                PageEntryData* expected = nullptr;
+                if (chunks[chunk_index].compare_exchange_strong(expected, candidate,
+                                                                std::memory_order_release,
+                                                                std::memory_order_acquire)) {
+                    chunk = candidate;
+                } else {
+                    std::destroy_n(candidate, EntriesPerChunk);
+                    FreeMemoryPages(candidate, ChunkBytes);
+                    chunk = expected;
+                }
+            }
+            return chunk[index % EntriesPerChunk];
+        }
+
+        void Release() noexcept {
+            if (chunks) {
+                for (std::size_t index = 0; index < chunk_count; ++index) {
+                    PageEntryData* chunk = chunks[index].load(std::memory_order_relaxed);
+                    if (!chunk)
+                        continue;
+                    std::destroy_n(chunk, EntriesPerChunk);
+                    FreeMemoryPages(chunk, ChunkBytes);
+                }
+            }
+            chunks.reset();
+            entry_count = 0;
+            chunk_count = 0;
+        }
+
+        mutable std::unique_ptr<std::atomic<PageEntryData*>[]> chunks;
+        std::size_t entry_count{};
+        std::size_t chunk_count{};
+    };
+
+    SparseEntries entries;
+#else
+    VirtualBuffer<PageEntryData> entries;
+#endif
 
     u8* fastmem_arena{};
     std::size_t current_address_space_width_in_bits{};

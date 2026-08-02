@@ -16,10 +16,10 @@ namespace Core {
 using namespace Common::Literals;
 
 DynarmicCallbacks64::DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess* process)
-    : m_parent{parent}, m_memory(process->GetMemory())
-    , m_process(process), m_debugger_enabled{parent.m_system.DebuggerEnabled()}
-    , m_check_memory_access{m_debugger_enabled || !Settings::values.cpuopt_ignore_memory_aborts.GetValue()}
-{}
+    : m_parent{parent}, m_memory(process->GetMemory()), m_process(process),
+      m_debugger_enabled{parent.m_system.DebuggerEnabled()},
+      m_check_memory_access{m_debugger_enabled ||
+                            !Settings::values.cpuopt_ignore_memory_aborts.GetValue()} {}
 
 u8 DynarmicCallbacks64::MemoryRead8(u64 vaddr) {
     CheckMemoryAccess(vaddr, 1, Kernel::DebugWatchpointType::Read);
@@ -80,29 +80,35 @@ void DynarmicCallbacks64::MemoryWrite128(u64 vaddr, Dynarmic::A64::Vector value)
     }
 }
 
-bool DynarmicCallbacks64::MemoryWriteExclusive8(u64 vaddr, std::uint8_t value, std::uint8_t expected) {
+bool DynarmicCallbacks64::MemoryWriteExclusive8(u64 vaddr, std::uint8_t value,
+                                                std::uint8_t expected) {
     return CheckMemoryAccess(vaddr, 1, Kernel::DebugWatchpointType::Write) &&
-            m_memory.WriteExclusive8(vaddr, value, expected);
+           m_memory.WriteExclusive8(vaddr, value, expected);
 }
-bool DynarmicCallbacks64::MemoryWriteExclusive16(u64 vaddr, std::uint16_t value, std::uint16_t expected) {
+bool DynarmicCallbacks64::MemoryWriteExclusive16(u64 vaddr, std::uint16_t value,
+                                                 std::uint16_t expected) {
     return CheckMemoryAccess(vaddr, 2, Kernel::DebugWatchpointType::Write) &&
-            m_memory.WriteExclusive16(vaddr, value, expected);
+           m_memory.WriteExclusive16(vaddr, value, expected);
 }
-bool DynarmicCallbacks64::MemoryWriteExclusive32(u64 vaddr, std::uint32_t value, std::uint32_t expected) {
+bool DynarmicCallbacks64::MemoryWriteExclusive32(u64 vaddr, std::uint32_t value,
+                                                 std::uint32_t expected) {
     return CheckMemoryAccess(vaddr, 4, Kernel::DebugWatchpointType::Write) &&
-            m_memory.WriteExclusive32(vaddr, value, expected);
+           m_memory.WriteExclusive32(vaddr, value, expected);
 }
-bool DynarmicCallbacks64::MemoryWriteExclusive64(u64 vaddr, std::uint64_t value, std::uint64_t expected) {
+bool DynarmicCallbacks64::MemoryWriteExclusive64(u64 vaddr, std::uint64_t value,
+                                                 std::uint64_t expected) {
     return CheckMemoryAccess(vaddr, 8, Kernel::DebugWatchpointType::Write) &&
-            m_memory.WriteExclusive64(vaddr, value, expected);
+           m_memory.WriteExclusive64(vaddr, value, expected);
 }
-bool DynarmicCallbacks64::MemoryWriteExclusive128(u64 vaddr, Dynarmic::A64::Vector value, Dynarmic::A64::Vector expected) {
+bool DynarmicCallbacks64::MemoryWriteExclusive128(u64 vaddr, Dynarmic::A64::Vector value,
+                                                  Dynarmic::A64::Vector expected) {
     return CheckMemoryAccess(vaddr, 16, Kernel::DebugWatchpointType::Write) &&
-            m_memory.WriteExclusive128(vaddr, value, expected);
+           m_memory.WriteExclusive128(vaddr, value, expected);
 }
 
-void DynarmicCallbacks64::InstructionCacheOperationRaised(Dynarmic::A64::InstructionCacheOperation op, u64 value) {
-    last_code_addr = u64(-1); //invalidate cached page
+void DynarmicCallbacks64::InstructionCacheOperationRaised(
+    Dynarmic::A64::InstructionCacheOperation op, u64 value) {
+    last_code_addr = u64(-1); // invalidate cached page
     switch (op) {
     case Dynarmic::A64::InstructionCacheOperation::InvalidateByVAToPoU: {
         static constexpr u64 ICACHE_LINE_SIZE = 64;
@@ -128,7 +134,9 @@ void DynarmicCallbacks64::ExceptionRaised(u64 pc, Dynarmic::A64::Exception excep
     case Dynarmic::A64::Exception::SendEvent:
     case Dynarmic::A64::Exception::SendEventLocal:
     case Dynarmic::A64::Exception::Yield:
-        LOG_TRACE(Core_ARM, "ExceptionRaised(exception = {}, pc = {:08X}, code = {:08X}, cached = {:08X})", std::size_t(exception), pc, m_memory.Read32(pc), MemoryReadCode(pc).value_or(0));
+        LOG_TRACE(Core_ARM,
+                  "ExceptionRaised(exception = {}, pc = {:08X}, code = {:08X}, cached = {:08X})",
+                  std::size_t(exception), pc, m_memory.Read32(pc), MemoryReadCode(pc).value_or(0));
         return;
     case Dynarmic::A64::Exception::NoExecuteFault:
         LOG_CRITICAL(Core_ARM, "Cannot execute instruction at unmapped address {:#016x}", pc);
@@ -139,7 +147,8 @@ void DynarmicCallbacks64::ExceptionRaised(u64 pc, Dynarmic::A64::Exception excep
             ReturnException(pc, InstructionBreakpoint);
         } else {
             m_parent.LogBacktrace(m_process);
-            LOG_CRITICAL(Core_ARM, "ExceptionRaised(exception = {}, pc = {:08X}, code = {:08X})", static_cast<std::size_t>(exception), pc, m_memory.Read32(pc));
+            LOG_CRITICAL(Core_ARM, "ExceptionRaised(exception = {}, pc = {:08X}, code = {:08X})",
+                         static_cast<std::size_t>(exception), pc, m_memory.Read32(pc));
         }
     }
 }
@@ -177,8 +186,7 @@ bool DynarmicCallbacks64::CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWat
     }
 
     if (!m_memory.IsValidVirtualAddressRange(addr, size)) {
-        LOG_CRITICAL(Core_ARM, "Stopping execution due to unmapped memory access at {:#x}",
-                        addr);
+        LOG_CRITICAL(Core_ARM, "Stopping execution due to unmapped memory access at {:#x}", addr);
         m_parent.m_jit->HaltExecution(PrefetchAbort);
         return false;
     }
@@ -211,6 +219,7 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
 
     // Memory
     if (page_table) {
+#if !defined(__PROSPERO__)
         constexpr size_t PageLog2Stride = 5;
         static_assert(1 << PageLog2Stride == sizeof(Common::PageTable::PageEntryData));
 
@@ -222,10 +231,17 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
         config.absolute_offset_page_table = true;
         config.detect_misaligned_access_via_page_table = 16 | 32 | 64 | 128;
         config.only_detect_misalignment_via_page_table_on_page_boundary = true;
+#else
+        // Prospero uses a lazily allocated sparse page table because a contiguous 39-bit table
+        // would reserve 4 GiB. Dynarmic must use the memory callbacks until a qualified sparse
+        // host-MMU path exists.
+        config.page_table = nullptr;
+#endif
 
-        config.fastmem_pointer = page_table->fastmem_arena ?
-            std::optional<uintptr_t>{reinterpret_cast<uintptr_t>(page_table->fastmem_arena)} :
-            std::nullopt;
+        config.fastmem_pointer =
+            page_table->fastmem_arena
+                ? std::optional<uintptr_t>{reinterpret_cast<uintptr_t>(page_table->fastmem_arena)}
+                : std::nullopt;
         config.fastmem_address_space_bits = std::uint32_t(address_space_bits);
         config.silently_mirror_fastmem = false;
 
@@ -252,7 +268,8 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
     config.enable_cycle_counting = !m_uses_wall_clock;
 
     // Code cache size
-#if defined(ARCHITECTURE_arm64) || defined(__sun__) || defined(__NetBSD__) || defined(__DragonFly__) || defined(__OpenBSD__)
+#if defined(ARCHITECTURE_arm64) || defined(__sun__) || defined(__NetBSD__) ||                      \
+    defined(__DragonFly__) || defined(__OpenBSD__)
     config.code_cache_size = std::uint32_t(128_MiB);
 #else
     config.code_cache_size = std::uint32_t(512_MiB);
@@ -389,11 +406,10 @@ void ArmDynarmic64::RewindBreakpointInstruction() {
     this->SetContext(m_breakpoint_context);
 }
 
-ArmDynarmic64::ArmDynarmic64(System& system, bool uses_wall_clock, Kernel::KProcess* process, DynarmicExclusiveMonitor& exclusive_monitor, std::size_t core_index)
-    : ArmInterface{uses_wall_clock}, m_system{system}, m_exclusive_monitor{exclusive_monitor}
-    , m_cb(std::make_optional<DynarmicCallbacks64>(*this, process))
-    , m_core_index{core_index}
-{
+ArmDynarmic64::ArmDynarmic64(System& system, bool uses_wall_clock, Kernel::KProcess* process,
+                             DynarmicExclusiveMonitor& exclusive_monitor, std::size_t core_index)
+    : ArmInterface{uses_wall_clock}, m_system{system}, m_exclusive_monitor{exclusive_monitor},
+      m_cb(std::make_optional<DynarmicCallbacks64>(*this, process)), m_core_index{core_index} {
     auto& page_table = process->GetPageTable().GetBasePageTable();
     auto& page_table_impl = page_table.GetImpl();
     MakeJit(&page_table_impl, page_table.GetAddressSpaceWidth());

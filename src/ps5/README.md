@@ -68,6 +68,31 @@ This is an eager chunked backing implementation. True sparse commitment would
 require a Prospero fault handler or a larger Eden memory-model refactor; it is
 not claimed by this gate.
 
+The full build also provides `eden-ps5-virtual-buffer-probe.elf` for Eden's
+large CPU-side address maps. On Prospero, the 39-bit process page table keeps
+its full logical 128-million-entry contract but allocates zero-initialized
+64 KiB chunks only when an entry is touched. Dynarmic therefore uses Eden's
+memory callbacks instead of its contiguous page-table fast path on PS5.
+Ordinary `VirtualBuffer` allocations use 16 KiB-aligned CPU flexible memory
+and release the exact mapping during destruction. The probe checks sparse
+entries across chunk and address-space boundaries, a 64 MiB flexible mapping,
+move/resize behavior, teardown, and immediate relaunch:
+
+```sh
+PS5_HOST=10.0.1.41 \
+EDEN_PS5_VIRTUAL_BUFFER_EXPECTED_SHA256=<probe-sha256> \
+EDEN_PS5_CLEANUP_EXPECTED_SHA256=<cleanup-sha256> \
+EDEN_PS5_CLEANUP_ELF=<cleanup-elf> \
+  tools/run_fw550_virtual_buffer.sh
+```
+
+The FW 5.50-qualified probe SHA-256 is
+`ba68ab06b05540868cdd828c94c41d47ec8c022861fe3ae1eae50617ca4290a5`.
+The two cleanup-first runs are recorded in the Vulkan-PS5 qualification logs
+at `20260802T045445Z-swapchain-run1` and
+`20260802T045456Z-swapchain-run1`; both returned the exact PASS oracle,
+retired the process, and left websrv/FTP available for immediate relaunch.
+
 For an Eden run, set the runner's `VULKAN_PS5_QUALIFICATION_ELF`,
 `VULKAN_PS5_QUALIFICATION_REMOTE_NAME`, `VULKAN_PS5_QUALIFICATION_LABEL`,
 `VULKAN_PS5_QUALIFICATION_PASS_PATTERN`, and

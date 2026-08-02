@@ -354,6 +354,19 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   the full Eden/2048 gate remains pending. Sparse commitment remains a later
   optimization because Eden currently requires a stable contiguous raw
   backing pointer.
+- The next startup failure was a separate 4 GiB anonymous `VirtualBuffer`,
+  identified as the 39-bit process page table rather than guest RAM. Prospero
+  now preserves the full logical table while committing zero-initialized
+  64 KiB chunks on demand, and it disables Dynarmic's contiguous page-table
+  optimization so CPU accesses use Eden's existing memory callbacks. Smaller
+  ordinary `VirtualBuffer` objects use tracked, 16 KiB-aligned CPU flexible
+  mappings with exact release. Probe bytes
+  `ba68ab06b05540868cdd828c94c41d47ec8c022861fe3ae1eae50617ca4290a5`
+  passed twice on FW 5.500.008, exercising far-apart sparse entries, a 64 MiB
+  flexible allocation, move/resize, teardown, and immediate relaunch. The
+  exact runs are `20260802T045445Z-swapchain-run1` and
+  `20260802T045456Z-swapchain-run1`; both target klogs show successful process
+  retirement with no panic, fault, assertion, or stale process.
 
 ## Milestones and gates
 
@@ -398,13 +411,13 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 
 ## Immediate next slice
 
-1. Restore FW 5.50 websrv/FTP/klog services and run the already-pinned
-   production-memory/compute bootstrap twice through the guarded runner,
-   including immediate relaunch and exact process-absence checks.
-2. Run the full `eden-ps5.elf` missing-sidecar/`init` preflight and verify
-   bounded system-service termination, exact process absence, and immediate
-   relaunch before giving it a game path.
-3. Boot a small homebrew application through the real scheduler, shader cache,
+1. Rebuild the full frontend with the qualified sparse page-table path and run
+   the guarded 600-frame `2048.nro` workload twice on FW 5.50. Record the next
+   real scheduler, shader-cache, renderer, WSI, or presentation failure rather
+   than adding another startup-only harness.
+2. Close only the general-purpose Vulkan-PS5/OpenAGC gap demonstrated by that
+   production workload, then repeat clean teardown and immediate relaunch.
+3. Boot a small representative application through the real scheduler, shader cache,
    renderer, WSI, and present path, closing only general-purpose Vulkan/OpenAGC
    gaps exposed by that workload.
 4. Build and install the pacbrew RmlUi package and layer the controller-driven
