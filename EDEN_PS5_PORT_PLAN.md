@@ -1,5 +1,27 @@
 # Eden PS5 Port Plan
 
+## Active construction diagnostic (2026-08-02)
+
+The unnormalized-sampler fix and OpenAGC runtime API 55 compute-scratch path
+remove the two successive `VK_ERROR_FEATURE_NOT_PRESENT` failures exposed by
+`BlitImageHelper` and Eden's 36,864-byte-per-wave ASTC decoder. The pinned
+source-integrated Prospero ELF
+`8e4937d4b2680c1ef237317e5e313d52323a30ec97910320ed8471ad5b1deca4`
+was replayed cleanup-first on FW `5.500.008`; log
+`Vulkan-PS5/examples/qualification-logs/20260802T071153Z-swapchain-run1.log`
+contains no compute-pipeline rejection and advances through
+`rasterizer-texture-cache-runtime` and `rasterizer-texture-cache`.
+
+The final `eden-ps5: INIT CHECKPOINT rasterizer` oracle is still absent. The
+next exposed failure occurs while constructing `buffer_cache_runtime` and is
+reported upward as `VK_ERROR_INITIALIZATION_FAILED`, followed by the existing
+partial-construction mutex teardown failure. The immediate slice therefore
+continues with exact attribution inside `BufferCacheRuntime`; scratch-ring GPU
+execution remains a separate guarded readback qualification gate and must not
+be inferred from pipeline creation alone. The bounded runner observed the
+texture-cache checkpoint but correctly rejected the run because this later
+failure entered the coredump path.
+
 ## Scope
 
 This plan targets PS5 homebrew built with `ps5-payload-sdk`. It does not port
