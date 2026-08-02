@@ -10,6 +10,10 @@ and 1; Vulkan-PS5 incorrectly required the whole entry to fit binding 0. The
 shared descriptor cursor now carries template updates, ordinary writes, and
 copies across compatible consecutive bindings while handling sparse and
 zero-count bindings, nonzero array offsets, and unaligned template payloads.
+The public compute-scratch implementation is OpenAGC commit `babc3b8`, with
+clean-checkout unnormalized-descriptor dependency follow-up `579c401`;
+Vulkan-PS5 commits `8789fc1` and `8cefa75` close the unnormalized-sampler and
+consecutive-descriptor blockers respectively.
 
 The final source-integrated Prospero ELF
 `4eae3b998f9a92664d41b86325a62bc8f9d2186a8c592e471ac180038923e490`
