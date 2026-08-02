@@ -14,16 +14,35 @@ TEST_CASE("PS5 launch configuration parses exact modes", "[ps5]") {
     REQUIRE(Eden::PS5::ParseLaunchConfig("init\n", config) == Eden::PS5::LaunchConfigError::None);
     REQUIRE(config.mode == Eden::PS5::LaunchMode::Init);
     REQUIRE(config.game_path.empty());
+    REQUIRE_FALSE(config.qualification_input_cycle);
 
     REQUIRE(Eden::PS5::ParseLaunchConfig("game\n/data/homebrew/games/2048.nro\n", config) ==
             Eden::PS5::LaunchConfigError::None);
     REQUIRE(config.mode == Eden::PS5::LaunchMode::Game);
     REQUIRE(config.game_path == "/data/homebrew/games/2048.nro");
     REQUIRE(config.presented_frame_limit == 0);
+    REQUIRE_FALSE(config.qualification_input_cycle);
 
     REQUIRE(Eden::PS5::ParseLaunchConfig("game\n/data/homebrew/games/2048.nro\nframes=600\n",
                                          config) == Eden::PS5::LaunchConfigError::None);
     REQUIRE(config.presented_frame_limit == 600);
+    REQUIRE_FALSE(config.qualification_input_cycle);
+
+    REQUIRE(Eden::PS5::ParseLaunchConfig(
+                "game\n/data/homebrew/games/2048.nro\nframes=600\ninput_cycle=1\n", config) ==
+            Eden::PS5::LaunchConfigError::None);
+    REQUIRE(config.presented_frame_limit == 600);
+    REQUIRE(config.qualification_input_cycle);
+
+    const std::string max_path = "/" + std::string(Eden::PS5::MaxGamePathBytes - 1, 'a');
+    const std::string max_config =
+        "game\n" + max_path + "\nframes=108000\ninput_cycle=1\n";
+    REQUIRE(max_config.size() == Eden::PS5::MaxLaunchConfigBytes);
+    REQUIRE(Eden::PS5::ParseLaunchConfig(max_config, config) ==
+            Eden::PS5::LaunchConfigError::None);
+    REQUIRE(config.game_path == max_path);
+    REQUIRE(config.presented_frame_limit == Eden::PS5::MaxPresentedFrameLimit);
+    REQUIRE(config.qualification_input_cycle);
 }
 
 TEST_CASE("PS5 launch configuration fails closed", "[ps5]") {
@@ -31,7 +50,11 @@ TEST_CASE("PS5 launch configuration fails closed", "[ps5]") {
     for (const std::string_view malformed :
          {"", "init", "init\nextra\n", "game\n", "game\nrelative.nro\n", "game\n/data/game.nro\r\n",
           "game\n/data/game.nro\nframes=0\n", "game\n/data/game.nro\nframes=108001\n",
-          "game\n/data/game.nro\nframes=60\nextra\n", "capture\n"}) {
+          "game\n/data/game.nro\nframes=60\nextra\n",
+          "game\n/data/game.nro\ninput_cycle=1\n",
+          "game\n/data/game.nro\ninput_cycle=1\nframes=60\n",
+          "game\n/data/game.nro\nframes=60\ninput_cycle=0\n",
+          "game\n/data/game.nro\nframes=60\ninput_cycle=1\ninput_cycle=1\n", "capture\n"}) {
         REQUIRE(Eden::PS5::ParseLaunchConfig(malformed, config) ==
                 Eden::PS5::LaunchConfigError::Malformed);
     }

@@ -41,11 +41,14 @@ LaunchConfigError ParseLaunchConfig(std::string_view text, LaunchConfig& config)
     config.game_path.assign(path);
     if (option_offset != std::string_view::npos) {
         constexpr std::string_view FramePrefix = "frames=";
-        const std::string_view option = body.substr(option_offset + 1);
-        if (!option.starts_with(FramePrefix)) {
+        constexpr std::string_view InputCycleOption = "input_cycle=1";
+        const std::string_view options = body.substr(option_offset + 1);
+        const std::size_t second_option_offset = options.find('\n');
+        const std::string_view frame_option = options.substr(0, second_option_offset);
+        if (!frame_option.starts_with(FramePrefix)) {
             return LaunchConfigError::Malformed;
         }
-        const std::string_view value = option.substr(FramePrefix.size());
+        const std::string_view value = frame_option.substr(FramePrefix.size());
         std::uint32_t frame_limit = 0;
         const auto [end, error] =
             std::from_chars(value.data(), value.data() + value.size(), frame_limit);
@@ -54,6 +57,12 @@ LaunchConfigError ParseLaunchConfig(std::string_view text, LaunchConfig& config)
             return LaunchConfigError::Malformed;
         }
         config.presented_frame_limit = frame_limit;
+        if (second_option_offset != std::string_view::npos) {
+            if (options.substr(second_option_offset + 1) != InputCycleOption) {
+                return LaunchConfigError::Malformed;
+            }
+            config.qualification_input_cycle = true;
+        }
     }
     return LaunchConfigError::None;
 }

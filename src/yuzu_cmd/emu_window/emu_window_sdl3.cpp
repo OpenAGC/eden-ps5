@@ -6,6 +6,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <array>
+
 #include "common/logging.h"
 #include "common/scm_rev.h"
 #include "common/settings.h"
@@ -33,6 +35,7 @@ EmuWindow_SDL3::EmuWindow_SDL3(InputCommon::InputSubsystem* input_subsystem_, Co
 }
 
 EmuWindow_SDL3::~EmuWindow_SDL3() {
+    SetQualificationInputCycle(false);
     system.HIDCore().UnloadInputDevices();
     input_subsystem->Shutdown();
     SDL_Quit();
@@ -111,6 +114,54 @@ void EmuWindow_SDL3::OnKeyEvent(int key, u8 state) {
         input_subsystem->GetKeyboard()->PressKey(static_cast<std::size_t>(key));
     } else {
         input_subsystem->GetKeyboard()->ReleaseKey(static_cast<std::size_t>(key));
+    }
+}
+
+void EmuWindow_SDL3::SetQualificationInputCycle(bool enabled) {
+    if (qualification_input_cycle_enabled == enabled) {
+        return;
+    }
+    if (qualification_input_held_key != 0) {
+        OnKeyEvent(qualification_input_held_key, 0);
+        qualification_input_held_key = 0;
+    }
+    qualification_input_cycle_enabled = enabled;
+    qualification_input_direction = 0;
+    qualification_input_press_count = 0;
+    qualification_input_last_step_ms = SDL_GetTicks();
+    LOG_INFO(Frontend, "PS5 qualification input cycle: enabled={} interval_ms=50", enabled);
+}
+
+void EmuWindow_SDL3::AdvanceQualificationInputCycle() {
+    if (!qualification_input_cycle_enabled) {
+        return;
+    }
+    constexpr u64 StepIntervalMs = 50;
+    constexpr std::array<int, 4> DirectionKeys{
+        SDL_SCANCODE_LEFT,
+        SDL_SCANCODE_UP,
+        SDL_SCANCODE_RIGHT,
+        SDL_SCANCODE_DOWN,
+    };
+    const u64 now = SDL_GetTicks();
+    if (now - qualification_input_last_step_ms < StepIntervalMs) {
+        return;
+    }
+    qualification_input_last_step_ms = now;
+    if (qualification_input_held_key != 0) {
+        OnKeyEvent(qualification_input_held_key, 0);
+        qualification_input_held_key = 0;
+        return;
+    }
+
+    qualification_input_held_key =
+        DirectionKeys[qualification_input_direction++ % DirectionKeys.size()];
+    OnKeyEvent(qualification_input_held_key, 1);
+    ++qualification_input_press_count;
+    if (qualification_input_press_count <= DirectionKeys.size() ||
+        qualification_input_press_count % 32 == 0) {
+        LOG_INFO(Frontend, "PS5 qualification input cycle: presses={}",
+                 qualification_input_press_count);
     }
 }
 
@@ -209,14 +260,19 @@ void EmuWindow_SDL3::Fullscreen() {
 
 void EmuWindow_SDL3::WaitEvent() {
     // Called on main thread
-    SDL_Event event;
+    SDL_Event event{};
 
-    if (!SDL_WaitEvent(&event)) {
+    SDL_ClearError();
+    const bool received_event = qualification_input_cycle_enabled
+                                    ? SDL_WaitEventTimeout(&event, 50)
+                                    : SDL_WaitEvent(&event);
+    if (!received_event) {
         const char* error = SDL_GetError();
         if (!error || strcmp(error, "") == 0) {
             // https://github.com/libsdl-org/SDL/issues/5780
             // Sometimes SDL will return without actually having hit an error condition;
             // just ignore it in this case.
+            AdvanceQualificationInputCycle();
             return;
         }
 
@@ -275,6 +331,12 @@ void EmuWindow_SDL3::WaitEvent() {
         break;
     default:
         break;
+    }
+
+    if (is_open) {
+        AdvanceQualificationInputCycle();
+    } else {
+        SetQualificationInputCycle(false);
     }
 
     const u32 current_time = SDL_GetTicks();

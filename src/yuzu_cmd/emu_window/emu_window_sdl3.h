@@ -41,6 +41,7 @@ public:
     void SetPresentedFrameLimit(u32 limit);
     u32 GetPresentedFrameCount() const;
     void OnFrameDisplayed() override;
+    void SetQualificationInputCycle(bool enabled);
 
     // Sets the window icon from yuzu.bmp
     void SetWindowIcon();
@@ -48,6 +49,9 @@ public:
 protected:
     /// Called by WaitEvent when a key is pressed or released.
     void OnKeyEvent(int key, u8 state);
+
+    /// Advances the sidecar-scoped qualification input state on the main thread.
+    void AdvanceQualificationInputCycle();
 
     /// Converts a SDL mouse button into MouseInput mouse button
     InputCommon::MouseButton SDLButtonToMouseButton(u32 button) const;
@@ -99,6 +103,11 @@ protected:
 
     std::atomic<u32> presented_frames = 0;
     std::atomic<u32> presented_frame_limit = 0;
+    bool qualification_input_cycle_enabled = false;
+    int qualification_input_held_key = 0;
+    std::size_t qualification_input_direction = 0;
+    u64 qualification_input_last_step_ms = 0;
+    u32 qualification_input_press_count = 0;
 
     /// Input subsystem to use with this window.
     InputCommon::InputSubsystem* input_subsystem;

@@ -211,6 +211,7 @@ static int EdenMain(int argc, char** argv) {
     std::string filepath;
 #ifdef __PROSPERO__
     u32 presented_frame_limit = 0;
+    bool qualification_input_cycle = false;
     if (argc == 1) {
         Eden::PS5::LaunchConfig launch_config{};
         const auto launch_error =
@@ -227,6 +228,7 @@ static int EdenMain(int argc, char** argv) {
         }
         filepath = std::move(launch_config.game_path);
         presented_frame_limit = launch_config.presented_frame_limit;
+        qualification_input_cycle = launch_config.qualification_input_cycle;
         LOG_INFO(Frontend, "PS5 sidecar selected game: {}", filepath);
     }
 #endif
@@ -442,6 +444,7 @@ static int EdenMain(int argc, char** argv) {
     }
 #ifdef __PROSPERO__
     emu_window->SetPresentedFrameLimit(presented_frame_limit);
+    emu_window->SetQualificationInputCycle(qualification_input_cycle);
 #endif
 
 #ifdef _WIN32
