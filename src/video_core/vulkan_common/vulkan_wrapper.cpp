@@ -449,9 +449,6 @@ VkResult Free(VkDevice device, VkCommandPool handle, Span<VkCommandBuffer> buffe
 
 Instance Instance::Create(u32 version, Span<const char*> layers, Span<const char*> extensions,
                           InstanceDispatch& dispatch) {
-#if defined(EDEN_PS5_BOOTSTRAP_MINIMAL)
-    (void)version;
-#endif
 #ifdef __APPLE__
     constexpr VkFlags ci_flags{VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR};
 #else
@@ -466,7 +463,7 @@ Instance Instance::Create(u32 version, Span<const char*> layers, Span<const char
         .applicationVersion = VK_MAKE_VERSION(1, 3, 0),
         .pEngineName = "yuzu Emulator",
         .engineVersion = VK_MAKE_VERSION(1, 3, 0),
-        .apiVersion = VK_API_VERSION_1_3,
+        .apiVersion = version,
     };
     const VkInstanceCreateInfo ci{
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,

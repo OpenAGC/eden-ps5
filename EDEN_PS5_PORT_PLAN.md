@@ -376,6 +376,18 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   Prospero frontend build pass. FW 5.50 then advanced through JIT creation and
   loaded `2048.nro`; the failing-before log is
   `20260802T050354Z-swapchain-run1`.
+- Eden's Vulkan instance creation now forwards the API version negotiated from
+  `vkEnumerateInstanceVersion` instead of hard-coding Vulkan 1.3. This keeps
+  the application honest against Vulkan-PS5's current Vulkan 1.2 contract.
+  The FW 5.50 run `20260802T051019Z-swapchain-run1` identified the previous
+  `VK_ERROR_INCOMPATIBLE_DRIVER`; the rebuilt ELF then reached physical-device
+  suitability, OpenAGC initialization, and PSBC SPIR-V-to-ACO compilation in
+  `20260802T051216Z-swapchain-run1`. That artifact is
+  `d7aacb715a7ec61e83d0fcecfd2d5965529d03d5cd062ab739c5bd74fe7945e3`.
+  The next active failure is a still-unidentified
+  `VK_ERROR_FEATURE_NOT_PRESENT`; capability support is not claimed until the
+  precise rejected operation is diagnosed, implemented through public
+  OpenAGC APIs, host-tested, and replayed through the cleanup-first gate.
 
 ## Milestones and gates
 

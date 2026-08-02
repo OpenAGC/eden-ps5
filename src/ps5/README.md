@@ -101,6 +101,15 @@ path that failed with `Xbyak::Error: can't alloc`. The first corrected FW 5.50
 run advanced through JIT construction and loaded `2048.nro`; compare
 `20260802T050354Z-swapchain-run1` with the later qualification logs.
 
+Vulkan instance creation must use the version returned by Eden's normal
+version negotiation. It must not request Vulkan 1.3 unconditionally while the
+Vulkan-PS5 ICD advertises Vulkan 1.2. After forwarding the negotiated version,
+the FW 5.50 run `20260802T051216Z-swapchain-run1` reached physical-device
+selection, OpenAGC initialization, and PSBC compilation. The tested ELF SHA-256
+was `d7aacb715a7ec61e83d0fcecfd2d5965529d03d5cd062ab739c5bd74fe7945e3`.
+It currently stops at a later `VK_ERROR_FEATURE_NOT_PRESENT`; this is a
+diagnostic milestone, not a renderer-pass claim.
+
 For an Eden run, set the runner's `VULKAN_PS5_QUALIFICATION_ELF`,
 `VULKAN_PS5_QUALIFICATION_REMOTE_NAME`, `VULKAN_PS5_QUALIFICATION_LABEL`,
 `VULKAN_PS5_QUALIFICATION_PASS_PATTERN`, and
