@@ -372,6 +372,43 @@ reboot. The next hardware attempt must start from the rebooted device, remain a
 single diagnostic run until visible guest pixels are confirmed, and still run
 the pinned cleanup plus exact-name absence check before launch.
 
+Eden commit `e4268cdd0d` adds bounded, Prospero-only samples at the CPU display
+source, intermediate presentation image, and destination swapchain image.
+Cleanup-first eight-frame run
+`Vulkan-PS5/examples/qualification-logs/20260802T151544Z-swapchain-run1.log`
+with integrated ELF SHA-256
+`8a8108c0bbc75ec7efe2ca09117fa61883d62deb0b2da8c02f842487cbe71585`
+records the non-accelerated 1280x720 RGBA8888 source with all 256 sampled CPU
+bytes nonzero (`fafafafa` first pixel), but every sampled byte from both the
+intermediate image and swapchain image is zero. Native presents 0 through 7
+still succeed and the frontend exits with `GAME PASS 8 frames`; direct display
+observation remains black. This moves the first proven zero stage ahead of the
+final transfer and native presentation path, into window adaptation.
+
+Eden commit `f282a91102` adds the next bounded discriminator: WindowAdapt
+sequences 0 through 7 explicitly clear magenta, while sequence 0 skips every
+guest layer draw. The first cleanup-first attempt with post-commit ELF SHA-256
+`1bcdd135d958cb3baee6470f6ee4c414b11ba77c0f0cf155069857bd7f0e1ad2`,
+`Vulkan-PS5/examples/qualification-logs/20260802T152205Z-swapchain-run1.log`,
+fails closed before its first guest frame on the known intermittent Dynarmic
+RW-to-RX `mprotect(EPERM)` boundary. The guarded failure path retires PID 97 and
+finds no exact `eboot.bin`; it provides no rendering evidence. After another
+pinned cleanup launch and independent exact-name absence check, the identical
+ELF completes eight frames in
+`Vulkan-PS5/examples/qualification-logs/20260802T152320Z-swapchain-run1.log`.
+Sequence 0 records the magenta control with guest layers skipped, its native
+clear draw records and submits successfully, yet all 64 sampled bytes in both
+the intermediate and swapchain images remain zero. Sequences 1 through 4 are
+also zero, and direct display observation reports no magenta and only black.
+The frontend nevertheless emits `GAME PASS 8 frames`, exits cleanly, and the
+runner proves PID 101 and every exact `eboot.bin` absent. The current blocker
+is therefore the Vulkan-PS5/OpenAGC offscreen color-attachment write path (or
+its visibility transition), not guest framebuffer generation, fullscreen
+sampling alone, the final image transfer, or native presentation. Before the
+next Eden launch, add an exact B8G8R8A8 UNORM optimal-image `GENERAL`
+render/clear/readback regression below the frontend and fix that failure at its
+owning layer.
+
 The earlier terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
