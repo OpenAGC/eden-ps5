@@ -1131,14 +1131,31 @@ absence. Because the user is away from the console, automated readback/process
 evidence may continue, but visible presentation must remain unverified until
 direct observation is available.
 
-1. Replace the production color-clear branch's recursive `vkCmdBindPipeline` /
-   `vkCmdPushConstants` / `vkCmdDraw` replay with the hardware-proven direct
-   native sequence, generalized for every clear rectangle, array layer, MRT
-   slot, and complete compatible attachment set. Remove the probe-only helper,
-   eager prewarm, unbounded render-pass cache, and single-layer restriction;
-   add layered, repeated-render-pass, and state-restoration regressions. Require
-   the two-submission production `vkCmdClearAttachments` oracle to pass before
-   another Eden launch.
+The first direct-production rewrite then replaced the recursive color-clear
+commands with the same native bind/push/viewport/complete-MRT-target/draw
+sequence used by the passing helper, including layered rectangles and a shared
+fail-closed restoration epilogue. The focused host command-recording test
+passes, but cleanup-first ELF SHA-256
+`f9baef2629de7c5b5a4a0c5d639a71361f1b1eeffb575e48505dde275247a9f5`
+in `20260802T173413Z-format-attachments-run1.log` still reports exact zero for
+the production clear; the later fixed and direct-native controls remain exact
+magenta and PID 174 is absent. That production rewrite was therefore reverted
+instead of committed. The strongest remaining distinction is temporal: the
+failed clear is the process's first graphics pipeline/default-state emission,
+whereas the passing graphics controls execute after it. The next oracle must
+put the fixed shader first, then repeat it after a separate priming submission,
+before changing meta-clear code again.
+
+1. Make the fixed-magenta pipeline the first graphics bind/draw after the
+   zero-initialization submission and read it back independently. Then repeat
+   the identical fixed draw after a separate priming graphics submission. If
+   only the first draw fails, repair OpenAGC's first graphics-default emission
+   and context synchronization; if both pass, capture and diff the first meta
+   draw's PM4 against the later passing direct helper. Only after that oracle
+   identifies the owner should the production clear be changed again. The
+   eventual Vulkan cleanup must also remove eager prewarm, the unbounded
+   render-pass/dynamic-rendering meta cache, probe-only helpers, and the
+   single-layer restriction, with layered and state-restoration regressions.
 2. Repeat the cleanup-first `2048.nro` 600-frame workload twice on FW 5.50
    through the
    real scheduler, shader cache, renderer, WSI, and present path. Require
