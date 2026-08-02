@@ -13,7 +13,9 @@ zero-count bindings, nonzero array offsets, and unaligned template payloads.
 The public compute-scratch implementation is OpenAGC commit `babc3b8`, with
 clean-checkout unnormalized-descriptor dependency follow-up `579c401`;
 Vulkan-PS5 commits `8789fc1` and `8cefa75` close the unnormalized-sampler and
-consecutive-descriptor blockers respectively.
+consecutive-descriptor blockers respectively. A clean checkout containing the
+two OpenAGC commits passes `make test`; unrelated OpenAGC reference-game work
+remains outside those commits.
 
 The final source-integrated Prospero ELF
 `4eae3b998f9a92664d41b86325a62bc8f9d2186a8c592e471ac180038923e490`
@@ -22,8 +24,10 @@ was replayed cleanup-first on FW `5.500.008`. Log
 reaches the buffer-cache runtime/cache, query-cache runtime/cache, pipeline
 cache, DMA acceleration, fence manager, and final
 `eden-ps5: INIT CHECKPOINT rasterizer` markers. The bounded runner therefore
-records a scoped PASS for complete `RasterizerVulkan` member construction, and
-the former partial-construction mutex-lock failure is absent.
+matches the scoped construction oracle for complete `RasterizerVulkan` member
+construction, and the former partial-construction mutex-lock failure is absent.
+The overall guarded run still fails because of the later coredump described
+below; it is not a clean runner PASS.
 
 This proves constructor completion and pipeline acceptance only. It does not
 yet prove descriptor GPU execution, scratch-ring readback, visible rendering,
@@ -56,10 +60,11 @@ used only as a behavioral reference after the equivalent PS5 contract has been
 identified and tested independently.
 
 The upstream source baseline for this plan is Eden revision `612409c7ba`; the
-PS5 planning branch begins at `b5cdae421b`. The graphics baseline is Vulkan-PS5
-revision `e78b64eaf8`, OpenAGC revision `6a9b7bcac3`, and openagc-psbc revision
-`ef8a98cb5e`, plus SDL2 2.30.12 and the pinned Mesa/Zink integration recorded in
-the adjacent projects.
+PS5 planning branch begins at `b5cdae421b`. The initial graphics baseline was
+Vulkan-PS5 revision `e78b64eaf8`, OpenAGC revision `6a9b7bcac3`, and
+openagc-psbc revision `ef8a98cb5e`, plus SDL2 2.30.12 and the pinned Mesa/Zink
+integration recorded in the adjacent projects. The current construction-proof
+revisions are pinned in the active diagnostic above.
 
 ## Active completion goal
 
