@@ -503,16 +503,6 @@ static int EdenMain(int argc, char** argv) {
         }
     }
 
-    // Core is loaded, start the GPU (makes the GPU contexts current to this thread)
-    system.GPU().Start();
-    system.GetCpuManager().OnGpuReady();
-
-    if (Settings::values.use_disk_shader_cache.GetValue()) {
-        system.Renderer().ReadRasterizer()->LoadDiskResources(
-            system.GetApplicationProcessProgramID(), std::stop_token{},
-            [](VideoCore::LoadCallbackStage, size_t value, size_t total) {});
-    }
-
     system.RegisterExitCallback([&] {
 #ifdef __PROSPERO__
         SDL_Event quit{};
@@ -525,6 +515,17 @@ static int EdenMain(int argc, char** argv) {
         exit(0);
 #endif
     });
+
+    // Core is loaded, start the GPU (makes the GPU contexts current to this thread)
+    system.GPU().Start();
+    system.GetCpuManager().OnGpuReady();
+
+    if (Settings::values.use_disk_shader_cache.GetValue()) {
+        system.Renderer().ReadRasterizer()->LoadDiskResources(
+            system.GetApplicationProcessProgramID(), std::stop_token{},
+            [](VideoCore::LoadCallbackStage, size_t value, size_t total) {});
+    }
+
     void(system.Run());
     if (system.DebuggerEnabled()) {
         system.InitializeDebugger();
@@ -534,7 +535,13 @@ static int EdenMain(int argc, char** argv) {
     }
     system.DetachDebugger();
     void(system.Pause());
+    const auto gpu_thread_failure = system.GPU().GetThreadFailure();
     system.ShutdownMainProcess();
+    if (gpu_thread_failure) {
+        LOG_CRITICAL(Frontend, "Emulation stopped after a GPU thread failure: {}",
+                     *gpu_thread_failure);
+        return -1;
+    }
 #ifdef __PROSPERO__
     const u32 presented_frames = emu_window->GetPresentedFrameCount();
     if (presented_frame_limit != 0 && presented_frames != presented_frame_limit) {

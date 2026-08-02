@@ -514,7 +514,7 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   maps one RW address, and performs checked RW-to-RX/RX-to-RW transitions
   around emission and patching. Create, map, descriptor-close, protection, and
   unmap failures are diagnosed and fail closed. The per-core A32/A64 cache is
-  16 MiB because JIT shared memory remains physically charged to the native
+  32 MiB because JIT shared memory remains physically charged to the native
   app; four 64 MiB caches left no headroom even for a later 64 KiB sparse page
   table chunk (`0x8002000c`). Ordinary flexible-buffer failures now report the
   exact requested/aligned size and kernel result.
@@ -523,13 +523,36 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   transition removed the execute fault and reached guest execution. Run
   `20260802T090810Z-swapchain-run1` pinned the 64 KiB out-of-memory boundary.
   Artifact `6b49e812f4589d66af38d3119521c5edc51d68e1c3625d873758d5ab391e1373`
-  with the 16 MiB caches then crossed that boundary, created the managed VI
+  with the initial 16 MiB caches then crossed that boundary, created the managed VI
   display layer, initialized HID and NVDRV, and stopped at the next independent
   `VK_ERROR_FORMAT_NOT_SUPPORTED` boundary in
   `20260802T090914Z-swapchain-run1`. The full Prospero frontend build, native
   host `core`/`video_core` builds, and `eden.ps5_thread_budget` CTest pass. This
   is discovery evidence, not a clean-run qualification: the format exception
   still triggers the coredump/forced-retirement path.
+- The 16 MiB cache was exactly Dynarmic's prelude reservation and failed on the
+  first later protection change. Raising A32/A64 caches to 32 MiB clears that
+  boundary without returning to the 64 MiB-per-cache exhaustion case. Eden now
+  qualifies presentation images by their real operations: raw CPU uploads use
+  only `TRANSFER_DST | SAMPLED` and metadata-free linear tiling, while capture
+  images use only `TRANSFER_SRC | COLOR_ATTACHMENT`. Allocation failures print
+  the complete image contract and Vulkan wrapper failures identify their call.
+  Vulkan-PS5 separately accepts the Vulkan-legal `GENERAL` color-attachment
+  reference layout while retaining fail-closed rejection of other layouts.
+  Its host command-recording test and Prospero static build pass.
+
+  Cleanup-first FW 5.50 artifact
+  `46461eb7697c5942c382df27cd3a606998576433cf5e6b0cb8b38eec3633b876`
+  in `20260802T093051Z-swapchain-run1` clears the JIT cache-size, image-format,
+  image-copy-metadata, and render-pass-layout boundaries. It reaches first
+  presentation pipeline compilation and identifies the next independent error:
+  OpenAGC rejects primitive-shader user-SGPR reflection with native result
+  `0x8089000b`, surfaced as `VK_ERROR_INITIALIZATION_FAILED`. Eden's dedicated
+  GPU-thread exception channel records the first failure, wakes blocked fence
+  waiters, requests frontend exit, suppresses `GAME PASS`, and prevents an
+  uncaught-exception coredump. The runner still had to retire the process after
+  its 120-second bound and reported a 16 KiB VM-resource leak, so clean teardown
+  and immediate relaunch remain unqualified.
 - Eden's Vulkan instance creation now forwards the API version negotiated from
   `vkEnumerateInstanceVersion` instead of hard-coding Vulkan 1.3. This keeps
   the application honest against Vulkan-PS5's current Vulkan 1.2 contract.
@@ -547,11 +570,12 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   removes the `dsp`/Opus startup boundary and reaches the same checkpoint in
   `20260802T081021Z-swapchain-run1`. The one-worker/SDL-only host-input policy
   then clears the VI thread boundary in `20260802T085539Z-swapchain-run1`; the
-  W^X JIT-shm and 16 MiB per-core cache policy then clear both the deterministic
+  W^X JIT-shm and 32 MiB per-core cache policy then clear both the deterministic
   guest execute fault and the 64 KiB flexible-memory exhaustion boundary. The
-  current production boundary is the guest NVDRV image-format request ending
-  in `VK_ERROR_FORMAT_NOT_SUPPORTED` in
-  `20260802T090914Z-swapchain-run1`.
+  narrowed presentation resource policy and Vulkan-PS5 `GENERAL` render-pass
+  support then clear the guest image-format boundary. The current production
+  boundary is primitive-shader user-SGPR reflection during first presentation
+  pipeline creation in `20260802T093051Z-swapchain-run1`.
 
 ## Milestones and gates
 

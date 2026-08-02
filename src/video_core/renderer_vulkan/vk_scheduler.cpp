@@ -357,6 +357,10 @@ u64 Scheduler::SubmitExecution(VkSemaphore signal_semaphore, VkSemaphore wait_se
             device.ReportLoss();
             [[fallthrough]];
         default:
+#ifdef __PROSPERO__
+            std::fprintf(stderr, "eden-ps5: vkQueueSubmit failed: result=%d\n",
+                         static_cast<int>(result));
+#endif
             vk::Check(result);
             break;
         }

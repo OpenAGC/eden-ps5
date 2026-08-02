@@ -32,32 +32,49 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
         Common::SetCurrentThreadPriority(Common::ThreadPriority::Critical);
         system.RegisterHostThread();
 
-        auto current_context = context.Acquire();
-        CommandDataContainer next;
-        while (!stop_token.stop_requested()) {
-            state.queue.PopWait(next, stop_token);
-            if (stop_token.stop_requested()) {
-                break;
+        const bool completed = CaptureThreadFailure(state.failure, [&] {
+            auto current_context = context.Acquire();
+            CommandDataContainer next;
+            while (!stop_token.stop_requested()) {
+                state.queue.PopWait(next, stop_token);
+                if (stop_token.stop_requested()) {
+                    break;
+                }
+                if (auto* submit_list = std::get_if<SubmitListCommand>(&next.data)) {
+                    scheduler.Push(system.GPU(), submit_list->channel,
+                                   std::move(submit_list->entries));
+                } else if (std::holds_alternative<GPUTickCommand>(next.data)) {
+                    system.GPU().TickWork();
+                } else if (const auto* flush = std::get_if<FlushRegionCommand>(&next.data)) {
+                    renderer.ReadRasterizer()->FlushRegion(flush->addr, flush->size);
+                } else if (const auto* invalidate =
+                               std::get_if<InvalidateRegionCommand>(&next.data)) {
+                    renderer.ReadRasterizer()->OnCacheInvalidation(invalidate->addr,
+                                                                   invalidate->size);
+                } else {
+                    ASSERT(false);
+                }
+                state.signaled_fence.store(next.fence);
+                if (next.block) {
+                    // We have to lock the write_lock to ensure that the condition_variable wait not
+                    // get a race between the check and the lock itself.
+                    std::scoped_lock lk{state.write_lock};
+                    state.cv.notify_all();
+                }
             }
-            if (auto* submit_list = std::get_if<SubmitListCommand>(&next.data)) {
-                scheduler.Push(system.GPU(), submit_list->channel, std::move(submit_list->entries));
-            } else if (std::holds_alternative<GPUTickCommand>(next.data)) {
-                system.GPU().TickWork();
-            } else if (const auto* flush = std::get_if<FlushRegionCommand>(&next.data)) {
-                renderer.ReadRasterizer()->FlushRegion(flush->addr, flush->size);
-            } else if (const auto* invalidate = std::get_if<InvalidateRegionCommand>(&next.data)) {
-                renderer.ReadRasterizer()->OnCacheInvalidation(invalidate->addr, invalidate->size);
-            } else {
-                ASSERT(false);
-            }
-            state.signaled_fence.store(next.fence);
-            if (next.block) {
-                // We have to lock the write_lock to ensure that the condition_variable wait not get a
-                // race between the check and the lock itself.
-                std::scoped_lock lk{state.write_lock};
-                state.cv.notify_all();
-            }
+        });
+        if (completed) {
+            return;
         }
+
+        const std::string message = state.failure.Message().value_or("unknown exception");
+        LOG_CRITICAL(HW_GPU, "GPU thread stopped after an exception: {}", message);
+        {
+            std::scoped_lock lock{state.write_lock};
+            state.signaled_fence.store(state.last_fence, std::memory_order_release);
+        }
+        state.cv.notify_all();
+        system.Exit();
     });
 }
 
@@ -101,16 +118,24 @@ u64 ThreadManager::PushCommand(CommandData&& command_data, bool block, bool is_a
     }
 
     std::unique_lock lk(state.write_lock);
+    if (state.failure.Failed()) {
+        return state.signaled_fence.load(std::memory_order_acquire);
+    }
     const u64 fence{++state.last_fence};
     state.queue.EmplaceWait(std::move(command_data), fence, block);
 
     if (block) {
         state.cv.wait(lk, thread.get_stop_token(), [this, fence] {
-            return fence <= state.signaled_fence.load(std::memory_order_relaxed);
+            return state.failure.Failed() ||
+                   fence <= state.signaled_fence.load(std::memory_order_acquire);
         });
     }
 
     return fence;
+}
+
+std::optional<std::string> ThreadManager::GetThreadFailure() const {
+    return state.failure.Message();
 }
 
 } // namespace VideoCommon::GPUThread

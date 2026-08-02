@@ -285,7 +285,23 @@ namespace Vulkan {
         VkImage handle{};
         VmaAllocation allocation{};
         VmaAllocationInfo alloc_info{};
-        vk::Check(vmaCreateImage(allocator, &ci, &alloc_ci, &handle, &allocation, &alloc_info));
+        const VkResult result =
+            vmaCreateImage(allocator, &ci, &alloc_ci, &handle, &allocation, &alloc_info);
+#if defined(__PROSPERO__)
+        if (result != VK_SUCCESS) {
+            std::fprintf(stderr,
+                         "eden-ps5 image allocation failed: result=%d format=%d type=%d "
+                         "extent=%ux%ux%u mips=%u layers=%u samples=0x%x tiling=%d "
+                         "usage=0x%x flags=0x%x\n",
+                         static_cast<int>(result), static_cast<int>(ci.format),
+                         static_cast<int>(ci.imageType), ci.extent.width, ci.extent.height,
+                         ci.extent.depth, ci.mipLevels, ci.arrayLayers,
+                         static_cast<unsigned int>(ci.samples), static_cast<int>(ci.tiling),
+                         static_cast<unsigned int>(ci.usage),
+                         static_cast<unsigned int>(ci.flags));
+        }
+#endif
+        vk::Check(result);
 
         // Log GPU memory allocation for images
 #if !defined(EDEN_PS5_BOOTSTRAP_MINIMAL)

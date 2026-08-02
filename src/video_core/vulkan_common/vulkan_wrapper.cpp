@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <cstdio>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -688,7 +689,15 @@ BufferView Device::CreateBufferView(const VkBufferViewCreateInfo& ci) const {
 
 ImageView Device::CreateImageView(const VkImageViewCreateInfo& ci) const {
     VkImageView object;
-    Check(dld->vkCreateImageView(handle, &ci, nullptr, &object));
+    const VkResult result = dld->vkCreateImageView(handle, &ci, nullptr, &object);
+#if defined(__PROSPERO__)
+    if (result != VK_SUCCESS) {
+        std::fprintf(stderr, "eden-ps5: vkCreateImageView failed: result=%d format=%d view=%d\n",
+                     static_cast<int>(result), static_cast<int>(ci.format),
+                     static_cast<int>(ci.viewType));
+    }
+#endif
+    Check(result);
     return ImageView(object, handle, *dld);
 }
 
@@ -721,7 +730,14 @@ DescriptorPool Device::CreateDescriptorPool(const VkDescriptorPoolCreateInfo& ci
 
 RenderPass Device::CreateRenderPass(const VkRenderPassCreateInfo& ci) const {
     VkRenderPass object;
-    Check(dld->vkCreateRenderPass(handle, &ci, nullptr, &object));
+    const VkResult result = dld->vkCreateRenderPass(handle, &ci, nullptr, &object);
+#if defined(__PROSPERO__)
+    if (result != VK_SUCCESS) {
+        std::fprintf(stderr, "eden-ps5: vkCreateRenderPass failed: result=%d attachments=%u subpasses=%u\n",
+                     static_cast<int>(result), ci.attachmentCount, ci.subpassCount);
+    }
+#endif
+    Check(result);
     return RenderPass(object, handle, *dld);
 }
 
@@ -752,6 +768,12 @@ Pipeline Device::CreateGraphicsPipeline(const VkGraphicsPipelineCreateInfo& ci, 
     // This result code is out of spec, but should be handled as "kinda working"
     if (result == VK_INCOMPLETE)
         return Pipeline(object, handle, *dld);
+#if defined(__PROSPERO__)
+    if (result != VK_SUCCESS) {
+        std::fprintf(stderr, "eden-ps5: vkCreateGraphicsPipelines failed: result=%d stages=%u\n",
+                     static_cast<int>(result), ci.stageCount);
+    }
+#endif
     Check(result);
     return Pipeline(object, handle, *dld);
 }
@@ -759,7 +781,14 @@ Pipeline Device::CreateGraphicsPipeline(const VkGraphicsPipelineCreateInfo& ci, 
 Pipeline Device::CreateComputePipeline(const VkComputePipelineCreateInfo& ci,
                                        VkPipelineCache cache) const {
     VkPipeline object;
-    Check(dld->vkCreateComputePipelines(handle, cache, 1, &ci, nullptr, &object));
+    const VkResult result = dld->vkCreateComputePipelines(handle, cache, 1, &ci, nullptr, &object);
+#if defined(__PROSPERO__)
+    if (result != VK_SUCCESS) {
+        std::fprintf(stderr, "eden-ps5: vkCreateComputePipelines failed: result=%d\n",
+                     static_cast<int>(result));
+    }
+#endif
+    Check(result);
     return Pipeline(object, handle, *dld);
 }
 
@@ -771,7 +800,14 @@ Sampler Device::CreateSampler(const VkSamplerCreateInfo& ci) const {
 
 Framebuffer Device::CreateFramebuffer(const VkFramebufferCreateInfo& ci) const {
     VkFramebuffer object;
-    Check(dld->vkCreateFramebuffer(handle, &ci, nullptr, &object));
+    const VkResult result = dld->vkCreateFramebuffer(handle, &ci, nullptr, &object);
+#if defined(__PROSPERO__)
+    if (result != VK_SUCCESS) {
+        std::fprintf(stderr, "eden-ps5: vkCreateFramebuffer failed: result=%d attachments=%u extent=%ux%u layers=%u\n",
+                     static_cast<int>(result), ci.attachmentCount, ci.width, ci.height, ci.layers);
+    }
+#endif
+    Check(result);
     return Framebuffer(object, handle, *dld);
 }
 

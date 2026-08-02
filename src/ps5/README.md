@@ -94,12 +94,12 @@ at `20260802T045445Z-swapchain-run1` and
 retired the process, and left websrv/FTP available for immediate relaunch.
 
 The full Eden boot path also requires executable memory for Dynarmic's Xbyak
-code cache. On Prospero, that cache uses a 16 KiB-aligned flexible-memory RWX
-mapping and records the complete mapping size for exact release; the A32 and
-A64 cache limits are 64 MiB per JIT. This replaced the generic 4 KiB `mmap`
-path that failed with `Xbyak::Error: can't alloc`. The first corrected FW 5.50
-run advanced through JIT construction and loaded `2048.nro`; compare
-`20260802T050354Z-swapchain-run1` with the later qualification logs.
+code cache. On Prospero, each cache uses JIT shared memory at one stable virtual
+address with checked RW-to-RX and RX-to-RW transitions; failures are diagnosed
+and stop execution. A32 and A64 each use a 32 MiB cache. Sixteen MiB left no
+space beyond Dynarmic's prelude reservation, while 64 MiB per cache exhausted
+native-app memory. Ordinary flexible-memory mappings retain their exact mapped
+size for checked teardown.
 
 Vulkan instance creation must use the version returned by Eden's normal
 version negotiation. It must not request Vulkan 1.3 unconditionally while the

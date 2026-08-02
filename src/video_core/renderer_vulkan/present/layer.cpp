@@ -168,8 +168,16 @@ void Layer::CreateRawImages(const Device& device, const Tegra::FramebufferConfig
     raw_image_views.resize(image_count);
 
     for (size_t i = 0; i < image_count; ++i) {
-        raw_images[i] =
-            CreateWrappedImage(memory_allocator, {framebuffer.width, framebuffer.height}, format);
+        // The CPU-upload fallback is copied into and sampled from; compute/filter targets use
+        // the utility's broader default separately. Requiring storage or attachment support here
+        // rejects valid guest scanout formats on otherwise capable Vulkan devices.
+        constexpr VkImageUsageFlags RawImageUsage =
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        // OpenAGC's direct buffer-to-image path requires a metadata-free image. Linear tiling
+        // keeps this CPU-upload resource metadata-free; render and filter targets stay optimal.
+        raw_images[i] = CreateWrappedImage(memory_allocator,
+                                           {framebuffer.width, framebuffer.height}, format,
+                                           RawImageUsage, VK_IMAGE_TILING_LINEAR);
         raw_image_views[i] = CreateWrappedImageView(device, raw_images[i], format);
     }
 }

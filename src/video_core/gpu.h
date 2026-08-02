@@ -7,6 +7,8 @@
 #pragma once
 
 #include <memory>
+#include <optional>
+#include <string>
 
 #include "common/bit_field.h"
 #include "common/common_types.h"
@@ -227,6 +229,8 @@ public:
 
     /// Performs any additional necessary steps to shutdown GPU emulation.
     void NotifyShutdown();
+
+    [[nodiscard]] std::optional<std::string> GetThreadFailure() const;
 
     /// Obtain the CPU Context
     void ObtainContext();

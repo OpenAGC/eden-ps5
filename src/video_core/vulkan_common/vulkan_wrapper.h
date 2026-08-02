@@ -7,6 +7,7 @@
 #pragma once
 
 #include <array>
+#include <cstdio>
 #include <exception>
 #include <limits>
 #include <memory>
@@ -1177,7 +1178,14 @@ public:
     }
 
     void End() const {
-        Check(dld->vkEndCommandBuffer(handle));
+        const VkResult result = dld->vkEndCommandBuffer(handle);
+#if defined(__PROSPERO__)
+        if (result != VK_SUCCESS) {
+            std::fprintf(stderr, "eden-ps5: vkEndCommandBuffer failed: result=%d\n",
+                         static_cast<int>(result));
+        }
+#endif
+        Check(result);
     }
 
     void BeginRenderPass(const VkRenderPassBeginInfo& renderpass_bi,

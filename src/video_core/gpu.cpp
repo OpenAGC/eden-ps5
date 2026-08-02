@@ -456,6 +456,10 @@ void GPU::NotifyShutdown() {
     impl->NotifyShutdown();
 }
 
+std::optional<std::string> GPU::GetThreadFailure() const {
+    return impl->gpu_thread.GetThreadFailure();
+}
+
 void GPU::ObtainContext() {
     impl->ObtainContext();
 }

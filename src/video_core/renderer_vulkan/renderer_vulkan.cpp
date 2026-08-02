@@ -56,6 +56,8 @@ constexpr VkExtent3D CaptureImageExtent{
 };
 
 constexpr VkFormat CaptureFormat = VK_FORMAT_A8B8G8R8_UNORM_PACK32;
+constexpr VkImageUsageFlags CaptureImageUsage =
+    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
 std::string GetReadableVersion(u32 version) {
     return fmt::format("{}.{}.{}", VK_VERSION_MAJOR(version), VK_VERSION_MINOR(version),
@@ -223,8 +225,9 @@ vk::Buffer RendererVulkan::RenderToBuffer(std::span<const Tegra::FramebufferConf
                                           VkDeviceSize buffer_size) {
     auto frame = [&]() {
         Frame f{};
-        f.image =
-            CreateWrappedImage(memory_allocator, VkExtent2D{layout.width, layout.height}, format);
+        f.image = CreateWrappedImage(memory_allocator,
+                                     VkExtent2D{layout.width, layout.height}, format,
+                                     CaptureImageUsage);
         f.image_view = CreateWrappedImageView(device, f.image, format);
         f.framebuffer = blit_capture.CreateFramebuffer(device, layout, *f.image_view, format);
         return f;
@@ -293,7 +296,8 @@ std::vector<u8> RendererVulkan::GetAppletCaptureBuffer() {
 void RendererVulkan::RenderAppletCaptureLayer(
     std::span<const Tegra::FramebufferConfig> framebuffers) {
     if (!applet_frame.image) {
-        applet_frame.image = CreateWrappedImage(memory_allocator, CaptureImageSize, CaptureFormat);
+        applet_frame.image = CreateWrappedImage(memory_allocator, CaptureImageSize, CaptureFormat,
+                                                CaptureImageUsage);
         applet_frame.image_view = CreateWrappedImageView(device, applet_frame.image, CaptureFormat);
         applet_frame.framebuffer = blit_applet.CreateFramebuffer(device,
             VideoCore::Capture::Layout, *applet_frame.image_view, CaptureFormat);

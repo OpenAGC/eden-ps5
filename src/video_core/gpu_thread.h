@@ -8,9 +8,12 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <exception>
 #include <mutex>
 #include <optional>
+#include <string>
 #include <thread>
+#include <utility>
 #include <variant>
 
 #include "common/bounded_threadsafe_queue.h"
@@ -38,6 +41,49 @@ class RendererBase;
 } // namespace VideoCore
 
 namespace VideoCommon::GPUThread {
+
+class ThreadFailureState final {
+public:
+    bool Report(std::string message) {
+        std::scoped_lock lock{message_mutex};
+        if (failed.load(std::memory_order_relaxed)) {
+            return false;
+        }
+        failure_message = std::move(message);
+        failed.store(true, std::memory_order_release);
+        return true;
+    }
+
+    [[nodiscard]] bool Failed() const noexcept {
+        return failed.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] std::optional<std::string> Message() const {
+        if (!Failed()) {
+            return std::nullopt;
+        }
+        std::scoped_lock lock{message_mutex};
+        return failure_message;
+    }
+
+private:
+    std::atomic_bool failed{};
+    mutable std::mutex message_mutex;
+    std::string failure_message;
+};
+
+template <typename Function>
+[[nodiscard]] bool CaptureThreadFailure(ThreadFailureState& failure, Function&& function) noexcept {
+    try {
+        std::forward<Function>(function)();
+        return true;
+    } catch (const std::exception& exception) {
+        failure.Report(exception.what());
+    } catch (...) {
+        failure.Report("unknown exception");
+    }
+    return false;
+}
 
 /// Command to signal to the GPU thread that a command list is ready for processing
 struct SubmitListCommand final {
@@ -99,6 +145,7 @@ struct SynchState final {
     u64 last_fence{};
     std::atomic<u64> signaled_fence{};
     std::condition_variable_any cv;
+    ThreadFailureState failure;
 };
 
 /// Class used to manage the GPU thread
@@ -124,6 +171,8 @@ public:
     void FlushAndInvalidateRegion(DAddr addr, u64 size, bool is_async);
 
     void TickGPU(bool is_async);
+
+    [[nodiscard]] std::optional<std::string> GetThreadFailure() const;
 
 private:
     /// Pushes a command to be executed by the GPU thread
