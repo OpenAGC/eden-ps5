@@ -181,7 +181,9 @@ public:
 
 private:
     PathManagerImpl() {
+#ifndef __PROSPERO__
         Reinitialize();
+#endif
     }
 
     ~PathManagerImpl() = default;

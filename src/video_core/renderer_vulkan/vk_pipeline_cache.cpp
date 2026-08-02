@@ -303,7 +303,7 @@ Shader::RuntimeInfo MakeRuntimeInfo(std::span<const Shader::IR::Program> program
 size_t GetTotalPipelineWorkers() {
     const size_t max_core_threads =
         std::max<size_t>(static_cast<size_t>(std::thread::hardware_concurrency()), 2ULL) - 1ULL;
-#ifdef __ANDROID__
+#if defined(__ANDROID__)
     const int configured = AndroidSettings::values.pipeline_worker_count.GetValue();
     const int clamped = std::clamp(configured, 4, 8);
     const size_t desired = static_cast<size_t>(clamped);
@@ -311,6 +311,10 @@ size_t GetTotalPipelineWorkers() {
         return 1ULL;
     }
     return std::min(max_core_threads, desired);
+#elif defined(__PROSPERO__)
+    // Preserve enough process thread slots for CPU, services, audio, and
+    // presentation workers on the constrained homebrew runtime.
+    return std::min(max_core_threads, size_t{4});
 #else
     return max_core_threads;
 #endif

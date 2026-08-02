@@ -51,8 +51,8 @@ OpusDecoder::~OpusDecoder() {
     auto msg = Receive(Direction::Host);
     ASSERT_MSG(msg == Message::ShutdownOK, "Expected Opus shutdown code {}, got {}",
                Message::ShutdownOK, msg);
-    main_thread.request_stop();
-    main_thread.join();
+    init_thread.request_stop();
+    init_thread.join();
     running = false;
 }
 
@@ -72,9 +72,10 @@ void OpusDecoder::Init(std::stop_token stop_token) {
                   "DSP OpusDecoder failed to receive Start message. Opus initialization failed.");
         return;
     }
-    main_thread = std::jthread([this](std::stop_token st) { Main(st); });
     running = true;
     Send(Direction::Host, Message::StartOK);
+    Common::SetCurrentThreadName("DSP_OpusDecoder_Main");
+    Main(stop_token);
 }
 
 void OpusDecoder::Main(std::stop_token stop_token) {

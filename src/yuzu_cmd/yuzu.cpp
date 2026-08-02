@@ -188,6 +188,12 @@ static int EdenMain(int argc, char** argv) {
     }
 #endif
 
+#ifdef __PROSPERO__
+    constexpr std::string_view Ps5UserDirectory = "/data/homebrew/eden_ps5/user";
+    Common::FS::SetAppDirectory(std::string{Ps5UserDirectory});
+    Common::FS::CreateEdenPaths();
+#endif
+
     Common::Log::Initialize();
     Common::Log::SetColorConsoleBackendEnabled(true);
     Common::Log::Start();
@@ -345,13 +351,13 @@ static int EdenMain(int argc, char** argv) {
         }
     }
 
-#ifdef __PROSPERO__
-    constexpr std::string_view Ps5UserDirectory = "/data/homebrew/eden_ps5/user";
-    Common::FS::SetAppDirectory(std::string{Ps5UserDirectory});
-    Common::FS::CreateEdenPaths();
-#endif
-
     SdlConfig config{config_path};
+
+#ifdef __PROSPERO__
+    // SDL3 currently has no qualified PS5 audio driver. Keep emulated audio
+    // timing active through the null sink until the native AudioOut sink lands.
+    Settings::values.sink_id.SetValue(Settings::AudioEngine::Null);
+#endif
 
     // apply the log_filter setting
     // the logger was initialized before and doesn't pick up the filter on its own

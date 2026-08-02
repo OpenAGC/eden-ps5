@@ -57,8 +57,13 @@ InputCommon::MouseButton EmuWindow_SDL3::SDLButtonToMouseButton(u32 button) cons
 
 /// @brief Translates pixel position to float position
 EmuWindow_SDL3::FloatPairNonHFA EmuWindow_SDL3::MouseToTouchPos(s32 touch_x, s32 touch_y) const {
+#ifdef __PROSPERO__
+    const int w = Layout::ScreenUndocked::Width;
+    const int h = Layout::ScreenUndocked::Height;
+#else
     int w = 0, h = 0;
     SDL_GetWindowSize(render_window, &w, &h);
+#endif
     const float fx = float(touch_x) / w;
     const float fy = float(touch_y) / h;
     return {

@@ -23,13 +23,26 @@ the former partial-construction mutex-lock failure is absent.
 
 This proves constructor completion and pipeline acceptance only. It does not
 yet prove descriptor GPU execution, scratch-ring readback, visible rendering,
-presentation, or orderly teardown. After SDL reports `dsp: No such audio
-device`, the same run fails later with `std::__1::system_error: thread
-constructor failed: Resource temporarily unavailable` and enters the coredump
-path. The immediate slice now attributes that exact thread creation/resource
-limit, selects a safe PS5 audio fallback, and proves failure cleanup before
-continuing into scheduler, shader-cache, renderer, WSI, and presentation
-qualification.
+presentation, or orderly teardown.
+
+A follow-up source-integrated candidate,
+`847db1f2b0e66eaa19a43bcc35afb3e2f39de215c1babf4c7313d157def1f72e`,
+moves the Prospero user path before logging/configuration, selects Eden's null
+audio sink, reuses the Opus initialization thread as its main worker, and caps
+Prospero pipeline-cache workers at four. FW `5.500.008` log
+`Vulkan-PS5/examples/qualification-logs/20260802T081021Z-swapchain-run1.log`
+uses `/data/homebrew/eden_ps5/user`, contains no SDL `dsp` error, clears the
+former Opus thread-creation boundary, and again reaches the final rasterizer
+checkpoint.
+
+The next failure is now attributed precisely: `Services::Services` creates
+host processes for audio, FS, LDN, NV services, and BSD sockets; after the BSD
+network-not-initialized messages, construction of the sixth host process for
+VI throws `std::__1::system_error: thread constructor failed: Resource
+temporarily unavailable` on `SceCloudClientAppMain`. The run enters the
+coredump path. The immediate slice therefore addresses the service host-thread
+budget and VI creation before continuing into scheduler, shader-cache,
+renderer, WSI, presentation, and orderly teardown qualification.
 
 ## Scope
 
@@ -100,6 +113,40 @@ FreeType, SDL2_image, and optional LuaJIT bindings. The package exists but must
 still be built, installed into the active PS5 sysroot, and qualified on
 hardware. Lua must remain optional; the first frontend must not require it.
 
+## Native PS5 input and audio decision
+
+The production Prospero frontend will use native PS5 services for controller
+and emulation audio. SDL3 remains only a temporary command-frontend diagnostic
+bridge while the native platform loop is implemented; SDL2 is not introduced
+as a second incompatible runtime. The target architecture is:
+
+- obtain the active user through `libSceUserService` and read controllers with
+  `libScePad`, including buttons, sticks, motion, touchpad, light bar, and
+  vibration where Eden exposes those capabilities;
+- translate native pad state into `InputCommon::InputSubsystem` and RmlUi
+  navigation, and replace SDL quit events with a bounded Eden-native
+  lifecycle/stop signal;
+- implement an `audio_core` sink backed by `libSceAudioOut`, retaining Eden's
+  null sink as the fail-closed fallback until AudioOut qualification passes;
+- remove SDL from the Prospero runtime target after native input, lifecycle,
+  and event handling have hardware evidence.
+
+The mGBA PS4 port is the behavioral reference for the AudioOut transport: a
+48 kHz signed-16-bit stereo stream, four bounded 1024-frame packets, one
+blocking output worker, producer/consumer synchronization, and explicit
+close/join teardown. SharpEmu independently confirms the Gen5 AudioOut ABI for
+`sceAudioOutInit`, `sceAudioOutOpen`, `sceAudioOutOutput`, and
+`sceAudioOutClose`; the installed PS5 payload SDK exports those symbols. A
+small standalone PS5 probe must still qualify the exact declarations, format,
+buffer length, blocking behavior, error handling, and teardown before Eden's
+production sink uses them.
+
+`SDL2_mixer` is not an Eden emulation-audio backend: Eden already produces and
+mixes PCM, and SDL2_mixer does not provide the missing PS5 device driver. It may
+be packaged only for optional launcher/UI sounds. pacbrew may continue to
+package SDL2/SDL3 for interim tools or third-party package dependencies, but
+core PS5 controller and audio correctness must not depend on either SDL branch.
+
 ## UI architecture
 
 Add a `src/ps5` frontend rather than adding PS5 conditionals throughout Qt or
@@ -115,8 +162,8 @@ Android code. Its UI boundary should contain:
   paths.
 - `RmlRenderInterfaceVulkanPs5`: RmlUi geometry, textures, scissor, transforms,
   and frame submission through ordinary Vulkan APIs.
-- `RmlInputPs5`: SDL2 controller, keyboard, and text input translated into
-  RmlUi focus/navigation events.
+- `RmlInputPs5`: `libSceUserService`/`libScePad` controller state translated
+  into Eden input and RmlUi focus/navigation events.
 - A small presentation model that exposes Eden data to RML documents without
   making core or frontend-common code depend on RmlUi.
 
@@ -135,8 +182,8 @@ ownership and bounded synchronization model.
 | Configuration | `frontend_common::Config`, `Common::Settings` | Add PS5 config paths and RmlUi bindings |
 | Content and firmware | `frontend_common` managers and Android native calls | Add controller-driven file selection and progress/error models |
 | Game metadata | Core loader/VFS metadata paths | Add a non-Qt/non-Kotlin game-library model and icon cache |
-| Input | `InputCommon::InputSubsystem`, SDL driver | Map PS5 SDL2 controller events and RmlUi navigation |
-| Audio | `audio_core` sink interface | Implement or qualify a PS5 SDL2 audio sink |
+| Input | `InputCommon::InputSubsystem` | Map native `libScePad` state into Eden controller capabilities and RmlUi navigation |
+| Audio | `audio_core` sink interface | Implement and qualify a bounded `libSceAudioOut` sink; retain the null sink as fail-closed fallback |
 | Applets | `core/frontend/applets` contracts | Implement RmlUi error, profile, controller, and software-keyboard applets first |
 | Renderer | Eden Vulkan renderer and VMA | Link Vulkan-PS5 and add PS5 surface/entrypoint discovery |
 | UI workflows | Android navigation graphs and settings taxonomy | Re-express them as RML/CSS documents and C++ presentation models |
@@ -169,11 +216,16 @@ succeed.
   Linux, FreeBSD, or OpenOrbis.
 - Cross-build C++20 with ps5-payload-sdk libc++ and static/package-resolved
   dependencies.
-- Disable Qt, SDL3, cubeb, RenderDoc, update checking, Discord, web services,
-  Wi-Fi scanning, libusb, and host-only crash dump paths for the first target.
+- Disable Qt, cubeb, RenderDoc, update checking, Discord, web services, Wi-Fi
+  scanning, libusb, and host-only crash dump paths for the first target. Keep
+  SDL3 only in the temporary command-frontend diagnostic build until the
+  native PS5 event/input loop replaces it.
 - Consume pacbrew packages for OpenAGC, openagc-psbc, Vulkan-PS5,
-  Vulkan-Headers, SDL2, RmlUi, SDL2_image, FreeType, FFmpeg, OpenSSL, Boost,
-  fmt, zstd, lz4, Opus, and other dependencies only as Eden reaches them.
+  Vulkan-Headers, RmlUi, FreeType, FFmpeg, OpenSSL, Boost, fmt, zstd, lz4,
+  Opus, and other dependencies only as Eden reaches them. SDL2, SDL2_image,
+  SDL2_mixer, or SDL3 packages are allowed for interim tooling, optional UI
+  features, or unavoidable third-party package edges, not as the production
+  Prospero controller or emulation-audio layer.
 - Add a pacbrew Eden package only after a reproducible standalone Prospero
   build exists.
 
@@ -450,17 +502,22 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   and consecutive descriptor-binding gaps. The current pinned artifact
   `4eae3b998f9a92664d41b86325a62bc8f9d2186a8c592e471ac180038923e490`
   reaches the final rasterizer checkpoint in
-  `20260802T074820Z-swapchain-run1`; its next production failure is the later
-  audio/thread resource error recorded in the active diagnostic above.
+  `20260802T074820Z-swapchain-run1`. Follow-up candidate
+  `847db1f2b0e66eaa19a43bcc35afb3e2f39de215c1babf4c7313d157def1f72e`
+  removes the `dsp`/Opus startup boundary and reaches the same checkpoint in
+  `20260802T081021Z-swapchain-run1`; its next production failure is the VI host
+  process exceeding the available service thread budget, as recorded in the
+  active diagnostic above.
 
 ## Milestones and gates
 
 ### P0: reproducible skeleton
 
 - Cross-configure Eden for PS5 using installed pacbrew dependencies.
-- Build a minimal ELF with Qt, Android, and SDL3 excluded.
-- Initialize logging, paths, settings, SDL2 controller input, RmlUi, Vulkan,
-  and clean teardown without booting a game.
+- Build a minimal ELF with Qt and Android excluded, then remove the temporary
+  SDL3 command-frontend dependency once native PS5 lifecycle/input is active.
+- Initialize logging, paths, settings, `libScePad` controller input, RmlUi,
+  Vulkan, and clean teardown without booting a game.
 - Add host-testable navigation and failure-cleanup tests.
 
 ### P1: launcher
@@ -496,22 +553,33 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 
 ## Immediate next slice
 
-1. Attribute `thread constructor failed: Resource temporarily unavailable`
-   after SDL's missing `dsp` device to the exact thread creation and PS5
-   resource limit, then select and test a safe PS5 audio fallback.
-2. Add the applicable frontend/platform regression and fix. Retain the
-   construction checkpoints until renderer startup is stable, and prove the
-   failure path leaves neither a coredump nor a live process/native allocation.
+1. Fix the now-attributed Prospero service host-thread budget: VI is the exact
+   failed creation after audio, FS, LDN, NV-services, and BSD-socket host
+   processes. Consolidate or cap service threads without changing guest-visible
+   service semantics, add a regression, and retain the null audio sink during
+   this renderer qualification slice.
+2. Retain the construction checkpoints until renderer startup is stable, and
+   prove the failure path leaves neither a coredump nor a live process/native
+   allocation.
 3. Repeat the cleanup-first `2048.nro` workload twice on FW 5.50 through the
    real scheduler, shader cache, renderer, WSI, and present path. Require
    visible frames, bounded teardown, and immediate relaunch on both runs.
-4. Remove the temporary construction checkpoints after stable renderer start,
+4. Qualify a small `libSceUserService`/`libScePad` probe, implement the native
+   controller/event/lifecycle bridge, and remove SDL3 from the production
+   Prospero target.
+5. Qualify the `libSceAudioOut` ABI with a standalone bounded-buffer probe,
+   then implement Eden's native AudioOut sink using the mGBA transport pattern.
+   Keep null audio as an explicit fail-closed fallback; do not use SDL2_mixer
+   for emulated audio.
+6. Remove the temporary construction checkpoints after stable renderer start,
    update the exact evidence and hashes, and commit that verified slice without
    staging unrelated diagnostic work.
-5. Refresh the Eden compatibility audit at revision `612409c7ba`, run the FW
+7. Refresh the Eden compatibility audit at revision `612409c7ba`, run the FW
    5.50 regression matrix and targeted CTS/deqp subset, and close any remaining
    format or command gaps demonstrated by those results.
-6. Build and install the pacbrew RmlUi package and layer the controller-driven
-   launcher over the proven emulator lifecycle. Keep Dear ImGui diagnostic-only.
-7. Freeze the final ELF/library hashes and replay the identical bytes and full
+8. Build and install the pacbrew RmlUi package, make its SDL2 dependency
+   optional or isolate it from the production runtime, and layer the
+   controller-driven launcher over the proven emulator lifecycle. Keep Dear
+   ImGui diagnostic-only.
+9. Freeze the final ELF/library hashes and replay the identical bytes and full
    advertised-feature gate on FW 11.60.

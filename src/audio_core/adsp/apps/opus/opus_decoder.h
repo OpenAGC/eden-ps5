@@ -81,10 +81,8 @@ private:
     Core::System& system;
     /// Mailbox to communicate messages with the host, drives the main thread
     Mailbox mailbox;
-    /// Init thread
+    /// Init thread, reused as the main worker after the startup handshake
     std::jthread init_thread{};
-    /// Main thread
-    std::jthread main_thread{};
     /// The current state
     bool running{};
     /// Structure shared with the host, input data set by the host before sending a mailbox message,
