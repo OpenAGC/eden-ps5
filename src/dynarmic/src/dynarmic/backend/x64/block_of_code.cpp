@@ -126,15 +126,25 @@ public:
 #        error "Prospero requires anonymous mmap support for Dynarmic JIT memory"
 #    endif
         // Dynarmic stores executable pointers while it emits code, so its write and execute
-        // addresses must be identical. Use the same ordinary anonymous RW -> RX path as the
-        // payload-SDK LLVM MCJIT example. JIT shared memory requires separate aliases and is
-        // not compatible with that pointer model without systematic address translation.
-        void* mapping = mmap(nullptr, size, PROT_READ | PROT_WRITE, flags, -1, 0);
+        // addresses must be identical. Request executable eligibility at allocation time,
+        // as the payload-SDK LLVM MCJIT path does, then immediately demote the complete VM
+        // entry to RW before returning it to Xbyak. JIT shared memory requires separate
+        // aliases and is not compatible with that pointer model without systematic address
+        // translation.
+        void* mapping =
+            mmap(nullptr, size, PROT_READ | PROT_WRITE | PROT_EXEC, flags, -1, 0);
         if (mapping == MAP_FAILED) {
-            FailProsperoJitOperation("anonymous code-cache mmap", nullptr, size, errno);
+            FailProsperoJitOperation("JIT-eligible anonymous code-cache mmap", nullptr, size,
+                                     errno);
+        }
+        if (mprotect(mapping, size, PROT_READ | PROT_WRITE) != 0) {
+            const int protect_errno = errno;
+            munmap(mapping, size);
+            FailProsperoJitOperation("initial code-cache RW demotion", mapping, size,
+                                     protect_errno);
         }
         std::fprintf(stderr,
-                     "eden-ps5 dynarmic anonymous W^X code cache mapped RW: base=%p "
+                     "eden-ps5 dynarmic JIT-eligible W^X code cache demoted RW: base=%p "
                      "size=0x%zx\n",
                      static_cast<void*>(static_cast<uint8_t*>(mapping) + DYNARMIC_PAGE_SIZE),
                      size - DYNARMIC_PAGE_SIZE);
@@ -212,13 +222,24 @@ void ProtectMemory(const void* base, size_t size, bool is_executable) {
     const size_t iaddr = reinterpret_cast<size_t>(base);
     const size_t roundAddr = iaddr & ~(pageSize - static_cast<size_t>(1));
     const int mode = is_executable ? (PROT_READ | PROT_EXEC) : (PROT_READ | PROT_WRITE);
+#        if defined(__PROSPERO__)
+    // The payload SDK executable-protection helper operates on kernel VM-map
+    // entries. Protect the exact anonymous mapping, including Dynarmic's
+    // metadata page, instead of beginning one page inside that entry. The
+    // metadata remains readable while RX and becomes writable again before
+    // Dynarmic changes the cache.
+    const size_t protectAddr = roundAddr - PROSPERO_PAGE_SIZE;
+    const size_t protect_size = size + (iaddr - roundAddr) + PROSPERO_PAGE_SIZE;
+#        else
+    const size_t protectAddr = roundAddr;
     const size_t protect_size = size + (iaddr - roundAddr);
-    const int result = mprotect(reinterpret_cast<void*>(roundAddr), protect_size, mode);
+#        endif
+    const int result = mprotect(reinterpret_cast<void*>(protectAddr), protect_size, mode);
     if (result != 0) {
 #        if defined(__PROSPERO__)
         FailProsperoJitOperation(is_executable ? "code-cache RW->RX mprotect"
                                                : "code-cache RX->RW mprotect",
-                                 reinterpret_cast<void*>(roundAddr), protect_size, errno);
+                                 reinterpret_cast<void*>(protectAddr), protect_size, errno);
 #        endif
     }
     ASSERT(result == 0);

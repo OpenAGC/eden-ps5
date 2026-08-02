@@ -94,13 +94,12 @@ and it does not hardware-qualify the 29-SGPR correction.
 The diagnosed allocator incorrectly combined the original executable JIT-shm
 handle with a same-address RW mapping and later `mprotect`. PS5 JIT shared
 memory is an alias-based design, while Dynarmic embeds identical write/execute
-addresses throughout generated code. The active correction therefore follows
-the payload-SDK LLVM MCJIT path: page-aligned anonymous memory starts RW and is
-serialized through checked RW/RX `mprotect` transitions at the same address.
-Every Prospero allocation, protection, or unmap failure terminates through the
-bounded, non-coredumping SystemService path without executing an invalid
-mapping. Host Dynarmic and `eden.ps5_thread_budget` builds/tests pass, and the
-source-integrated Prospero ELF rebuilds.
+addresses throughout generated code. The first anonymous correction used a
+page-aligned RW mapping and serialized, checked RW/RX transitions at the same
+address. Every Prospero allocation, protection, or unmap failure terminates
+through the bounded, non-coredumping SystemService path without executing an
+invalid mapping. Host Dynarmic and `eden.ps5_thread_budget` builds/tests pass,
+and the source-integrated Prospero ELF rebuilds.
 
 Eden commit `29cc79b55d47fb158d4564ddca219ae7d1cc187c` contains that
 allocator and produces source-integrated ELF SHA-256
@@ -112,6 +111,29 @@ and contains neither the former `mprotect` failure nor a native allocation
 failure. It reaches six 29-user-SGPR NGG pipeline compilations without the
 former OpenAGC `0x8089000b` rejection, hardware-clearing the graphics 32-slot
 pipeline-creation gate. Draw and presentation proof remain open.
+
+That single transition pass is not qualification. Cleanup-first run
+`Vulkan-PS5/examples/qualification-logs/20260802T110600Z-swapchain-run1.log`
+with source-integrated ELF SHA-256
+`506d3d8340811176a8a705402e1d7a9378853e4779d7a5367316963e6f8956d1`
+clears the former compatible-3D image-view failure, then fails closed on the
+first 32 MiB cache RW-to-RX transition at `CreateManagedDisplayLayer` with
+reported `errno=1`. The paired kernel log shows normal process retirement with
+no coredump, and the independent exact-name postcheck finds no `eboot.bin`.
+Together with the earlier `101532` failure and `103800` pass at the identical
+address and size, this proves the delayed executable elevation is intermittent
+on FW 5.50. Payload-SDK libc replaces every `kernel_mprotect` failure with
+synthetic `EPERM`; its helper walks and edits the live VM map without taking the
+map lock, so this does not prove a policy denial.
+
+The active diagnostic now requests executable eligibility during anonymous
+`mmap`, matching the SDK LLVM MCJIT allocation path, immediately demotes the
+exact whole mapping (including Dynarmic's metadata page) to RW, and retains
+serialized fail-closed whole-mapping RW/RX transitions. This candidate requires
+repeated-transition and immediate-relaunch hardware evidence. Any recurrence
+moves the production path to JIT shared-memory RW/RX handles remapped at the
+same numeric virtual address, preserving Dynarmic's pointer assumptions without
+the unlocked protection helper.
 
 The next terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
