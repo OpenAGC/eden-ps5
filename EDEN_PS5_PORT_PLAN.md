@@ -343,6 +343,17 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   Prospero frontend build pass; the current discovery ELF hash is
   `5bdedb4c7f342fa82adc0b073bc12a34beca3e6eeaf2f16872a019be04fad019`.
   The 2048 result is not claimed until the FW 5.50 guarded run executes.
+- Eden now has an explicit `__PROSPERO__` guest-memory backend instead of the
+  unsuitable FreeBSD anonymous-SHM path. It disables 4 KiB fastmem on the
+  16 KiB PS5 host, reserves one contiguous backing range, maps it from tracked
+  64 MiB direct-memory chunks, and releases every chunk after unmapping. A
+  dedicated 4 GiB probe touched both ends of all 64 chunks and passed two
+  consecutive cleanup-first, SHA-pinned FW 5.50 launches with clean process
+  exit and kernel logs. The qualified discovery probe hash is
+  `1ce0b9403b21305e09774a1085d352991a62c349ea3a3dd6feefed2090b25535`;
+  the full Eden/2048 gate remains pending. Sparse commitment remains a later
+  optimization because Eden currently requires a stable contiguous raw
+  backing pointer.
 
 ## Milestones and gates
 

@@ -49,6 +49,25 @@ Hardware runs must use the guarded Vulkan-PS5 runner with the cleanup ELF and
 local/remote SHA-256 verification. FW 5.50 is the development endpoint; replay
 the final identical bytes on FW 11.60 only during final qualification.
 
+The full Prospero build also provides `eden-ps5-host-memory-probe.elf`. It
+exercises Eden's PS5 guest-memory backend independently of Vulkan: fastmem is
+disabled because the host uses 16 KiB pages, a contiguous 4 GiB guest backing
+range is mapped from 64 tracked 64 MiB direct-memory allocations, both ends of
+every chunk are verified, and teardown unmaps the range and releases every
+physical allocation. Run it twice through the cleanup-first gate with:
+
+```sh
+PS5_HOST=10.0.1.41 \
+EDEN_PS5_MEMORY_PROBE_EXPECTED_SHA256=<probe-sha256> \
+EDEN_PS5_CLEANUP_EXPECTED_SHA256=<cleanup-sha256> \
+EDEN_PS5_CLEANUP_ELF=<cleanup-elf> \
+  tools/run_fw550_host_memory.sh
+```
+
+This is an eager chunked backing implementation. True sparse commitment would
+require a Prospero fault handler or a larger Eden memory-model refactor; it is
+not claimed by this gate.
+
 For an Eden run, set the runner's `VULKAN_PS5_QUALIFICATION_ELF`,
 `VULKAN_PS5_QUALIFICATION_REMOTE_NAME`, `VULKAN_PS5_QUALIFICATION_LABEL`,
 `VULKAN_PS5_QUALIFICATION_PASS_PATTERN`, and

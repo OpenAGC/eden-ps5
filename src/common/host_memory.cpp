@@ -52,7 +52,9 @@
 #endif // ^^^ POSIX ^^^
 
 #include <mutex>
+#include <new>
 #include <random>
+#include <vector>
 
 #include "common/alignment.h"
 #include "common/assert.h"
@@ -74,6 +76,20 @@ namespace Common {
 
 [[maybe_unused]] constexpr size_t PageAlignment = 0x1000;
 [[maybe_unused]] constexpr size_t HugePageSize = 0x200000;
+
+#if defined(__PROSPERO__)
+extern "C" {
+int sceKernelAllocateDirectMemory(int64_t search_start, int64_t search_end, size_t length,
+                                  uint64_t alignment, int memory_type,
+                                  int64_t* physical_address);
+size_t sceKernelGetDirectMemorySize(void);
+int sceKernelMapDirectMemory(void** virtual_address, size_t length, int protection, int flags,
+                             int64_t physical_address, uint64_t alignment);
+int sceKernelMunmap(void* address, size_t length);
+int sceKernelReleaseDirectMemory(int64_t physical_address, size_t length);
+int sceKernelReserveVirtualRange(void** address, size_t length, int flags, uint64_t alignment);
+}
+#endif
 
 #ifdef _WIN32
 
@@ -399,6 +415,8 @@ private:
 // For managarm: see https://github.com/managarm/managarm/issues/1370
 #else // ^^^ Windows ^^^ vvv POSIX vvv
 
+#if !defined(__PROSPERO__)
+
 #ifdef ARCHITECTURE_arm64
 
 static void* ChooseVirtualBase(size_t virtual_size) {
@@ -498,6 +516,94 @@ static int shm_open_anon(int flags, mode_t mode) {
     return fd;
 }
 #endif
+
+#endif
+
+#if defined(__PROSPERO__)
+
+class HostMemory::ProsperoImpl {
+public:
+    explicit ProsperoImpl(size_t backing_size_) : backing_size{backing_size_} {}
+
+    bool Init() {
+        constexpr size_t HostPageSize = 0x4000;
+        constexpr size_t DirectAlignment = 0x200000;
+        constexpr size_t ChunkSize = 0x4000000;
+        constexpr int DirectMemoryType = 3;
+        constexpr int CpuGpuReadWrite = 0x33;
+
+        if (backing_size == 0 || backing_size % HostPageSize != 0)
+            return false;
+
+        void* reservation = nullptr;
+        if (sceKernelReserveVirtualRange(&reservation, backing_size, 0, DirectAlignment) != 0 ||
+            reservation == nullptr) {
+            LOG_CRITICAL(HW_Memory, "sceKernelReserveVirtualRange failed for {:#x} bytes",
+                         backing_size);
+            return false;
+        }
+        backing_base = static_cast<u8*>(reservation);
+
+        const size_t direct_memory_size = sceKernelGetDirectMemorySize();
+        for (size_t offset = 0; offset < backing_size; offset += ChunkSize) {
+            const size_t size = (std::min)(ChunkSize, backing_size - offset);
+            Chunk chunk{backing_base + offset, 0, size};
+            if (sceKernelAllocateDirectMemory(0, static_cast<int64_t>(direct_memory_size), size,
+                                              DirectAlignment, DirectMemoryType,
+                                              &chunk.physical_address) != 0) {
+                LOG_CRITICAL(HW_Memory,
+                             "guest backing direct allocation failed at {:#x}/{:#x}", offset,
+                             backing_size);
+                Release();
+                return false;
+            }
+            chunks.push_back(chunk);
+
+            void* mapping = chunk.virtual_address;
+            if (sceKernelMapDirectMemory(&mapping, size, CpuGpuReadWrite, MAP_FIXED,
+                                         chunk.physical_address, DirectAlignment) != 0 ||
+                mapping != chunk.virtual_address) {
+                LOG_CRITICAL(HW_Memory,
+                             "guest backing direct mapping failed at {:#x}/{:#x}", offset,
+                             backing_size);
+                Release();
+                return false;
+            }
+        }
+
+        LOG_INFO(HW_Memory, "PS5 guest backing: {:#x} bytes in {} tracked chunks", backing_size,
+                 chunks.size());
+        return true;
+    }
+
+    ~ProsperoImpl() {
+        Release();
+    }
+
+    u8* backing_base{};
+
+private:
+    struct Chunk {
+        void* virtual_address;
+        int64_t physical_address;
+        size_t size;
+    };
+
+    void Release() {
+        if (backing_base) {
+            (void)sceKernelMunmap(backing_base, backing_size);
+            backing_base = nullptr;
+        }
+        for (const Chunk& chunk : chunks)
+            (void)sceKernelReleaseDirectMemory(chunk.physical_address, chunk.size);
+        chunks.clear();
+    }
+
+    const size_t backing_size;
+    std::vector<Chunk> chunks;
+};
+
+#else
 
 class HostMemory::Impl {
 public:
@@ -683,13 +789,22 @@ private:
     FreeRegionManager free_manager{};
 };
 
+#endif
+
 #endif // ^^^ POSIX ^^^
 
 HostMemory::HostMemory(size_t backing_size_, size_t virtual_size_)
     : backing_size(backing_size_)
     , virtual_size(virtual_size_)
 {
-#if defined(__OPENORBIS__) || defined(__managarm__)
+#if defined(__PROSPERO__)
+    const size_t aligned_backing_size = AlignUp(backing_size, size_t{0x4000});
+    prospero_impl = std::make_unique<HostMemory::ProsperoImpl>(aligned_backing_size);
+    if (!prospero_impl->Init())
+        throw std::bad_alloc{};
+    backing_base = prospero_impl->backing_base;
+    virtual_base = nullptr;
+#elif defined(__OPENORBIS__) || defined(__managarm__)
     LOG_WARNING(HW_Memory, "Platform doesn't support fastmem");
     fallback_buffer.emplace(backing_size);
     backing_base = fallback_buffer->data();
@@ -723,7 +838,7 @@ HostMemory::HostMemory(HostMemory&&) noexcept = default;
 HostMemory& HostMemory::operator=(HostMemory&&) noexcept = default;
 
 void HostMemory::Map(size_t virtual_offset, size_t host_offset, size_t length, MemoryPermission perms, bool separate_heap) {
-#if !(defined(__OPENORBIS__) || defined(__managarm__))
+#if !(defined(__OPENORBIS__) || defined(__managarm__) || defined(__PROSPERO__))
     ASSERT(virtual_offset % PageAlignment == 0);
     ASSERT(host_offset % PageAlignment == 0);
     ASSERT(length % PageAlignment == 0);
@@ -737,7 +852,7 @@ void HostMemory::Map(size_t virtual_offset, size_t host_offset, size_t length, M
 }
 
 void HostMemory::Unmap(size_t virtual_offset, size_t length, bool separate_heap) {
-#if !(defined(__OPENORBIS__) || defined(__managarm__))
+#if !(defined(__OPENORBIS__) || defined(__managarm__) || defined(__PROSPERO__))
     ASSERT(virtual_offset % PageAlignment == 0);
     ASSERT(length % PageAlignment == 0);
     ASSERT(virtual_offset + length <= virtual_size);
@@ -749,7 +864,7 @@ void HostMemory::Unmap(size_t virtual_offset, size_t length, bool separate_heap)
 }
 
 void HostMemory::Protect(size_t virtual_offset, size_t length, MemoryPermission perm) {
-#if !(defined(__OPENORBIS__) || defined(__managarm__))
+#if !(defined(__OPENORBIS__) || defined(__managarm__) || defined(__PROSPERO__))
     ASSERT(virtual_offset % PageAlignment == 0);
     ASSERT(length % PageAlignment == 0);
     ASSERT(virtual_offset + length <= virtual_size);
@@ -768,7 +883,7 @@ void HostMemory::ClearBackingRegion(size_t physical_offset, size_t length, u32 f
 }
 
 void HostMemory::EnableDirectMappedAddress() {
-#if !(defined(__OPENORBIS__) || defined(__managarm__))
+#if !(defined(__OPENORBIS__) || defined(__managarm__) || defined(__PROSPERO__))
     if (impl) {
         impl->EnableDirectMappedAddress();
         virtual_size += reinterpret_cast<uintptr_t>(virtual_base);

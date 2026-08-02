@@ -4,6 +4,17 @@
 find_package(Threads REQUIRED)
 find_package(VulkanPS5 CONFIG QUIET)
 
+if (TARGET common)
+    add_executable(eden-ps5-host-memory-probe
+        host_memory_probe.cpp
+        runtime.cpp)
+    target_compile_features(eden-ps5-host-memory-probe PRIVATE cxx_std_20)
+    target_compile_options(eden-ps5-host-memory-probe PRIVATE
+        -Wall -Wextra -Wpedantic -Werror)
+    target_link_libraries(eden-ps5-host-memory-probe PRIVATE common SceSystemService)
+    set_target_properties(eden-ps5-host-memory-probe PROPERTIES SUFFIX ".elf")
+endif()
+
 if (NOT TARGET VulkanPS5::ICD)
     if (NOT EDEN_PS5_VULKAN_PS5_SOURCE_DIR)
         set(_eden_adjacent_vulkan_ps5 "${PROJECT_SOURCE_DIR}/../Vulkan-PS5")

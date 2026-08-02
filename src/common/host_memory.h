@@ -70,14 +70,17 @@ public:
     }
 
     bool IsInVirtualRange(void* address) const noexcept {
-        return address >= virtual_base && address < virtual_base + virtual_size;
+        return virtual_base && address >= virtual_base && address < virtual_base + virtual_size;
     }
 
 private:
     size_t backing_size{};
     size_t virtual_size{};
 
-#if !(defined(__OPENORBIS__) || defined(__managarm__))
+#if defined(__PROSPERO__)
+    class ProsperoImpl;
+    std::unique_ptr<ProsperoImpl> prospero_impl;
+#elif !(defined(__OPENORBIS__) || defined(__managarm__))
     // Low level handler for the platform dependent memory routines
     class Impl;
     std::unique_ptr<Impl> impl;
