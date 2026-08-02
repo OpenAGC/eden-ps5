@@ -1252,6 +1252,16 @@ mismatch in resolve-to-scanout, but Eden's current presentation path uses
 `vkCmdBlitImage`; resolve hardening is therefore a follow-up, not the owner of
 the current black output.
 
+The Prospero Dynarmic code cache remains fail-closed: every allocation,
+demotion, RW-to-RX, RX-to-RW, and unmap failure enters the noreturn PS5
+termination path before invalid code can execute. Hardware logs have shown an
+intermittent RW-to-RX `mprotect` `EPERM`, so the two-run wrapper now rejects the
+common `eden-ps5 dynarmic ... failed:` prefix in addition to its narrower
+memory and invalid-mapping diagnostics. A shell regex regression covers the
+initial-demotion, both protection directions, unmap, and overflow messages and
+does not match a healthy cache-ready message. This strengthens the 600-frame
+gate but does not claim that the intermittent firmware failure is resolved.
+
 1. Rerun the scanout-aware scaling `vkCmdBlitImage` candidate through the
    cleanup-first presented-frame readback gate when the PS5 is reachable.
    Require the exact magenta sequence-zero intermediate and swapchain samples

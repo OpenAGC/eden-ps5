@@ -25,7 +25,7 @@ run=1
 native_present_600_pattern='^vulkan-ps5: native present 600-frame gate complete successes=600 frame=[0-9]+ index=[0-2]$'
 firmware_pattern='^\[openagc\] system software raw=0x05500008 string= 5\.500\.008$'
 input_cycle_pattern='PS5 qualification input cycle: enabled=true interval_ms=50'
-default_reject_pattern='allocation failed|mapping failed|mmap failed|mprotect failed|terminating without executing an invalid JIT mapping|Failed to present|GPU thread failure|^vulkan-ps5: .*failed'
+default_reject_pattern='allocation failed|mapping failed|mmap failed|mprotect failed|^eden-ps5 dynarmic .* failed:|terminating without executing an invalid JIT mapping|Failed to present|GPU thread failure|^vulkan-ps5: .*failed'
 while [ "$run" -le 2 ]; do
     required_pattern="$native_present_600_pattern"
     required_pattern_2="$firmware_pattern"
