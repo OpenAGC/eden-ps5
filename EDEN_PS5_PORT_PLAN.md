@@ -156,7 +156,13 @@ CTest entries and 19,827 assertions, and its Prospero build passes. Vulkan-PS5
 commit `2f23dd2` maps and validates the Vulkan contract, accepts both compatible
 2D and 2D-array views, and adds the format/image/view regressions. Its focused
 `vulkan_ps5.image_cube_array` test and full 62-test host suite pass, as does the
-full Prospero build. Hardware qualification of this correction, followed by
+full Prospero build. Review follow-ups `2509110` (OpenAGC) and `0964bd8`
+(Vulkan-PS5) accept legal depth-one 3D-compatible images, validate framebuffer
+extent against the view's minified mip dimensions, and propagate the view mip
+through color/depth render-pass and clear bindings. Command-level regression
+now records a mip-1/slice-1 render pass, clear, and draw. OpenAGC passes all 19
+CTest entries and 19,830 assertions; Vulkan-PS5 passes all 62 host tests; both
+Prospero builds pass. Hardware qualification of this correction, followed by
 orderly failure propagation or sustained draw/presentation, is the active
 gate.
 
