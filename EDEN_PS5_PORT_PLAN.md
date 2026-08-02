@@ -164,6 +164,20 @@ adds those final Prospero-only rejection-stage diagnostics; its focused image
 and pipeline tests and full Prospero build pass. A cleanup-first capture with
 that commit is the immediate next action.
 
+Cleanup-first run
+`Vulkan-PS5/examples/qualification-logs/20260802T113018Z-swapchain-run1.log`
+with integrated ELF SHA-256
+`74d513b689c770f559a1d820d59ab7f6007b79548dd2997de1d68a97487f5a28`
+identifies the exact remaining rejection: an ordinary 2D mutable image with
+Vulkan format 44 (`VK_FORMAT_B8G8R8A8_UNORM`) and flags `0x108` is viewed as
+format 51 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`). Both formats are in Vulkan's
+32-bit compatibility class, but Vulkan-PS5 and OpenAGC incorrectly separated
+their BGRA and RGBA/A8 format families. OpenAGC commit `6f29f4b` and Vulkan-PS5
+commit `14758ae` unify their supported RGBA8/BGRA8 UNORM/SRGB variants into the
+same mutable-view class. Direct OpenAGC descriptor coverage and the exact
+Vulkan command-recording view regression pass; both full host suites and both
+Prospero builds pass. The cleanup-first 2048 rerun is the active gate.
+
 The next terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
