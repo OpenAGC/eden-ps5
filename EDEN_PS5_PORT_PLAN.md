@@ -135,6 +135,21 @@ moves the production path to JIT shared-memory RW/RX handles remapped at the
 same numeric virtual address, preserving Dynarmic's pointer assumptions without
 the unlocked protection helper.
 
+Cleanup-first FW 5.50 run
+`Vulkan-PS5/examples/qualification-logs/20260802T111910Z-swapchain-run1.log`
+with integrated ELF SHA-256
+`da805c5ba6a29931c7bd20e41d1723dfa8ccf739c5f65a6fafee2eb64bc06fdf`
+maps and immediately demotes all four JIT-eligible caches, clears the formerly
+intermittent first RX transition, reaches `CreateManagedDisplayLayer`, and
+again compiles six 29-user-SGPR NGG pipelines. It then reaches the same format
+51 2D image-view rejection, remains live until the bounded 120-second request
+expires, and is retired with no exact-name `eboot.bin` process left. This is
+one positive transition sample, not repeated JIT qualification. Vulkan-PS5
+commit `881c531` and Eden commit `55ea61f` add Prospero-only rejection context
+for the image's type/flags/extent and the exact mip/layer interval; focused host
+tests and both Prospero builds pass. The next cleanup-first run must capture
+that diagnostic before any further image-view semantic change.
+
 The next terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
