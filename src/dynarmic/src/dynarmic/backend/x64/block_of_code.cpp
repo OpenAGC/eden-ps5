@@ -22,7 +22,9 @@
 #endif
 
 #include <array>
+#include <cstdio>
 #include <cstring>
+#include <limits>
 
 #include "common/assert.h"
 #include "dynarmic/mcl/bit.hpp"
@@ -61,6 +63,21 @@ namespace {
 constexpr size_t CONSTANT_POOL_SIZE = 2 * 1024 * 1024;
 constexpr size_t PRELUDE_COMMIT_SIZE = 16 * 1024 * 1024;
 
+#if defined(__PROSPERO__)
+constexpr size_t PROSPERO_PAGE_SIZE = 0x4000;
+constexpr int PROSPERO_CPU_READ_WRITE_EXECUTE = 0x07;
+
+extern "C" {
+int sceKernelMapFlexibleMemory(void** address, size_t length, int protection, int flags);
+int sceKernelReleaseFlexibleMemory(void* address, size_t length);
+int sceKernelMunmap(void* address, size_t length);
+}
+
+constexpr size_t AlignUpProspero(size_t value) noexcept {
+    return (value + PROSPERO_PAGE_SIZE - 1) / PROSPERO_PAGE_SIZE * PROSPERO_PAGE_SIZE;
+}
+#endif
+
 class CustomXbyakAllocator : public Xbyak::Allocator {
 public:
 #ifdef _WIN32
@@ -79,12 +96,37 @@ public:
 
     bool useProtect() const override { return false; }
 #else
+#if defined(__PROSPERO__)
+    static constexpr size_t DYNARMIC_PAGE_SIZE = PROSPERO_PAGE_SIZE;
+#else
     static constexpr size_t DYNARMIC_PAGE_SIZE = 4096;
+#endif
 
     // Can't subclass Xbyak::MmapAllocator because it is not a pure interface
     // and doesn't expose its construtor
     uint8_t* alloc(size_t size) override {
         // Waste a page to store the size
+#if defined(__PROSPERO__)
+        if (size > std::numeric_limits<size_t>::max() - DYNARMIC_PAGE_SIZE -
+                       (PROSPERO_PAGE_SIZE - 1)) {
+            using Xbyak::Error;
+            XBYAK_THROW(Xbyak::ERR_CANT_ALLOC);
+        }
+        size = AlignUpProspero(size + DYNARMIC_PAGE_SIZE);
+
+        void* mapping = nullptr;
+        const int result = sceKernelMapFlexibleMemory(
+            &mapping, size, PROSPERO_CPU_READ_WRITE_EXECUTE, 0);
+        if (result != 0 || mapping == nullptr) {
+            std::fprintf(stderr,
+                         "eden-ps5 dynarmic code-cache allocation failed: size=0x%zx result=0x%x\n",
+                         size, static_cast<unsigned int>(result));
+            using Xbyak::Error;
+            XBYAK_THROW(Xbyak::ERR_CANT_ALLOC);
+        }
+        std::memcpy(mapping, &size, sizeof(size_t));
+        return static_cast<uint8_t*>(mapping) + DYNARMIC_PAGE_SIZE;
+#else
         size += DYNARMIC_PAGE_SIZE;
 
         int mode = MAP_PRIVATE;
@@ -111,17 +153,31 @@ public:
         }
         std::memcpy(p, &size, sizeof(size_t));
         return static_cast<uint8_t*>(p) + DYNARMIC_PAGE_SIZE;
+#endif
     }
 
     void free(uint8_t* p) override {
         size_t size;
         std::memcpy(&size, p - DYNARMIC_PAGE_SIZE, sizeof(size_t));
+#if defined(__PROSPERO__)
+        void* const mapping = p - DYNARMIC_PAGE_SIZE;
+        const int release_result = sceKernelReleaseFlexibleMemory(mapping, size);
+        if (release_result != 0 && sceKernelMunmap(mapping, size) != 0) {
+            std::fprintf(stderr,
+                         "eden-ps5 dynarmic code-cache release failed: size=0x%zx result=0x%x\n",
+                         size, static_cast<unsigned int>(release_result));
+        }
+#else
         munmap(p - DYNARMIC_PAGE_SIZE, size);
+#endif
     }
 
 #    ifdef DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT
     bool useProtect() const override { return false; }
 #    endif
+#if defined(__PROSPERO__) && !defined(DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT)
+    bool useProtect() const override { return false; }
+#endif
 #endif
 };
 

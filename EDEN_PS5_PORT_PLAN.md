@@ -367,6 +367,15 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   exact runs are `20260802T045445Z-swapchain-run1` and
   `20260802T045456Z-swapchain-run1`; both target klogs show successful process
   retirement with no panic, fault, assertion, or stale process.
+- The first full `2048.nro` launch after the page-table gate reached Dynarmic
+  construction and failed with `Xbyak::Error: can't alloc` because the generic
+  allocator requested a 512 MiB executable `mmap` on Prospero. Dynarmic now
+  obtains its executable cache from a tracked 16 KiB-aligned flexible-memory
+  mapping, stores the exact mapping size for teardown, uses RWX protection,
+  and caps each Prospero A32/A64 JIT cache at 64 MiB. Host `core` and the full
+  Prospero frontend build pass. FW 5.50 then advanced through JIT creation and
+  loaded `2048.nro`; the failing-before log is
+  `20260802T050354Z-swapchain-run1`.
 
 ## Milestones and gates
 

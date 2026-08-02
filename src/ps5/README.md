@@ -93,6 +93,14 @@ at `20260802T045445Z-swapchain-run1` and
 `20260802T045456Z-swapchain-run1`; both returned the exact PASS oracle,
 retired the process, and left websrv/FTP available for immediate relaunch.
 
+The full Eden boot path also requires executable memory for Dynarmic's Xbyak
+code cache. On Prospero, that cache uses a 16 KiB-aligned flexible-memory RWX
+mapping and records the complete mapping size for exact release; the A32 and
+A64 cache limits are 64 MiB per JIT. This replaced the generic 4 KiB `mmap`
+path that failed with `Xbyak::Error: can't alloc`. The first corrected FW 5.50
+run advanced through JIT construction and loaded `2048.nro`; compare
+`20260802T050354Z-swapchain-run1` with the later qualification logs.
+
 For an Eden run, set the runner's `VULKAN_PS5_QUALIFICATION_ELF`,
 `VULKAN_PS5_QUALIFICATION_REMOTE_NAME`, `VULKAN_PS5_QUALIFICATION_LABEL`,
 `VULKAN_PS5_QUALIFICATION_PASS_PATTERN`, and
