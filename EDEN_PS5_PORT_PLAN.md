@@ -460,6 +460,35 @@ direct push-constant/state replay. Compare a normal push-constant fullscreen
 draw on this same image before changing OpenAGC synchronization or surface
 registers.
 
+Vulkan-PS5 commit `6bfb04d` adds that same-image ordinary push-constant
+control. Cleanup-first run
+`Vulkan-PS5/examples/qualification-logs/20260802T155922Z-format-attachments-run1.log`
+used ELF SHA-256
+`8dcee21b1873af59ad626e8ff9a6d51b7013455955b2ba5719687bc95c6169a8`.
+The fixed shader, ordinary `vec4` fragment push-constant draw, and transfer
+clear all pass three exact magenta samples; only `vkCmdClearAttachments`
+remains zero. PID 117 self-exits with no matching `eboot.bin`. The clear and
+control fragment SPIR-V are instruction-equivalent apart from debug names, and
+both ordinary and direct paths ultimately call OpenAGC's
+`agcCmdPushConstants`. Therefore neither shader generation nor general push
+constants explain the failure. The next fix belongs in Vulkan-PS5's direct
+meta-clear replay or cached dynamic-rendering pipeline state; preserve the
+passing ordinary controls while replacing or correcting that bypass.
+
+Vulkan-PS5 front-face A/B commits `aedfde1` and `253addc` temporarily align
+the meta pipeline with the passing control and then restore the original state.
+Cleanup-first run
+`Vulkan-PS5/examples/qualification-logs/20260802T160402Z-format-attachments-run1.log`
+used ELF SHA-256
+`d50010a33f2d247cf2d9ba57425ccc5bf126ee0d46abafe36dd93daed5b77cfb`.
+Its result is identical: meta clear zero, all three controls exact magenta, and
+PID 120 absent after self-exit. Front-face encoding is therefore eliminated.
+The next lower-level action is to run the direct meta bind/push/viewport/target/
+draw sequence with the known passing ordinary pipeline, or capture and diff
+the emitted PM4 streams, to separate cached meta-pipeline construction from
+the bypass replay itself. Do not return to Eden qualification until this exact
+regression passes.
+
 The earlier terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
