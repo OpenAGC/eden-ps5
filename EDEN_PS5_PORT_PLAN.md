@@ -176,9 +176,52 @@ their BGRA and RGBA/A8 format families. OpenAGC commit `6f29f4b` and Vulkan-PS5
 commit `14758ae` unify their supported RGBA8/BGRA8 UNORM/SRGB variants into the
 same mutable-view class. Direct OpenAGC descriptor coverage and the exact
 Vulkan command-recording view regression pass; both full host suites and both
-Prospero builds pass. The cleanup-first 2048 rerun is the active gate.
+Prospero builds pass.
 
-The next terminal boundary was `vkCreateImageView`: Vulkan format 51
+Cleanup-first FW 5.500.008 run
+`Vulkan-PS5/examples/qualification-logs/20260802T114341Z-swapchain-run1.log`
+with integrated ELF SHA-256
+`8a6e4d70c86b36d8cd9c4c73f9bd1f87ea3436156be1c32ae4c18ffc207176c1`
+uses the pinned cleanup ELF SHA-256
+`9fd6b41cf2ea87989c4217234c6f34c96a1ca5dc482355af1258539db77d4d76`;
+the preflight independently proves no prior exact `eboot.bin`. It supplies a
+fourth consecutive positive first JIT-transition sample, clears the format-44
+to format-51 `vkCreateImageView` rejection, and reaches
+the first render-pass attachment clear. The clear path incorrectly builds its
+internal graphics pipeline for the underlying image format 44 while binding
+the legal mutable view as format 51; OpenAGC correctly rejects the mismatched
+pipeline and color target with `0x80890501`. `vkEndCommandBuffer` propagates
+`VK_ERROR_INITIALIZATION_FAILED`, but the frontend still terminates on the
+uncaught Vulkan exception. The kernel records PID 178 as an app crash with
+`canCoredump=false`, retires it, and the runner independently reports no exact
+`eboot.bin` process. This is bounded crash retirement, not orderly emulator
+teardown or leak-free relaunch evidence. OpenAGC commit `c1ddcce` generalizes
+supported mutable color views by uncompressed storage width and explicit BC
+family while keeping depth/stencil and multiplane formats fail-closed.
+Vulkan-PS5 commit `99e1249` retains and enforces non-empty image format lists,
+implements its supported Vulkan compatibility classes, and keys both
+attachment-clear pipeline lookups by the framebuffer view format. OpenAGC's
+19 CTest entries and 19,926 direct assertions pass; Vulkan-PS5's 62 host tests
+and both Prospero builds pass.
+
+Cleanup-first FW 5.500.008 run
+`Vulkan-PS5/examples/qualification-logs/20260802T115623Z-swapchain-run1.log`
+with integrated ELF SHA-256
+`a707e44eb900c399af594adaed45f7b28a20363dab53bade741b9f61edca64d8`
+uses the same pinned cleanup hash and exact-process preflight. It supplies a
+fifth consecutive positive first JIT-transition sample, clears both the
+mutable view and attachment-clear failures, and records the first native draw.
+The next boundary is a color image barrier from
+`VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL` to `VK_IMAGE_LAYOUT_GENERAL`:
+OpenAGC rejects the requested sampled-read `1/1` to storage-write `4/1`
+usage/owner transition with `0x80890001`. `vkEndCommandBuffer` propagates the
+error, the GPU-thread exception is caught, and the frontend remains bounded
+until the 120-second runner retires PID 181. The kernel log contains no app
+crash, coredump, JIT protection error, or native allocation failure, and the
+runner proves no exact `eboot.bin` remains. This is still forced retirement,
+not orderly teardown or presentation evidence.
+
+The earlier terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
 emulated time 5.83 seconds. The process then remains live until the guarded
@@ -767,14 +810,14 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
 
 ## Immediate next slice
 
-1. Trace the guest NVDRV image request that currently ends in
-   `VK_ERROR_FORMAT_NOT_SUPPORTED` after HID/NVDRV initialization. Record the
-   exact guest format, usage, tiling, and public Vulkan-PS5/OpenAGC call that
-   rejects it; add only a general-purpose format path justified by that trace.
+1. Correct the public Vulkan-PS5/OpenAGC image transition that currently
+   rejects the exact sampled-read `SHADER_READ_ONLY_OPTIMAL` to storage-write
+   `GENERAL` barrier. Preserve declared prior-state validation and add a focused
+   command-level regression for the traced usage, owner, aspect, mip, and layer.
 2. Retain the construction checkpoints and JIT/flexible-memory diagnostics
-   until renderer startup is stable. Convert the current uncaught format
-   exception into a bounded failure while fixing the root format path, with
-   neither a coredump nor a live process/native allocation.
+   until renderer startup is stable. Preserve bounded GPU-thread failure
+   propagation while fixing the root transition path, with neither a coredump
+   nor a live process/native allocation.
 3. Repeat the cleanup-first `2048.nro` workload twice on FW 5.50 through the
    real scheduler, shader cache, renderer, WSI, and present path. Require
    visible frames, bounded teardown, and immediate relaunch on both runs.
