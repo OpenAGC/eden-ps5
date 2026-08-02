@@ -43,10 +43,13 @@ void WindowAdaptPass::Draw(const Device& device, RasterizerVulkan& rasterizer, S
 
 #ifdef __PROSPERO__
     static std::atomic<u32> qualification_draw_count{0};
-    const u32 qualification_sequence =
-        qualification_draw_count.fetch_add(1, std::memory_order_relaxed);
-    const bool qualification_control = qualification_sequence < 8u;
-    const bool qualification_skip_layers = qualification_sequence == 0u;
+    const bool qualification_target = static_cast<bool>(dst->qualification_readback);
+    const u32 qualification_sequence = qualification_target
+                                           ? qualification_draw_count.fetch_add(
+                                                 1, std::memory_order_relaxed)
+                                           : 0u;
+    const bool qualification_control = qualification_target && qualification_sequence < 8u;
+    const bool qualification_skip_layers = qualification_target && qualification_sequence == 0u;
     if (qualification_control) {
         std::fprintf(stderr,
                      "eden-ps5: window-adapt control sequence=%u magenta-clear=1 "

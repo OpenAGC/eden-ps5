@@ -1181,11 +1181,53 @@ runner independently finds no exact `eboot.bin`, and no extra compute partial
 flush is required for this path. Because the user is away from the console,
 these automated readback and lifecycle results do not qualify visible output.
 
-1. Rebuild the identical Eden ELF against OpenAGC `7b60617` and Vulkan-PS5
-   `ae9da26`, then run the cleanup-first automated renderer/readback gate. The
-   eventual Vulkan cleanup must also remove eager prewarm, the unbounded
-   render-pass/dynamic-rendering meta cache, probe-only helpers, and the
-   single-layer restriction, with layered and state-restoration regressions.
+The integrated Eden rebuild against those commits produced ELF SHA-256
+`1b9684d472f3732107f281944ddb6add91bf6155467b3b606f35fbbca4f21289`.
+Its first 600-frame attempt,
+`Vulkan-PS5/examples/qualification-logs/20260802T180320Z-swapchain-run1.log`,
+reaches eight successful native presents but does not reach 100 presents or the
+600-frame oracle within the 60-second guard. The cleanup trap retires PID 186
+and independently proves exact process absence. This is bounded progress, not
+600-frame, relaunch, teardown, or visible-presentation qualification.
+
+Two cleanup-first standalone oracles then eliminate the fresh intermediate
+image and cross-submit semaphore paths. The first uses Eden's 1280x720 mutable,
+extended-usage `COLOR_ATTACHMENT|TRANSFER_SRC` image, `UNDEFINED` first use,
+`GENERAL` render-pass attachment, full magenta production clear, and transfer
+readback. ELF SHA-256
+`f8b94a50401f86d73f0a24a28cc4a6955bf2f034b8c45129a82dc377566da9ef`
+passes in `20260802T181422Z-format-attachments-run1.log`, with PID 190 absent.
+The split-submit variant signals a render-ready semaphore from the graphics
+submit and waits at `TRANSFER` in a second command buffer before readback. ELF
+SHA-256
+`1bd964ca67371ab8c8dd5555138b6cfdb124ee7ab2462c62cb5548ff5cbeb4be`
+also passes in `20260802T181717Z-format-attachments-run1.log`, with PID 193
+absent. The temporary standalone code was removed after collecting evidence so
+the committed attachment regression remains reachable.
+
+The earlier WindowAdapt control accidentally counted the applet-capture pass,
+whose separate `applet_frame` has no presentation readback buffer. Consequently
+its sequence-zero magenta clear and layer suppression never targeted the frame
+copied to the swapchain. The corrected Prospero-only qualifier counts only
+frames that own `qualification_readback`. Cleanup-first ELF SHA-256
+`78de222ef564d6416f79f168e625b53f7195eb2f1f6d3d19108b3c25ff440396`
+passes the committed eight-frame sidecar in
+`20260802T183213Z-swapchain-run1.log`: presented sequence zero reads exact
+magenta from the intermediate image (`ff00ffff`, 48 of 64 sampled bytes
+nonzero), while the swapchain image remains exactly zero. PID 224 and the
+global exact-name check are absent after bounded teardown. This moves the
+active black-output owner to Vulkan-PS5's scaling `vkCmdBlitImage` path. A
+forced `vkCmdCopyImage` A/B is invalid because the 1280x720 intermediate and
+surface extents differ; it fails command recording and is reverted. No visual
+claim is made while the user is away from the console.
+
+1. Fix and regress Vulkan-PS5's scaling `vkCmdBlitImage` path, then rerun the
+   cleanup-first presented-frame readback gate. Require the exact magenta
+   sequence-zero intermediate and swapchain samples to match before returning
+   to the long Eden workload. The eventual Vulkan cleanup must also remove
+   eager prewarm, the unbounded render-pass/dynamic-rendering meta cache,
+   probe-only helpers, and the single-layer restriction, with layered and
+   state-restoration regressions.
 2. Repeat the cleanup-first `2048.nro` 600-frame workload twice on FW 5.50
    through the
    real scheduler, shader cache, renderer, WSI, and present path. Require
