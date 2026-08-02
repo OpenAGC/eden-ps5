@@ -34,6 +34,11 @@ struct Frame {
     vk::CommandBuffer cmdbuf;
     vk::Semaphore render_ready;
     vk::Fence present_done;
+#ifdef __PROSPERO__
+    vk::Buffer qualification_readback;
+    u32 qualification_sequence{};
+    bool qualification_readback_pending{};
+#endif
 };
 
 class PresentManager {

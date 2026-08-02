@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2023 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
 #include <cstdio>
 
 #include "common/settings.h"
@@ -140,6 +141,25 @@ PresentManager::PresentManager(const vk::Instance& instance_,
             .pNext = nullptr,
             .flags = VK_FENCE_CREATE_SIGNALED_BIT,
         });
+#ifdef __PROSPERO__
+        constexpr VkDeviceSize QualificationReadbackBytes = 32u * sizeof(u32);
+        frame.qualification_readback = memory_allocator.CreateBuffer(
+            {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0,
+                .size = QualificationReadbackBytes,
+                .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                .queueFamilyIndexCount = 0,
+                .pQueueFamilyIndices = nullptr,
+            },
+            MemoryUsage::Download);
+        if (!frame.qualification_readback.IsHostVisible() ||
+            frame.qualification_readback.Mapped().size() < QualificationReadbackBytes) {
+            throw std::runtime_error{"PS5 qualification readback is not host visible"};
+        }
+#endif
         free_queue.push_back(&frame);
     }
 
@@ -165,6 +185,29 @@ Frame* PresentManager::GetRenderFrame() {
 
     // Wait for the presentation to be finished so all frame resources are free
     frame->present_done.Wait();
+#ifdef __PROSPERO__
+    if (frame->qualification_readback_pending) {
+        frame->qualification_readback.Invalidate();
+        const std::span<const u8> samples = frame->qualification_readback.Mapped().first(128u);
+        const auto report_samples = [sequence = frame->qualification_sequence](
+                                        const char* stage, std::span<const u8> stage_samples) {
+            u32 nonzero_bytes = 0;
+            u64 hash = UINT64_C(1469598103934665603);
+            for (const u8 byte : stage_samples) {
+                nonzero_bytes += byte != 0;
+                hash = (hash ^ byte) * UINT64_C(1099511628211);
+            }
+            std::fprintf(stderr,
+                         "eden-ps5: %s samples sequence=%u nonzero_bytes=%u hash=%016llx "
+                         "first=%02x%02x%02x%02x\n",
+                         stage, sequence, nonzero_bytes, static_cast<unsigned long long>(hash),
+                         stage_samples[0], stage_samples[1], stage_samples[2], stage_samples[3]);
+        };
+        report_samples("intermediate-frame", samples.first(64u));
+        report_samples("swapchain-frame", samples.subspan(64u, 64u));
+        frame->qualification_readback_pending = false;
+    }
+#endif
     frame->present_done.Reset();
 
     return frame;
@@ -395,7 +438,7 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
             },
         },
     };
-    const std::array post_barriers{
+    std::array post_barriers{
         VkImageMemoryBarrier{
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
             .pNext = nullptr,
@@ -437,6 +480,30 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
     cmdbuf.PipelineBarrier(vk::PIPELINE_STAGE_GRAPHICS_COMPUTE_TRANSFER, VK_PIPELINE_STAGE_TRANSFER_BIT, {},
                            {}, {}, pre_barriers);
 
+#ifdef __PROSPERO__
+    static std::atomic<u32> qualification_sequence{0};
+    const u32 sequence = qualification_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool capture_qualification_frames =
+        sequence < 8u && frame->width > 0u && frame->height > 0u && extent.width > 0u &&
+        extent.height > 0u;
+    if (capture_qualification_frames) {
+        std::array<VkBufferImageCopy, 16> sample_regions{};
+        for (u32 i = 0; i < sample_regions.size(); ++i) {
+            VkBufferImageCopy& region = sample_regions[i];
+            region.bufferOffset = i * sizeof(u32);
+            region.imageSubresource = MakeImageSubresourceLayers();
+            region.imageOffset = {
+                .x = static_cast<s32>((i % 4u) * (frame->width - 1u) / 3u),
+                .y = static_cast<s32>((i / 4u) * (frame->height - 1u) / 3u),
+                .z = 0,
+            };
+            region.imageExtent = {.width = 1, .height = 1, .depth = 1};
+        }
+        cmdbuf.CopyImageToBuffer(*frame->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                 *frame->qualification_readback, sample_regions);
+    }
+#endif
+
     if (blit_supported) {
         cmdbuf.BlitImage(*frame->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -447,6 +514,57 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                          MakeImageCopy(frame->width, frame->height, extent.width, extent.height));
     }
+
+#ifdef __PROSPERO__
+    if (capture_qualification_frames) {
+        const VkImageMemoryBarrier swapchain_read_barrier{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .pNext = nullptr,
+            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = image,
+            .subresourceRange = post_barriers[0].subresourceRange,
+        };
+        cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                               swapchain_read_barrier);
+
+        std::array<VkBufferImageCopy, 16> sample_regions{};
+        for (u32 i = 0; i < sample_regions.size(); ++i) {
+            VkBufferImageCopy& region = sample_regions[i];
+            region.bufferOffset = 16u * sizeof(u32) + i * sizeof(u32);
+            region.imageSubresource = MakeImageSubresourceLayers();
+            region.imageOffset = {
+                .x = static_cast<s32>((i % 4u) * (extent.width - 1u) / 3u),
+                .y = static_cast<s32>((i / 4u) * (extent.height - 1u) / 3u),
+                .z = 0,
+            };
+            region.imageExtent = {.width = 1, .height = 1, .depth = 1};
+        }
+        cmdbuf.CopyImageToBuffer(image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                 *frame->qualification_readback, sample_regions);
+        const VkBufferMemoryBarrier host_read_barrier{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .pNext = nullptr,
+            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_HOST_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer = *frame->qualification_readback,
+            .offset = 0,
+            .size = VK_WHOLE_SIZE,
+        };
+        cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0,
+                               host_read_barrier);
+        post_barriers[0].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        post_barriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        frame->qualification_sequence = sequence;
+        frame->qualification_readback_pending = true;
+    }
+#endif
 
     cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, {},
                            {}, {}, post_barriers);

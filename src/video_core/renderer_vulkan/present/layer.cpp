@@ -4,6 +4,8 @@
 // SPDX-FileCopyrightText: Copyright 2024 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
+#include <cstdio>
 #include <variant>
 #include "video_core/present.h"
 #include "video_core/renderer_vulkan/present/anti_alias_pass.h"
@@ -90,6 +92,21 @@ void Layer::ConfigureDraw(const Device& device, PresentPushConstants* out_push_c
     const u32 scaled_width = texture_info ? texture_info->scaled_width : texture_width;
     const u32 scaled_height = texture_info ? texture_info->scaled_height : texture_height;
     const bool use_accelerated = texture_info.has_value();
+#ifdef __PROSPERO__
+    static std::atomic<u32> qualification_configure_count{0};
+    const u32 qualification_configure =
+        qualification_configure_count.fetch_add(1, std::memory_order_relaxed);
+    if (qualification_configure < 8u) {
+        std::fprintf(stderr,
+                     "eden-ps5: display-source sequence=%u accelerated=%u address=%llx "
+                     "offset=%llx width=%u height=%u stride=%u format=%u\n",
+                     qualification_configure, use_accelerated,
+                     static_cast<unsigned long long>(framebuffer.address),
+                     static_cast<unsigned long long>(framebuffer.offset), framebuffer.width,
+                     framebuffer.height, framebuffer.stride,
+                     static_cast<unsigned>(framebuffer.pixel_format));
+    }
+#endif
 
     RefreshResources(device, framebuffer);
     SetAntiAliasPass(device);
@@ -295,9 +312,32 @@ void Layer::UpdateRawImage(const Tegra::FramebufferConfig& framebuffer, size_t i
     const u64 tiled_size{Tegra::Texture::CalculateSize(
         true, bytes_per_pixel, framebuffer.stride, framebuffer.height, 1, block_height_log2, 0)};
     if (host_ptr) {
+        const std::span<u8> linear = mapped_span.subspan(image_offset, linear_size);
         Tegra::Texture::UnswizzleTexture(
-            mapped_span.subspan(image_offset, linear_size), std::span(host_ptr, tiled_size),
+            linear, std::span(host_ptr, tiled_size),
             bytes_per_pixel, framebuffer.width, framebuffer.height, 1, block_height_log2, 0);
+#ifdef __PROSPERO__
+        static std::atomic<u32> qualification_upload_count{0};
+        const u32 qualification_upload =
+            qualification_upload_count.fetch_add(1, std::memory_order_relaxed);
+        if (qualification_upload < 8u && linear.size() >= 4u) {
+            u32 nonzero_samples = 0;
+            u64 hash = UINT64_C(1469598103934665603);
+            constexpr size_t SampleCount = 256;
+            const size_t step = (std::max)(linear.size() / SampleCount, size_t{1});
+            for (size_t offset = 0; offset < linear.size(); offset += step) {
+                const u8 byte = linear[offset];
+                nonzero_samples += byte != 0;
+                hash = (hash ^ byte) * UINT64_C(1099511628211);
+            }
+            std::fprintf(stderr,
+                         "eden-ps5: raw-frame samples sequence=%u nonzero=%u hash=%016llx "
+                         "first=%02x%02x%02x%02x\n",
+                         qualification_upload, nonzero_samples,
+                         static_cast<unsigned long long>(hash), linear[0], linear[1], linear[2],
+                         linear[3]);
+        }
+#endif
         buffer.Flush();  // Ensure host writes are visible before the GPU copy.
     }
 
