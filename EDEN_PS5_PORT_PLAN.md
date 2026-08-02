@@ -426,6 +426,24 @@ host visibility, and BGRA interpretation are now directly qualified. Fix and
 regress the graphics target binding/export/cache state before rebuilding or
 launching Eden again.
 
+OpenAGC commit `f7110fb` strengthens every writer release from GCR `0x603` to
+Mesa-aligned `0x703`, adding the previously omitted GL2 invalidate while
+retaining forward sequencing and GLM/GL2 writeback. Its exact packet fixtures
+and all 19,924 host assertions pass, and the integrated Prospero build passes.
+Cleanup-first A/B run
+`Vulkan-PS5/examples/qualification-logs/20260802T154908Z-format-attachments-run1.log`
+used ELF SHA-256
+`bbbbac660ed5bd56123b8f808d72b3923b83dc4258a2dbdceea8f500638aba83`.
+The result is unchanged: the graphics attachment clear reads zero and the
+same-image transfer clear passes three exact magenta samples; PID 111 then
+self-exits with no matching `eboot.bin`. The missing GL2 invalidate was a real
+barrier weakness but is not the sole cause of this black output. The next
+bounded discriminator must issue a hardcoded fragment-color draw without push
+constants to the same image, then reuse the proven copy/readback path. A pass
+would isolate the meta-clear shader or push-constant path; another zero would
+keep color-target addressing, rasterization, and graphics completion ordering
+as the remaining lower-layer suspects.
+
 The earlier terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
