@@ -444,6 +444,22 @@ would isolate the meta-clear shader or push-constant path; another zero would
 keep color-target addressing, rasterization, and graphics completion ordering
 as the remaining lower-layer suspects.
 
+Vulkan-PS5 commit `5e8b3fd` adds the fixed-magenta fragment discriminator with
+no descriptors or push constants. Cleanup-first FW 5.500.008 run
+`Vulkan-PS5/examples/qualification-logs/20260802T155537Z-format-attachments-run1.log`
+used post-commit ELF SHA-256
+`d53cc055ee968ed1ae09ba553f1208cbc0f814b5a8f3f2d9a22130b320e170a9`.
+The ordinary fullscreen graphics draw passes all three exact magenta samples
+on the same legacy render pass, optimal device-local image, and readback path;
+the transfer clear also passes, while `vkCmdClearAttachments` alone remains
+zero. PID 114 self-exits and the runner finds no matching `eboot.bin`. This
+qualifies OpenAGC color-target addressing, device-local graphics writes,
+graphics-to-transfer visibility, and the fixed-shader raster path. The active
+defect is now confined to Vulkan-PS5's meta attachment-clear pipeline or its
+direct push-constant/state replay. Compare a normal push-constant fullscreen
+draw on this same image before changing OpenAGC synchronization or surface
+registers.
+
 The earlier terminal boundary was `vkCreateImageView`: Vulkan format 51
 (`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) with 2D view type returns
 `VK_ERROR_FEATURE_NOT_PRESENT`, and the GPU thread catches the exception at
