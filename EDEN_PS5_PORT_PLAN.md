@@ -1221,10 +1221,38 @@ forced `vkCmdCopyImage` A/B is invalid because the 1280x720 intermediate and
 surface extents differ; it fails command recording and is reverted. No visual
 claim is made while the user is away from the console.
 
-1. Fix and regress Vulkan-PS5's scaling `vkCmdBlitImage` path, then rerun the
-   cleanup-first presented-frame readback gate. Require the exact magenta
-   sequence-zero intermediate and swapchain samples to match before returning
-   to the long Eden workload. The eventual Vulkan cleanup must also remove
+A second cleanup-first A/B forced nearest filtering without changing the
+scaling blit geometry. ELF SHA-256
+`3c58eef97de85b4d76e1bfef87f3a37424cf4b44f0bdd1c9d7ef1e59b5496721`
+passes the bounded eight-frame lifecycle in
+`20260802T183758Z-swapchain-run1.log`, but its presented-frame intermediate is
+still exact magenta while the swapchain sample remains zero. The filter change
+was reverted, eliminating linear filtering as the zero-write owner.
+
+The next Vulkan-PS5 defect is a logical/native scanout-format mismatch. Eden's
+mutable swapchain images are logically `VK_FORMAT_B8G8R8A8_UNORM`, while
+`vk_ps5_enable_image_scanout` changes their native descriptor to
+`AGC_FORMAT_BGRA8_SRGB`. The scaling blit previously created its meta pipeline
+and bound its color target using the stale logical UNORM format. The current
+candidate derives the destination blit format from the native scanout
+descriptor, uses SRGB consistently for the meta pipeline and target binding,
+and preserves logical formats for ordinary images. Focused WSI and command
+recording regressions pass, as does the full Prospero driver build. The rebuilt
+Eden ELF is
+`7dc8c40268852d87d51e9a191c433aed31513e78cc92be93d36959bc184e9885`.
+Hardware readback remains pending: the pinned cleanup ELF hash verified, but
+the loader at `10.0.1.41:8080` was unreachable on 2026-08-03, so the launch was
+correctly withheld. This candidate is not yet PS5-qualified and makes no
+visible-presentation claim. An independent audit found the same latent format
+mismatch in resolve-to-scanout, but Eden's current presentation path uses
+`vkCmdBlitImage`; resolve hardening is therefore a follow-up, not the owner of
+the current black output.
+
+1. Rerun the scanout-aware scaling `vkCmdBlitImage` candidate through the
+   cleanup-first presented-frame readback gate when the PS5 is reachable.
+   Require the exact magenta sequence-zero intermediate and swapchain samples
+   to match before returning to the long Eden workload. The eventual Vulkan
+   cleanup must also remove
    eager prewarm, the unbounded render-pass/dynamic-rendering meta cache,
    probe-only helpers, and the single-layer restriction, with layered and
    state-restoration regressions.
