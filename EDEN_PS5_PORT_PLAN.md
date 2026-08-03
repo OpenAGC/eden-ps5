@@ -12,8 +12,8 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current pinned guest startup diagnostic Eden ELF is SHA-256
-`72ca7527cd1dfbe2565d8bbc6e118789011b633ee2e0c38d3549b96a2e9502ed`,
-embeds Eden `7c1de93`, and incorporates OpenAGC byte-granular transfer commit
+`4533e94528e6c1cebb28787bdaa1cfca27af94c4ae7781a4ab8f0a3dbd2fd69d`,
+embeds Eden `0463e02`, and incorporates OpenAGC byte-granular transfer commit
 `4719611` plus Vulkan-PS5 first-command diagnostics `237ba9f`, buffer-image
 failure telemetry `ed9eada`, and exact buffer-image range preparation
 `edba96d`. It also includes OpenAGC capacity diagnostics `7e87dd8` and the
@@ -21,7 +21,9 @@ Vulkan-PS5 256-KiB native DCB plus old-budget regression at `d518591`, empty
 native scissors `993952e`, signed Vulkan scissor clipping `f9ae5ad`, and
 buffer-image validation telemetry `aa82230`. Vulkan-PS5 `dab93b4` adds the
 first tiled D32 depth-plane meta upload, while `dbe9973` adds the matching
-packed S8 upload. The guarded ELF pin is Eden commit `c2cea14`.
+packed S8 upload. OpenAGC `f49bf8e` adds the authoritative successful direct
+`/dev/gc` marker. The guarded ELF pin and audio/backend gates are Eden commit
+`26f385e`.
 
 Before launch, pin the ELF, NRO, sidecar, cleanup ELF, guarded runner,
 exact-process helper, and PyPS4debug revision/lockfile. Run only the direct
@@ -166,6 +168,22 @@ responding to ping, and post-run cleanup could not prove process absence. On
 the next boot, run the pinned cleanup ELF and independently prove exact global
 absence twice before retrying this same pinned canary. Do not classify this
 debug-service/console loss as either an S8 pass or an S8 failure.
+
+While the console remained offline, the canary proof audit closed two missing
+positive oracles. Prospero startup now emits
+`Prospero audio policy: sink=null fail_soft=true` immediately after forcing
+the qualified null sink, and OpenAGC emits
+`[openagc] backend=direct-dev-gc fd_open=true capability=...` only after the
+direct device opens and its context query succeeds. Vulkan-PS5 `b5f5f96`
+extends the guarded runner to ten independent required patterns and tests both
+presence and absence of the tenth oracle; its complete runner safety test
+passes. The Flappy wrapper pins the updated runner SHA-256
+`96e396e42d6b3a73eef0ed7de78fe0e318b1aa51cdcf8ff2c89a54b013452c08`
+and requires both new markers without dropping the existing firmware, input,
+cache identity, PSBC, baseline, Dynarmic, guest-pipeline creation, or
+transferable-record gates. The Prospero OpenAGC target and full Eden
+`yuzu-cmd` build pass. Hardware evidence is still pending a fresh boot,
+cleanup, and exact-process absence proof.
 
 `InvadersNX.nro` remains the second workload and long-running presentation
 canary, not a substitute for the current diagnosis. Switch to it after Flappy
