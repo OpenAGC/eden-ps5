@@ -102,6 +102,24 @@ clean bounded teardown. The GPU-free JIT W^X preflight is therefore qualified;
 the remaining active proof is the repinned full Eden ELF's two-run InvadersNX
 renderer/WSI gate under normal multithreaded load.
 
+The first full `b15cdff1...` replay,
+`20260803T025758Z-swapchain-run1.log`, clears the former first-cache RW-to-RX
+boundary under Eden's normal multithreaded initialization and executes the
+InvadersNX guest. It contains no JIT/mprotect failure or crash. InvadersNX then
+exits its guest process normally before producing a display buffer, so Eden
+correctly rejects `expected=600 actual=0`; cleanup and exact-process checks
+pass. This is positive JIT evidence but not an InvadersNX renderer pass. The
+separate guest SDL/window exit is under investigation and must not be hidden by
+weakening the presentation oracle.
+
+To qualify the intermittent protection fix under a known rendering workload,
+`tools/run_fw550_2048_jit_stress.sh` pins the repointed sequence-zero wrapper
+and executes it in 20 fresh cleanup-first processes. Each run uses the same
+full `b15cdff1...` ELF, requires exact magenta renderer/swapchain readback and
+eight presented frames, rejects every JIT/allocation/presentation failure, and
+requires bounded teardown plus exact process absence. This supplements, rather
+than replaces, the already-passed GPU-free 20-process W^X probe.
+
 ## Active construction diagnostic (2026-08-02)
 
 The unnormalized-sampler fix, OpenAGC runtime API 55 compute-scratch path, and

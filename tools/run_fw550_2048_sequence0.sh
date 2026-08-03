@@ -14,7 +14,7 @@ elf=${EDEN_PS5_ELF:-$repo_dir/build-prospero-full-audit2/bin/eden-ps5.elf}
 cleanup_elf=${EDEN_PS5_CLEANUP_ELF:-$vulkan_repo/build-prospero-msaa/vulkan_ps5_process_cleanup.elf}
 homebrew=${EDEN_PS5_2048_NRO:-$repo_dir/../2048.nro}
 sidecar="$repo_dir/src/ps5/eden-2048-thread-budget.launch"
-pinned_eden_sha256=18295a780e72d724c4f2eeb4bcf4a868c4ba2fe3c122b7de0dab43b922251f22
+pinned_eden_sha256=b15cdff162630eb9d9dfd01195407b8a904020aee58068726e44bd909ecc164e
 pinned_cleanup_sha256=9fd6b41cf2ea87989c4217234c6f34c96a1ca5dc482355af1258539db77d4d76
 pinned_runner_sha256=1daccfac01b61a2b00e610dd15403cde844ed399a27d512eb8646b07f7d6102e
 pinned_process_helper_sha256=8dff282cdbc7ac1f4a037ad9e2a0e800fa82838cd1342b804b1eaff65ffd1ef6
@@ -93,6 +93,7 @@ VULKAN_PS5_QUALIFICATION_PASS_DESCRIPTION='2048 sequence-zero exact-magenta scan
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN='^eden-ps5: intermediate-frame samples sequence=0 nonzero_bytes=48 hash=6fc6b825c3dda003 first=ff00ffff$' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2='^eden-ps5: swapchain-frame samples sequence=0 nonzero_bytes=48 hash=6fc6b825c3dda003 first=ff00ffff$' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_3='^\[openagc\] system software raw=0x05500008 string= 5\.500\.008$' \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4='^eden-ps5 dynarmic JIT-eligible W\^X code cache demoted RW: base=303204000 size=0x2000000$' \
 VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
 VULKAN_PS5_WEBSRV_TIMEOUT="$websrv_timeout" \
 VULKAN_PS5_SWAPCHAIN_EXPECTED_SHA256="$pinned_eden_sha256" \
