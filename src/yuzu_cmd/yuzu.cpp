@@ -11,8 +11,8 @@
 
 #include <fmt/ostream.h>
 
-#include "common/logging.h"
 #include "common/fs/path_util.h"
+#include "common/logging.h"
 #include "common/scm_rev.h"
 #include "common/settings.h"
 #include "common/string_util.h"
@@ -26,12 +26,13 @@
 #include "core/hle/service/filesystem/filesystem.h"
 #include "core/loader/loader.h"
 #include "frontend_common/config.h"
-#include "input_common/main.h"
 #include "input_common/host_thread_budget.h"
+#include "input_common/main.h"
 #include "network/network.h"
 #ifdef __PROSPERO__
 #include "ps5/launch_config.h"
 #include "ps5/runtime.h"
+#include "ps5/shader_cache_identity.h"
 #endif
 #include "sdl_config.h"
 #include "video_core/renderer_base.h"
@@ -407,8 +408,7 @@ static int EdenMain(int argc, char** argv) {
     system.Initialize();
 
 #ifdef __PROSPERO__
-    constexpr auto input_worker_policy =
-        InputCommon::ResolveHostInputWorkerPolicy(true);
+    constexpr auto input_worker_policy = InputCommon::ResolveHostInputWorkerPolicy(true);
     Settings::values.enable_joycon_driver = input_worker_policy.enable_custom_hid;
     Settings::values.enable_procon_driver = input_worker_policy.enable_custom_hid;
     if (!input_worker_policy.enable_udp) {
@@ -491,6 +491,20 @@ static int EdenMain(int argc, char** argv) {
         break;
     }
 
+#ifdef __PROSPERO__
+    std::optional<u64> shader_cache_id;
+    if (Settings::values.use_disk_shader_cache.GetValue()) {
+        shader_cache_id = Eden::PS5::ResolveShaderCacheIdentity(
+            system.GetApplicationProcessProgramID(), system.GetAppLoader().GetBackingFile());
+        if (!shader_cache_id) {
+            LOG_ERROR(Frontend,
+                      "Failed to derive the Prospero shader-cache identity; disk cache disabled");
+        } else {
+            LOG_INFO(Frontend, "Prospero shader-cache identity: {:016x}", *shader_cache_id);
+        }
+    }
+#endif
+
     if (use_multiplayer) {
         if (auto member = Network::GetRoomMember().lock()) {
             member->BindOnChatMessageReceived(OnMessageReceived);
@@ -524,9 +538,17 @@ static int EdenMain(int argc, char** argv) {
     system.GetCpuManager().OnGpuReady();
 
     if (Settings::values.use_disk_shader_cache.GetValue()) {
+#ifdef __PROSPERO__
+        if (shader_cache_id) {
+            system.Renderer().ReadRasterizer()->LoadDiskResources(
+                *shader_cache_id, std::stop_token{},
+                [](VideoCore::LoadCallbackStage, size_t value, size_t total) {});
+        }
+#else
         system.Renderer().ReadRasterizer()->LoadDiskResources(
             system.GetApplicationProcessProgramID(), std::stop_token{},
             [](VideoCore::LoadCallbackStage, size_t value, size_t total) {});
+#endif
     }
 
     void(system.Run());

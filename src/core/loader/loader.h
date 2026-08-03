@@ -182,6 +182,9 @@ public:
      */
     virtual FileType GetFileType() const = 0;
 
+    /// Returns the exact backing file selected by the loader.
+    [[nodiscard]] const FileSys::VirtualFile& GetBackingFile() const noexcept;
+
     /**
      * Load the application and return the created Process instance
      *

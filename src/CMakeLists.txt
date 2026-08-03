@@ -269,6 +269,15 @@ if (YUZU_TESTS)
     target_link_libraries(eden_ps5_launch_config_tests PRIVATE Catch2::Catch2WithMain)
     add_test(NAME eden_ps5.launch_config COMMAND eden_ps5_launch_config_tests)
 
+    add_executable(eden_ps5_shader_cache_identity_tests
+        core/file_sys/vfs/vfs.cpp
+        core/file_sys/vfs/vfs_vector.cpp
+        ps5/shader_cache_identity.cpp
+        tests/ps5/shader_cache_identity.cpp)
+    target_link_libraries(eden_ps5_shader_cache_identity_tests PRIVATE
+        Catch2::Catch2WithMain common OpenSSL::Crypto)
+    add_test(NAME eden_ps5.shader_cache_identity COMMAND eden_ps5_shader_cache_identity_tests)
+
     add_executable(eden_ps5_thread_budget_tests
         tests/input_common/host_thread_budget.cpp
         tests/video_core/gpu_thread.cpp

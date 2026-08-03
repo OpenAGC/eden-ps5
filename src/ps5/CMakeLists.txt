@@ -70,7 +70,9 @@ if (NOT EDEN_PS5_BOOTSTRAP_ONLY)
     target_link_libraries(yuzu-cmd PRIVATE VulkanPS5::ICD SceSystemService)
     target_sources(yuzu-cmd PRIVATE
         launch_config.cpp
-        runtime.cpp)
+        runtime.cpp
+        shader_cache_identity.cpp)
+    target_link_libraries(yuzu-cmd PRIVATE OpenSSL::Crypto)
     set_target_properties(yuzu-cmd PROPERTIES
         OUTPUT_NAME "eden-ps5"
         SUFFIX ".elf")

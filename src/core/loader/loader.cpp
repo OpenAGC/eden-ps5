@@ -262,6 +262,10 @@ std::ostream& operator<<(std::ostream& os, ResultStatus status) {
 AppLoader::AppLoader(FileSys::VirtualFile file_) : file(std::move(file_)) {}
 AppLoader::~AppLoader() = default;
 
+const FileSys::VirtualFile& AppLoader::GetBackingFile() const noexcept {
+    return file;
+}
+
 /**
  * Get a loader for a file with a specific type
  * @param system The system context to use.
