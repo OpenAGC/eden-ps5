@@ -11,7 +11,7 @@ cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
 Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
-The current unlaunched guest command-completion diagnostic Eden ELF is SHA-256
+The current pinned guest startup diagnostic Eden ELF is SHA-256
 `3719f5906c46b5f6a833e1813475230947572297ef3081c8a0ec51e5bc9b2af7`,
 embeds Eden `7a3042e989`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
@@ -1054,6 +1054,28 @@ the strict Prospero build pass. Revision `7a3042e` contains the focused trace
 and PID 188 evidence. Its rebuilt ELF embeds `7a3042e989`, has SHA-256
 `3719f5906c46b5f6a833e1813475230947572297ef3081c8a0ec51e5bc9b2af7`, and
 is pinned for exactly one cleanup-first 30-second replay.
+
+That replay ran as PID 191 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T185206Z-swapchain-run1.log`.
+The focused trace follows guest thread 77 throughout the bounded window. It
+continued successful IPC, memory-management, synchronization, and thread
+operations through 19.878 seconds, then spent about 7.2 seconds entirely in
+guest code before resuming successful service calls at 27.092 seconds. It
+mapped two additional `0xf0000` regions and returned to guest work at 27.206
+seconds. No call remained blocked and no fatal diagnostic appeared. Audio
+continued at the correct cadence, and cleanup proved PID 191 and global
+`eboot.bin` absence twice each.
+
+This timing matches Flappy's synchronous `SDL_HelperInit`: after creating the
+accelerated renderer and opening SDL_mixer it rasterizes the same shared font
+at four sizes before `SceneManager::Start` and the real applet render loop.
+The first GPFIFO is therefore an initialization upload, not a frame-two fence,
+and the 30-second host deadline currently truncates CPU-bound font startup.
+Do not change GPFIFO, syncpoint, BufferQueue, or Vulkan behavior based on this
+timeout. The next offline slice must profile or improve the guest/JIT font
+rasterization path while retaining the pinned 30-second diagnostic contract;
+if that cannot make startup fit, a separately justified bounded startup window
+must be agreed before final 120-frame qualification.
 
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
