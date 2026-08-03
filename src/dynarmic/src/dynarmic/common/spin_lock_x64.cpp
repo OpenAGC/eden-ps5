@@ -6,19 +6,24 @@
  * SPDX-License-Identifier: 0BSD
  */
 
-#include <mutex>
-#include <optional>
 #include "dynarmic/backend/x64/xbyak.h"
 
-#include "dynarmic/backend/x64/abi.h"
-#include "dynarmic/backend/x64/hostloc.h"
-#include "dynarmic/backend/x64/prospero_jit_vm_lock.h"
+#if !defined(__PROSPERO__)
+#    include <mutex>
+#    include <optional>
+
+#    include "dynarmic/backend/x64/abi.h"
+#    include "dynarmic/backend/x64/hostloc.h"
+#endif
+
 #include "dynarmic/common/spin_lock.h"
 
-#ifdef DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT
+#if !defined(__PROSPERO__)
+#    ifdef DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT
 static const auto default_cg_mode = Xbyak::DontSetProtectRWE;
-#else
-static const auto default_cg_mode = nullptr; //Allow RWE
+#    else
+static const auto default_cg_mode = nullptr;  // Allow RWE
+#    endif
 #endif
 
 namespace Dynarmic {
@@ -39,8 +44,10 @@ void EmitSpinLockLock(Xbyak::CodeGenerator& code, Xbyak::Reg64 ptr, Xbyak::Reg32
         // XBYAK BUG: code.umonitor(ptr); see issue #255
         // replace once xbyak has been fixed
         code.db(0xF3);
-        if (ptr.getIdx() >= 8) code.db(0x41);
-        code.db(0x0F); code.db(0xAE);
+        if (ptr.getIdx() >= 8)
+            code.db(0x41);
+        code.db(0x0F);
+        code.db(0xAE);
         code.db(uint8_t((3 << 6) | ((6 & 7) << 3) | (ptr.getIdx() & 7)));
 
         // tmp.bit[0] = 0: C0.1 | Slow Wakup | Better Savings
@@ -75,25 +82,41 @@ void EmitSpinLockUnlock(Xbyak::CodeGenerator& code, Xbyak::Reg64 ptr, Xbyak::Reg
     code.mfence();
 }
 
+#if defined(__PROSPERO__)
+
+namespace {
+
+inline void SpinPause() noexcept {
+    __builtin_ia32_pause();
+}
+
+}  // namespace
+
+void SpinLock::Lock() noexcept {
+    // Keep the host-side lock out of the JIT allocator. Guest code continues
+    // to use EmitSpinLockLock above against the same 0/1 lock word.
+    for (;;) {
+        while (__atomic_load_n(&storage, __ATOMIC_RELAXED) != 0) {
+            SpinPause();
+        }
+
+        if (__atomic_exchange_n(&storage, 1, __ATOMIC_ACQUIRE) == 0) {
+            return;
+        }
+    }
+}
+
+void SpinLock::Unlock() noexcept {
+    __atomic_store_n(&storage, 0, __ATOMIC_RELEASE);
+}
+
+#else
+
 namespace {
 struct SpinLockImpl {
-#if defined(__PROSPERO__)
-    ~SpinLockImpl() noexcept {
-        // Xbyak's destructor first restores RW protection and then frees its
-        // executable mapping. Destroy it under the same process-global guard
-        // as its construction and BlockOfCode's VM operations.
-        const auto vm_lock = Backend::X64::LockProsperoJitVm();
-        code.reset();
-    }
-#endif
-
     void Initialize() noexcept;
     static void GlobalInitialize() noexcept;
-#if defined(__PROSPERO__)
-    std::optional<Xbyak::CodeGenerator> code;
-#else
     Xbyak::CodeGenerator code = Xbyak::CodeGenerator(4096, default_cg_mode);
-#endif
     void (*lock)(volatile int*) = nullptr;
     void (*unlock)(volatile int*) = nullptr;
 };
@@ -105,12 +128,7 @@ std::once_flag flag;
 std::optional<SpinLockImpl> impl;
 
 void SpinLockImpl::Initialize() noexcept {
-#if defined(__PROSPERO__)
-    code.emplace(4096, default_cg_mode);
-    auto& generator = *code;
-#else
     auto& generator = code;
-#endif
     // Needed for W^X systems (i.e SElinux, OpenBSD)
     generator.setProtectMode(Xbyak::CodeArray::ProtectMode::PROTECT_RW);
     Xbyak::Reg64 const ABI_PARAM1 = Backend::X64::HostLocToReg64(Backend::X64::ABI_PARAM1);
@@ -126,14 +144,6 @@ void SpinLockImpl::Initialize() noexcept {
 }
 
 void SpinLockImpl::GlobalInitialize() noexcept {
-#if defined(__PROSPERO__)
-    // CodeGenerator construction may request executable mmap eligibility, and
-    // Initialize() later changes that mapping RW then RX. Hold the same outer
-    // VM-operation guard as BlockOfCode for that complete sequence. Do not
-    // wrap mprotect itself: the payload SDK's executable mmap path calls its
-    // kernel helper internally.
-    const auto vm_lock = Backend::X64::LockProsperoJitVm();
-#endif
     impl.emplace();
     impl->Initialize();
 }
@@ -148,5 +158,7 @@ void SpinLock::Unlock() noexcept {
     std::call_once(flag, &SpinLockImpl::GlobalInitialize);
     impl->unlock(&storage);
 }
+
+#endif
 
 }  // namespace Dynarmic

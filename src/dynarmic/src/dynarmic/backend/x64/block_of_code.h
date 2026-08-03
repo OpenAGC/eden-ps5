@@ -15,16 +15,16 @@
 
 #include "common/common_types.h"
 #include "common/x64/xbyak.h"
-#include "dynarmic/mcl/bit.hpp"
-#include "dynarmic/backend/x64/xbyak.h"
 #include "dynarmic/backend/x64/abi.h"
 #include "dynarmic/backend/x64/callback.h"
 #include "dynarmic/backend/x64/constant_pool.h"
 #include "dynarmic/backend/x64/host_feature.h"
 #include "dynarmic/backend/x64/jitstate_info.h"
+#include "dynarmic/backend/x64/xbyak.h"
 #include "dynarmic/common/cast_util.h"
 #include "dynarmic/interface/halt_reason.h"
 #include "dynarmic/ir/cond.h"
+#include "dynarmic/mcl/bit.hpp"
 
 namespace Dynarmic::Backend::X64 {
 
@@ -85,7 +85,7 @@ public:
 
     /// @brief Code emitter: Calls the function
     template<typename F>
-        requires std::is_pointer_v<F> && std::is_function_v<std::remove_pointer_t<F>>
+    requires std::is_pointer_v<F> && std::is_function_v<std::remove_pointer_t<F>>
     void CallFunction(F fn) {
         ::Common::X64::CallFarFunction(*this, fn);
     }
@@ -139,6 +139,10 @@ public:
     /// This is useful for objects that need to be placed close to or within code.
     /// The lifetime of this memory is the same as the code around it.
     void* AllocateFromCodeSpace(size_t size);
+
+    /// Translate an execution-visible code-space address to its writable alias.
+    /// On platforms without split JIT mappings this is an identity operation.
+    void* GetWritableAddress(const void* executable_address) const;
 
     void SetCodePtr(CodePtr code_ptr);
     void EnsurePatchLocationSize(CodePtr begin, size_t size);

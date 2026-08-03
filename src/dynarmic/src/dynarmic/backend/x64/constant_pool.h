@@ -13,8 +13,9 @@
 #include <span>
 #include <utility>
 
-#include "common/common_types.h"
 #include <ankerl/unordered_dense.h>
+
+#include "common/common_types.h"
 #include "dynarmic/backend/x64/xbyak.h"
 
 namespace Dynarmic::Backend::X64 {
@@ -43,8 +44,12 @@ private:
         }
     };
 
+    // Xbyak uses executable_pool addresses to calculate RIP-relative
+    // displacements. Values are initialized only through writable_pool: on
+    // Prospero the two spans are separate aliases of the same JIT allocation.
     ankerl::unordered_dense::map<ConstantT, void*, ConstantHash> constant_info;
-    std::span<ConstantT> pool;
+    std::span<ConstantT> executable_pool;
+    std::span<ConstantT> writable_pool;
     BlockOfCode& code;
     std::size_t insertion_point;
 };

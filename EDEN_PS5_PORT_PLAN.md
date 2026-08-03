@@ -346,8 +346,27 @@ ordinary non-executable `mmap` and maps the executable handle once with
 `sceKernelJitMapSharedMemory`, under the payload SDK VM-operation lock. This
 hybrid also avoids the helper's observed same-address behavior when it is
 called for both handles. The rebuilt hybrid probe is pinned as SHA-256
-`5f8510d1b0612dc46910b1c381cb98d4757ffe15b90b5386c8cb9f8b22c7b5c6`;
-its cleanup-first hardware canary is the next gate.
+`5f8510d1b0612dc46910b1c381cb98d4757ffe15b90b5386c8cb9f8b22c7b5c6`.
+Its cleanup-first canary passed in
+`20260803T103359Z-swapchain-run1.log`: RW `0x20006c000`, direct-JIT RX
+`0x9000d8000`, known-return execution, both unmaps, both closes, PID 211
+absence, and global exact `eboot.bin` absence all passed. The console web
+service became unreachable before the separate 20-run command launched, so
+the remaining 20-process hybrid gate is still pending and no unguarded retry
+was attempted.
+
+Production integration now uses that same hybrid mechanism. The Xbyak patch
+keeps execution-visible addresses on RX while redirecting emission, rewrites,
+growth copies, and explicit patches to RW; Dynarmic's constant pool separates
+its writable storage pointer from its executable RIP target. Prospero's native
+spin lock no longer creates a second standalone Xbyak cache. The allocator
+keeps trusted mapping sizes, aliases, and descriptors in a fixed 32-slot
+out-of-band registry keyed by the exact executable code pointer, so writable
+cache bytes cannot authorize an arbitrary unmap or close. Duplicate and unknown
+cleanup fails closed, equal descriptor ownership is deduplicated, and native
+JIT map/unmap calls share the payload SDK VM-operation lock. The Prospero
+`dynarmic` target and full `yuzu-cmd` target both build successfully; hardware
+Dynarmic execution and teardown remain pending after the reboot.
 
 The prior sequence-zero canary's operator-visible result is also confirmed:
 magenta appeared first, followed by the 2048 game with a faint but otherwise

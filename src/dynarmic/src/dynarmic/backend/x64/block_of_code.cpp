@@ -31,17 +31,18 @@
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <mutex>
+#include <optional>
 
 #include "common/assert.h"
-#include "dynarmic/mcl/bit.hpp"
-#include "dynarmic/backend/x64/xbyak.h"
-
 #include "dynarmic/backend/x64/a32_jitstate.h"
 #include "dynarmic/backend/x64/abi.h"
 #include "dynarmic/backend/x64/hostloc.h"
 #include "dynarmic/backend/x64/perf_map.h"
 #include "dynarmic/backend/x64/prospero_jit_vm_lock.h"
 #include "dynarmic/backend/x64/stack_layout.h"
+#include "dynarmic/backend/x64/xbyak.h"
+#include "dynarmic/mcl/bit.hpp"
 
 namespace Dynarmic::Backend::X64 {
 
@@ -72,17 +73,68 @@ constexpr size_t PRELUDE_COMMIT_SIZE = 16 * 1024 * 1024;
 
 #if defined(__PROSPERO__)
 constexpr size_t PROSPERO_PAGE_SIZE = 0x4000;
+constexpr int PROSPERO_JIT_MAX_PROTECTION = PROT_READ | PROT_WRITE | PROT_EXEC;
+constexpr size_t PROSPERO_JIT_ALLOCATION_SLOTS = 32;
+
+struct ProsperoJitAllocation {
+    size_t mapping_size;
+    u8* executable_code;
+    u8* writable_mapping;
+    u8* executable_mapping;
+    int writable_descriptor;
+    int executable_descriptor;
+};
+
+std::mutex s_prospero_jit_allocations_mutex;
+std::array<std::optional<ProsperoJitAllocation>, PROSPERO_JIT_ALLOCATION_SLOTS>
+    s_prospero_jit_allocations;
 
 extern "C" [[noreturn]] void edenPs5TerminateApplicationFromJitFailure(
     const char* operation, const void* base, size_t size, int error);
+extern "C" int sceKernelJitCreateSharedMemory(int flags, size_t size, int protection, int* descriptor);
+extern "C" int sceKernelJitCreateAliasOfSharedMemory(int descriptor, int protection, int* alias_descriptor);
+extern "C" int sceKernelJitMapSharedMemory(int descriptor, int protection, void** address);
+extern "C" int sceKernelMunmap(void* address, size_t size);
 
 constexpr size_t AlignUpProspero(size_t value) noexcept {
     return (value + PROSPERO_PAGE_SIZE - 1) / PROSPERO_PAGE_SIZE * PROSPERO_PAGE_SIZE;
 }
 
-[[noreturn]] void FailProsperoJitOperation(const char* operation, const void* base, size_t size,
-                                           int error) {
+[[noreturn]] void FailProsperoJitOperation(const char* operation, const void* base, size_t size, int error) {
     edenPs5TerminateApplicationFromJitFailure(operation, base, size, error);
+}
+
+bool RegisterProsperoJitAllocation(const ProsperoJitAllocation& allocation) {
+    std::scoped_lock lock{s_prospero_jit_allocations_mutex};
+    for (auto& slot : s_prospero_jit_allocations) {
+        if (!slot.has_value()) {
+            slot = allocation;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::optional<ProsperoJitAllocation> TakeProsperoJitAllocation(const u8* executable_code) {
+    std::scoped_lock lock{s_prospero_jit_allocations_mutex};
+    for (auto& slot : s_prospero_jit_allocations) {
+        if (slot.has_value() && slot->executable_code == executable_code) {
+            auto allocation = slot;
+            slot.reset();
+            return allocation;
+        }
+    }
+    return std::nullopt;
+}
+
+u8* FindProsperoWritableCode(const u8* executable_code) {
+    std::scoped_lock lock{s_prospero_jit_allocations_mutex};
+    for (const auto& slot : s_prospero_jit_allocations) {
+        if (slot.has_value() && slot->executable_code == executable_code) {
+            return slot->writable_mapping + PROSPERO_PAGE_SIZE;
+        }
+    }
+    return nullptr;
 }
 #endif
 
@@ -104,78 +156,138 @@ public:
 
     bool useProtect() const override { return false; }
 #else
-#if defined(__PROSPERO__)
+#    if defined(__PROSPERO__)
     static constexpr size_t DYNARMIC_PAGE_SIZE = PROSPERO_PAGE_SIZE;
-#else
+#    else
     static constexpr size_t DYNARMIC_PAGE_SIZE = 4096;
-#endif
+#    endif
 
     // Can't subclass Xbyak::MmapAllocator because it is not a pure interface
     // and doesn't expose its construtor
     uint8_t* alloc(size_t size) override {
         // Waste a page to store the size
-#if defined(__PROSPERO__)
+#    if defined(__PROSPERO__)
         const auto vm_lock = LockProsperoJitVm();
-        if (size > std::numeric_limits<size_t>::max() - DYNARMIC_PAGE_SIZE -
-                       (PROSPERO_PAGE_SIZE - 1)) {
+        if (size > std::numeric_limits<size_t>::max() - DYNARMIC_PAGE_SIZE - (PROSPERO_PAGE_SIZE - 1)) {
             FailProsperoJitOperation("code-cache size overflow", nullptr, size, EOVERFLOW);
         }
         size = AlignUpProspero(size + DYNARMIC_PAGE_SIZE);
 
-        int flags = MAP_PRIVATE;
-#    if defined(MAP_ANONYMOUS)
-        flags |= MAP_ANONYMOUS;
-#    elif defined(MAP_ANON)
-        flags |= MAP_ANON;
-#    else
-#        error "Prospero requires anonymous mmap support for Dynarmic JIT memory"
-#    endif
-        // Dynarmic stores executable pointers while it emits code, so its write and execute
-        // addresses must be identical. Request executable eligibility at allocation time,
-        // as the payload-SDK LLVM MCJIT path does, then immediately demote the complete VM
-        // entry to RW before returning it to Xbyak. JIT shared memory requires separate
-        // aliases and is not compatible with that pointer model without systematic address
-        // translation.
-        void* mapping =
-            mmap(nullptr, size, PROT_READ | PROT_WRITE | PROT_EXEC, flags, -1, 0);
-        if (mapping == MAP_FAILED) {
-            FailProsperoJitOperation("JIT-eligible anonymous code-cache mmap", nullptr, size,
-                                     errno);
+        int executable_descriptor = -1;
+        int writable_descriptor = -1;
+        void* writable_mapping = MAP_FAILED;
+        void* executable_mapping = MAP_FAILED;
+        auto cleanup_failed_allocation = [&] {
+            if (executable_mapping != MAP_FAILED && executable_mapping != writable_mapping) {
+                kernel_vm_operation_lock();
+                sceKernelMunmap(executable_mapping, size);
+                kernel_vm_operation_unlock();
+                executable_mapping = MAP_FAILED;
+            }
+            if (writable_mapping != MAP_FAILED) {
+                kernel_vm_operation_lock();
+                sceKernelMunmap(writable_mapping, size);
+                kernel_vm_operation_unlock();
+                writable_mapping = MAP_FAILED;
+            }
+            if (writable_descriptor >= 0) {
+                const int descriptor = writable_descriptor;
+                close(descriptor);
+                writable_descriptor = -1;
+                if (executable_descriptor == descriptor) {
+                    executable_descriptor = -1;
+                }
+            }
+            if (executable_descriptor >= 0) {
+                close(executable_descriptor);
+                executable_descriptor = -1;
+            }
+        };
+
+        errno = 0;
+        int result = sceKernelJitCreateSharedMemory(0, size, PROSPERO_JIT_MAX_PROTECTION,
+                                                    &executable_descriptor);
+        if (result != 0 || executable_descriptor < 0) {
+            const int error = errno != 0 ? errno : (result != 0 ? result : EINVAL);
+            cleanup_failed_allocation();
+            FailProsperoJitOperation("create executable JIT shared memory", nullptr, size,
+                                     error);
         }
-        if (kernel_mprotect_exact(-1, reinterpret_cast<intptr_t>(mapping), size,
-                                  PROT_READ | PROT_WRITE) != 0) {
-            const int protect_errno = errno;
-            munmap(mapping, size);
-            FailProsperoJitOperation("initial code-cache RW demotion", mapping, size,
-                                     protect_errno);
+        errno = 0;
+        result = sceKernelJitCreateAliasOfSharedMemory(
+            executable_descriptor, PROT_READ | PROT_WRITE, &writable_descriptor);
+        if (result != 0 || writable_descriptor < 0 || writable_descriptor == executable_descriptor) {
+            const int error = errno != 0 ? errno : (result != 0 ? result : EINVAL);
+            cleanup_failed_allocation();
+            FailProsperoJitOperation("create writable JIT shared-memory alias", nullptr, size,
+                                     error);
+        }
+
+        errno = 0;
+        writable_mapping = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, writable_descriptor, 0);
+        if (writable_mapping == MAP_FAILED) {
+            const int error = errno;
+            cleanup_failed_allocation();
+            FailProsperoJitOperation("map writable JIT shared-memory alias", nullptr, size,
+                                     error);
+        }
+        errno = 0;
+        executable_mapping = nullptr;
+        kernel_vm_operation_lock();
+        result = sceKernelJitMapSharedMemory(executable_descriptor, PROT_READ | PROT_EXEC,
+                                             &executable_mapping);
+        const int executable_map_error = result == 0 ? 0 : errno;
+        kernel_vm_operation_unlock();
+        if (result != 0 || executable_mapping == nullptr || executable_mapping == writable_mapping) {
+            const int error = result != 0 ? executable_map_error : EINVAL;
+            if (executable_mapping == nullptr) {
+                executable_mapping = MAP_FAILED;
+            }
+            cleanup_failed_allocation();
+            FailProsperoJitOperation("map distinct executable JIT shared-memory alias", nullptr,
+                                     size, error);
+        }
+
+        const ProsperoJitAllocation allocation{
+            .mapping_size = size,
+            .executable_code = static_cast<u8*>(executable_mapping) + DYNARMIC_PAGE_SIZE,
+            .writable_mapping = static_cast<u8*>(writable_mapping),
+            .executable_mapping = static_cast<u8*>(executable_mapping),
+            .writable_descriptor = writable_descriptor,
+            .executable_descriptor = executable_descriptor,
+        };
+        if (!RegisterProsperoJitAllocation(allocation)) {
+            cleanup_failed_allocation();
+            FailProsperoJitOperation("register dual-alias code cache", executable_mapping, size,
+                                     ENOSPC);
         }
         std::fprintf(stderr,
-                     "eden-ps5 dynarmic JIT-eligible W^X code cache demoted RW: base=%p "
+                     "eden-ps5 dynarmic dual-alias code cache: writable=%p executable=%p "
                      "size=0x%zx\n",
-                     static_cast<void*>(static_cast<uint8_t*>(mapping) + DYNARMIC_PAGE_SIZE),
+                     static_cast<void*>(static_cast<u8*>(writable_mapping) + DYNARMIC_PAGE_SIZE),
+                     static_cast<void*>(static_cast<u8*>(executable_mapping) + DYNARMIC_PAGE_SIZE),
                      size - DYNARMIC_PAGE_SIZE);
-        std::memcpy(mapping, &size, sizeof(size_t));
-        return static_cast<uint8_t*>(mapping) + DYNARMIC_PAGE_SIZE;
-#else
+        return static_cast<u8*>(executable_mapping) + DYNARMIC_PAGE_SIZE;
+#    else
         size += DYNARMIC_PAGE_SIZE;
 
         int mode = MAP_PRIVATE;
-#if defined(MAP_ANONYMOUS)
+#        if defined(MAP_ANONYMOUS)
         mode |= MAP_ANONYMOUS;
-#elif defined(MAP_ANON)
+#        elif defined(MAP_ANON)
         mode |= MAP_ANON;
-#else
-#   error "not supported"
-#endif
-#ifdef MAP_JIT
+#        else
+#            error "not supported"
+#        endif
+#        ifdef MAP_JIT
         mode |= MAP_JIT;
-#endif
+#        endif
         int prot = PROT_READ | PROT_WRITE;
-#ifdef PROT_MPROTECT
+#        ifdef PROT_MPROTECT
         // https://man.netbsd.org/mprotect.2 specifies that an mprotect() that is LESS
         // restrictive than the original mapping MUST fail
         prot |= PROT_MPROTECT(PROT_READ) | PROT_MPROTECT(PROT_WRITE) | PROT_MPROTECT(PROT_EXEC);
-#endif
+#        endif
         void* p = mmap(nullptr, size, prot, mode, -1, 0);
         if (p == MAP_FAILED) {
             using Xbyak::Error;
@@ -183,81 +295,100 @@ public:
         }
         std::memcpy(p, &size, sizeof(size_t));
         return static_cast<uint8_t*>(p) + DYNARMIC_PAGE_SIZE;
-#endif
+#    endif
     }
 
     void free(uint8_t* p) override {
-#if defined(__PROSPERO__)
+#    if defined(__PROSPERO__)
         const auto vm_lock = LockProsperoJitVm();
-#endif
+        const auto allocation = TakeProsperoJitAllocation(p);
+        if (!allocation.has_value()) {
+            FailProsperoJitOperation("unknown dual-alias code cache", p, 0, EINVAL);
+        }
+
+        const char* failed_operation = nullptr;
+        int failed_error = 0;
+        auto record_failure = [&](const char* operation, int result) {
+            if (failed_operation == nullptr) {
+                failed_operation = operation;
+                failed_error = errno != 0 ? errno : result;
+            }
+        };
+        errno = 0;
+        kernel_vm_operation_lock();
+        int result = sceKernelMunmap(allocation->executable_mapping, allocation->mapping_size);
+        const int executable_unmap_error = result == 0 ? 0 : errno;
+        kernel_vm_operation_unlock();
+        if (result != 0) {
+            errno = executable_unmap_error;
+            record_failure("unmap executable JIT shared-memory alias", result);
+        }
+        errno = 0;
+        kernel_vm_operation_lock();
+        result = sceKernelMunmap(allocation->writable_mapping, allocation->mapping_size);
+        const int writable_unmap_error = result == 0 ? 0 : errno;
+        kernel_vm_operation_unlock();
+        if (result != 0) {
+            errno = writable_unmap_error;
+            record_failure("unmap writable JIT shared-memory alias", result);
+        }
+        errno = 0;
+        result = close(allocation->writable_descriptor);
+        if (result != 0) {
+            record_failure("close writable JIT shared-memory descriptor", result);
+        }
+        errno = 0;
+        result = close(allocation->executable_descriptor);
+        if (result != 0) {
+            record_failure("close executable JIT shared-memory descriptor", result);
+        }
+        if (failed_operation != nullptr) {
+            FailProsperoJitOperation(failed_operation, allocation->executable_mapping,
+                                     allocation->mapping_size, failed_error);
+        }
+#    else
         size_t size;
         std::memcpy(&size, p - DYNARMIC_PAGE_SIZE, sizeof(size_t));
-#if defined(__PROSPERO__)
-        void* const mapping = p - DYNARMIC_PAGE_SIZE;
-        const int unmap_result = munmap(mapping, size);
-        if (unmap_result != 0) {
-            FailProsperoJitOperation("code-cache unmap", mapping, size, errno);
-        }
-#else
         munmap(p - DYNARMIC_PAGE_SIZE, size);
-#endif
+#    endif
     }
+
+#    if defined(__PROSPERO__)
+    uint8_t* getWritableAddress(uint8_t* executable) const override {
+        u8* const writable = FindProsperoWritableCode(executable);
+        if (writable == nullptr) {
+            FailProsperoJitOperation("unknown executable code-cache address", executable, 0,
+                                     EINVAL);
+        }
+        return writable;
+    }
+#    endif
 
 #    ifdef DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT
     bool useProtect() const override { return false; }
 #    endif
-#if defined(__PROSPERO__) && !defined(DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT)
+#    if defined(__PROSPERO__) && !defined(DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT)
     bool useProtect() const override { return false; }
-#endif
+#    endif
 #endif
 };
 
-// This is threadsafe as Xbyak::Allocator does not contain any state; it is a pure interface.
+// The allocator's fixed registry serializes split-alias lookup and cleanup.
 CustomXbyakAllocator s_allocator;
 
-#ifdef DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT
+#if defined(DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT) && !defined(__PROSPERO__)
 void ProtectMemory(const void* base, size_t size, bool is_executable) {
 #    ifdef _WIN32
     DWORD oldProtect = 0;
     VirtualProtect(const_cast<void*>(base), size, is_executable ? PAGE_EXECUTE_READ : PAGE_READWRITE, &oldProtect);
 #    else
-#        if defined(__PROSPERO__)
-    const auto vm_lock = LockProsperoJitVm();
-    constexpr size_t pageSize = PROSPERO_PAGE_SIZE;
-#        else
     static const size_t pageSize = sysconf(_SC_PAGESIZE);
-#        endif
     const size_t iaddr = reinterpret_cast<size_t>(base);
     const size_t roundAddr = iaddr & ~(pageSize - static_cast<size_t>(1));
     const int mode = is_executable ? (PROT_READ | PROT_EXEC) : (PROT_READ | PROT_WRITE);
-#        if defined(__PROSPERO__)
-    // The payload SDK executable-protection helper operates on kernel VM-map
-    // entries. Protect the exact anonymous mapping, including Dynarmic's
-    // metadata page, instead of beginning one page inside that entry. The
-    // metadata remains readable while RX and becomes writable again before
-    // Dynarmic changes the cache.
-    const size_t protectAddr = roundAddr - PROSPERO_PAGE_SIZE;
-    const size_t protect_size = size + (iaddr - roundAddr) + PROSPERO_PAGE_SIZE;
-#        else
     const size_t protectAddr = roundAddr;
     const size_t protect_size = size + (iaddr - roundAddr);
-#        endif
-#        if defined(__PROSPERO__)
-    // Keep each owned cache as one exact VM entry. A normal RW mprotect may merge adjacent
-    // same-protection cache entries, after which the fail-closed exact RX promotion cannot
-    // prove that it is changing only this cache. Direct exact mutations preserve boundaries
-    // in both directions and avoid structural VM-map changes between promotions.
-    const int result = kernel_mprotect_exact(-1, protectAddr, protect_size, mode);
-#        else
     const int result = mprotect(reinterpret_cast<void*>(protectAddr), protect_size, mode);
-#        endif
-    if (result != 0) {
-#        if defined(__PROSPERO__)
-        FailProsperoJitOperation(is_executable ? "code-cache RW->RX mprotect"
-                                               : "code-cache RX->RW mprotect",
-                                 reinterpret_cast<void*>(protectAddr), protect_size, errno);
-#        endif
-    }
     ASSERT(result == 0);
 #    endif
 }
@@ -356,7 +487,7 @@ bool IsUnderRosetta() {
 #ifdef DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT
 static const auto default_cg_mode = Xbyak::DontSetProtectRWE;
 #else
-static const auto default_cg_mode = nullptr; //Allow RWE
+static const auto default_cg_mode = nullptr;  // Allow RWE
 #endif
 
 BlockOfCode::BlockOfCode(RunCodeCallbacks cb, JitStateInfo jsi, size_t total_code_size, std::function<void(BlockOfCode&)> rcp)
@@ -379,20 +510,24 @@ void BlockOfCode::PreludeComplete() {
 
 void BlockOfCode::EnableWriting() {
 #ifdef DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT
-#    ifdef _WIN32
+#    if !defined(__PROSPERO__)
+#        ifdef _WIN32
     ProtectMemory(getCode(), committed_size, false);
-#    else
+#        else
     ProtectMemory(getCode(), maxSize_, false);
+#        endif
 #    endif
 #endif
 }
 
 void BlockOfCode::DisableWriting() {
 #ifdef DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT
-#    ifdef _WIN32
+#    if !defined(__PROSPERO__)
+#        ifdef _WIN32
     ProtectMemory(getCode(), committed_size, true);
-#    else
+#        else
     ProtectMemory(getCode(), maxSize_, true);
+#        endif
 #    endif
 #endif
 }
@@ -458,7 +593,7 @@ void BlockOfCode::GenRunCode(std::function<void(BlockOfCode&)> rcp) {
     ABI_PushCalleeSaveRegistersAndAdjustStack(*this, sizeof(StackLayout));
 
     mov(ABI_JIT_PTR, ABI_PARAM1);
-    mov(rbx, ABI_PARAM2); // save temporarily in non-volatile register
+    mov(rbx, ABI_PARAM2);  // save temporarily in non-volatile register
 
     if (cb.enable_cycle_counting) {
         cb.GetTicksRemaining->EmitCall(*this);
@@ -492,7 +627,8 @@ void BlockOfCode::GenRunCode(std::function<void(BlockOfCode&)> rcp) {
 
     cmp(dword[ABI_JIT_PTR + jsi.offsetof_halt_reason], 0);
     jne(return_to_caller_mxcsr_already_exited, T_NEAR);
-    lock(); or_(dword[ABI_JIT_PTR + jsi.offsetof_halt_reason], u32(HaltReason::Step));
+    lock();
+    or_(dword[ABI_JIT_PTR + jsi.offsetof_halt_reason], u32(HaltReason::Step));
 
     SwitchMxcsrOnEntry();
     jmp(ABI_PARAM2);
@@ -659,10 +795,15 @@ void* BlockOfCode::AllocateFromCodeSpace(size_t alloc_size) {
 
     EnsureMemoryCommitted(alloc_size);
 
-    void* ret = getCurr<void*>();
+    void* const ret = getCurr<void*>();
+    void* const writable_ret = GetWritableAddress(ret);
     size_ += alloc_size;
-    memset(ret, 0, alloc_size);
+    memset(writable_ret, 0, alloc_size);
     return ret;
+}
+
+void* BlockOfCode::GetWritableAddress(const void* executable_address) const {
+    return Xbyak::CodeArray::getWritableAddress(executable_address);
 }
 
 void BlockOfCode::SetCodePtr(CodePtr code_ptr) {

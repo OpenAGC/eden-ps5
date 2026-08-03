@@ -94,12 +94,14 @@ at `20260802T045445Z-swapchain-run1` and
 retired the process, and left websrv/FTP available for immediate relaunch.
 
 The full Eden boot path also requires executable memory for Dynarmic's Xbyak
-code cache. On Prospero, each cache uses JIT shared memory at one stable virtual
-address with checked RW-to-RX and RX-to-RW transitions; failures are diagnosed
-and stop execution. A32 and A64 each use a 32 MiB cache. Sixteen MiB left no
-space beyond Dynarmic's prelude reservation, while 64 MiB per cache exhausted
-native-app memory. Ordinary flexible-memory mappings retain their exact mapped
-size for checked teardown.
+code cache. On Prospero, each cache uses JIT shared memory with distinct
+OS-chosen RW and RX aliases. Xbyak exposes RX addresses for branches and
+execution while routing emission and patch writes through the RW alias;
+constant-pool writes follow the same rule. Allocation ownership is kept in a
+fixed out-of-band registry, and mapping, lookup, or teardown failures stop
+execution. A32 and A64 each use a 32 MiB cache. Sixteen MiB left no space
+beyond Dynarmic's prelude reservation, while 64 MiB per cache exhausted
+native-app memory.
 
 Vulkan instance creation must use the version returned by Eden's normal
 version negotiation. It must not request Vulkan 1.3 unconditionally while the
@@ -138,15 +140,14 @@ diagnostic only and never substitutes for the native 600-present oracle.
 InvadersNX remains available for guest-specific investigation but is not
 accepted as evidence for the 2048 completion goal.
 
-Before rerunning the long gate after a Dynarmic or payload-SDK protection
-change, run `tools/run_fw550_dynarmic_jit_wx.sh`. It pins the GPU-free probe,
+Before rerunning the long gate after a Dynarmic or payload-SDK JIT change, run
+`tools/run_fw550_dynarmic_jit_dual_alias.sh`. It pins the GPU-free probe,
 cleanup ELF, guarded runner, exact-process helper, and PyPS4debug toolchain,
-then requires 20 fresh cleanup-first processes. Each process exercises four
-OS-chosen `0x2004000` mappings through four full-map RW-to-RX/execute/RX-to-RW
-cycles. The generated known-return stub is called only after a successful RX
-transition; any mapping, protection, execution, or teardown failure prevents
-the pass oracle. This is a JIT W^X preflight, not renderer evidence.
-The active Prospero allocator and probe protect the exact full anonymous
-mapping—including the 16 KiB metadata page—in both RW and RX directions.
-Ordinary `mprotect` must not be reintroduced for cache demotion because it may
-merge adjacent VM entries and destroy the exact per-cache ownership invariant.
+then requires 20 fresh cleanup-first processes. Each process creates shared
+JIT backing, maps a writable alias with non-executable `mmap`, maps the
+executable alias once through `sceKernelJitMapSharedMemory`, emits only through
+RW, executes a known-return stub only through RX, and checks exact teardown and
+process absence. Any failure prevents the pass oracle. This is a JIT primitive
+preflight, not full Dynarmic or renderer evidence. The active allocator uses
+the same hybrid mapping mechanism and never performs RW-to-RX `mprotect`
+transitions.
