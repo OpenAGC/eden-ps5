@@ -22,7 +22,7 @@ pinned_pyps4debug_commit=8f1443bb97bd6e2a77ed5ea2cc9145975d3152eb
 pinned_pyps4debug_lock_sha256=c9eb85e0f0bc1bde6c4e00f1112a1aea982dc7eed024eb973fca91e436051033
 sidecar_sha256=e5c10f0d91bcb683f8e9f41a1bce44228d07317ff1f07236fcfabf702f4a4bac
 homebrew_sha256=cd7e7f343830920196590d99c82a9f1ab8a375eeaeb943fa6c671aa68250a20d
-websrv_timeout=${EDEN_PS5_WEBSRV_TIMEOUT:-60}
+websrv_timeout=${EDEN_PS5_WEBSRV_TIMEOUT:-90}
 
 verify_file_sha256() {
     file=$1

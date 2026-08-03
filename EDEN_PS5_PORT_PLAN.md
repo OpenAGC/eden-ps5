@@ -237,6 +237,18 @@ Prospero build, and source audit pass. The next never-launched Eden ELF is
 SHA-256
 `3b22a7cea17af3fd300dc8d5e8d8160b5bba592fbeeef18cb1b4aa2b83716c2e`.
 
+The cleanup-first sequence-zero canary for that ELF passed all automated gates
+in `20260803T090555Z-swapchain-run1.log`, including eight native presents,
+exact-magenta readback, checked native teardown, continuous target klog, and
+exact PID/global `eboot.bin` absence. The first 600-frame attempt
+(`20260803T090629Z-swapchain-run1.log`) remained visibly healthy through the
+2048 game but reached the qualification runner's exact 60-second HTTP ceiling
+at 544 input-cycle presses before the 600-frame oracle. Cleanup and exact
+process-absence checks passed and the loader remained responsive; this is a
+harness timeout rather than a completed qualification. The dedicated 600-frame
+wrapper now allows 90 seconds, within its enforced 120-second maximum, while
+the short canary retains its 60-second bound.
+
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
 process-lifetime guard: cache eligibility allocation and initial demotion,
