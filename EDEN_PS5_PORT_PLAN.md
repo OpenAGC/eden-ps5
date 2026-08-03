@@ -1077,6 +1077,37 @@ rasterization path while retaining the pinned 30-second diagnostic contract;
 if that cannot make startup fit, a separately justified bounded startup window
 must be agreed before final 120-frame qualification.
 
+The first offline startup optimization is revision `eabe4a7`. Prospero cannot
+reserve the 39-bit contiguous fastmem or page-table arenas under the native-app
+VM ceiling, so Dynarmic continues using the qualified sparse callback path.
+Previously every ordinary scalar callback first walked the sparse page table
+through `IsValidVirtualAddressRange` and then walked it again through
+`Memory::Read*` or `Memory::Write*`. The PS5 non-debug callbacks now use the
+status-returning block access to fuse validity, sparse translation, rasterizer
+cache handling, and the scalar copy into one page-table walk. Little-endian
+conversion remains explicit. Invalid accesses still set Dynarmic
+`MemoryAbort`; debug/watchpoint accesses retain the original path; and writes
+that cross a guest page retain range prevalidation so an invalid second page
+cannot cause a partial write. `MemoryRead64` retains the focused TLS/audio
+diagnostic only on the invalid path.
+
+Host and Prospero `core` builds and the full Prospero `yuzu-cmd` link pass.
+The five available relevant host tests (`dynarmic_tests`,
+`eden.multi_level_page_table`, `eden.ps5_thread_budget`,
+`eden_ps5.launch_config`, and `eden_ps5.shader_cache_identity`) pass. The
+unrelated aggregate host target remains unavailable because its stale
+Dynarmic test generator expects the removed `A64TestEnv::interrupts` member
+and the tree lacks its generated FFmpeg archive; neither failure involves the
+two changed A64 callback files. The rebuilt ELF embeds full revision
+`eabe4a770f97bb6187636831cf93451817a1110f`, has SHA-256
+`d7899430bb4d64b2d73029ad8ee558b45dd126b9739f2ad175c5bfeca93f42ef`,
+and is not the banned fixed-address diagnostic. The cleanup-first Flappy
+wrapper now pins these bytes and requires the exact core-zero marker
+`sparse_callbacks=true single_lookup_scalars=true fastmem=false
+address_space_bits=39` before accepting any runtime result. Hardware timing
+and presentation evidence remain pending; this static optimization alone does
+not advance the visible-frame or 120-frame gates.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the
