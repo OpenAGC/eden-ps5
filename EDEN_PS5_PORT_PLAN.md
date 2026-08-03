@@ -11,9 +11,9 @@ cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
 Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
-The current unlaunched audout-tag diagnostic Eden ELF is SHA-256
-`d1b7d250d677cefddc8a4319b04fdb9ff4ca9ee425cf38630f13172500cb3230`,
-embeds Eden `4fcb755f21`, and incorporates Vulkan-PS5 checkpoint-retirement
+The current unlaunched AudioOut event-contract Eden ELF is SHA-256
+`f3e642af9d8fd04d88f5be37c6a5e739e6594e6f8e1210d2282665be3b32d28c`,
+embeds Eden `eff93045eb`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
 usage fix `2d84b89`.
 
@@ -759,6 +759,12 @@ from leaving a stale signalled event that makes `audoutWaitPlayFinish` return
 zero buffers. The next replay must return one of the appended tags, eliminate
 the null `SWITCHAUDIO_GetDeviceBuf` read, and continue toward the 120-frame
 oracle; merely surviving the old boundary is not the completion gate.
+
+Revision `eff9304` implements the split AudioOut/AudioIn empty-queue policy.
+Host `audio_core` and `core` targets and the strict integrated Prospero build
+pass. The rebuilt ELF embeds `eff93045eb`, has SHA-256
+`f3e642af9d8fd04d88f5be37c6a5e739e6594e6f8e1210d2282665be3b32d28c`, and
+is pinned for the cleanup-first hardware A/B.
 
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
