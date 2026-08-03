@@ -232,17 +232,18 @@ public:
                                      error);
         }
         errno = 0;
-        executable_mapping = nullptr;
+        void* executable_candidate = nullptr;
         kernel_vm_operation_lock();
         result = sceKernelJitMapSharedMemory(executable_descriptor, PROT_READ | PROT_EXEC,
-                                             &executable_mapping);
+                                             &executable_candidate);
         const int executable_map_error = result == 0 ? 0 : errno;
         kernel_vm_operation_unlock();
-        if (result != 0 || executable_mapping == nullptr || executable_mapping == writable_mapping) {
+        const bool executable_candidate_valid = executable_candidate != nullptr && executable_candidate != MAP_FAILED && reinterpret_cast<uintptr_t>(executable_candidate) % PROSPERO_PAGE_SIZE == 0;
+        if (result == 0 && executable_candidate_valid) {
+            executable_mapping = executable_candidate;
+        }
+        if (result != 0 || !executable_candidate_valid || executable_mapping == writable_mapping) {
             const int error = result != 0 ? executable_map_error : EINVAL;
-            if (executable_mapping == nullptr) {
-                executable_mapping = MAP_FAILED;
-            }
             cleanup_failed_allocation();
             FailProsperoJitOperation("map distinct executable JIT shared-memory alias", nullptr,
                                      size, error);

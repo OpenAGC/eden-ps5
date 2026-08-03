@@ -364,7 +364,10 @@ keeps trusted mapping sizes, aliases, and descriptors in a fixed 32-slot
 out-of-band registry keyed by the exact executable code pointer, so writable
 cache bytes cannot authorize an arbitrary unmap or close. Duplicate and unknown
 cleanup fails closed, equal descriptor ownership is deduplicated, and native
-JIT map/unmap calls share the payload SDK VM-operation lock. The Prospero
+JIT map/unmap calls share the payload SDK VM-operation lock. A JIT-map output
+becomes cleanup-authoritative only after a successful result plus non-null,
+non-`MAP_FAILED`, page-aligned validation; failed-call output is never unmapped.
+The Prospero
 `dynarmic` target and full `yuzu-cmd` target both build successfully; hardware
 Dynarmic execution and teardown remain pending after the reboot.
 
