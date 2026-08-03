@@ -70,6 +70,7 @@ public:
     Core::Memory::Memory& m_memory;
     u64 m_tpidrro_el0{};
     u64 m_tpidr_el0{};
+    std::optional<u64> m_invalid_read64_address{};
     Kernel::KProcess* m_process{};
     const bool m_debugger_enabled{};
     const bool m_check_memory_access{};
