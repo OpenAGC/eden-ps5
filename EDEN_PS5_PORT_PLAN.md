@@ -172,9 +172,9 @@ diagnostics, and contains no Prospero teardown-fault injection string. The
 wrapper pins the revised sequence-zero runner.
 
 The active goal is revised only in ordering, not acceptance: after a fresh FW
-5.50 boot using only direct `/dev/gc`, start continuous klog, run the pinned
-cleanup ELF, independently prove exact `eboot.bin` absence, then run one
-bounded eight-frame 2048 canary with the new bytes. Require checked native
+5.50 boot using only direct `/dev/gc`, run the pinned cleanup ELF,
+independently prove exact `eboot.bin` absence, start continuous klog, then run
+one bounded eight-frame 2048 canary with the new bytes. Require checked native
 teardown, clean PID-scoped evidence, exact process absence, and a responsive
 console. Only after that canary passes may the identical ELF begin the two
 cleanup-first 600-present runs, including immediate relaunch. Any unregister,
