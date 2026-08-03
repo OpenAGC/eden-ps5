@@ -225,9 +225,11 @@ regression also pins format enum 130 (`VK_FORMAT_D32_SFLOAT_S8_UINT`) to
 attachment/transfer features for both reported tilings, rejects sampled use,
 and accepts the qualified optimal attachment/transfer usage. OpenAGC runtime
 and API-reference tests pass; all 20 focused Vulkan command-recording tests
-and the lifecycle test pass; both Prospero static libraries cross-build. A new
-Eden ELF must now be built and pinned before the next cleanup-first Flappy
-hardware retry.
+and the lifecycle test pass; both Prospero static libraries cross-build. The
+rebuilt Eden ELF embeds revision
+`e0cbb5ab8cf3bd9bf0c5ea190873ad6c21b5ce1d`, has SHA-256
+`d76f2440c04f53ec500724d93361c2bf3df7e4cfe7fb3c91f942dd42d27b8c08`,
+and is pinned by the Flappy wrapper for the next cleanup-first hardware retry.
 
 ### Payload SDK identity
 
