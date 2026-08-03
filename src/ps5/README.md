@@ -146,3 +146,7 @@ OS-chosen `0x2004000` mappings through four full-map RW-to-RX/execute/RX-to-RW
 cycles. The generated known-return stub is called only after a successful RX
 transition; any mapping, protection, execution, or teardown failure prevents
 the pass oracle. This is a JIT W^X preflight, not renderer evidence.
+The active Prospero allocator and probe protect the exact full anonymous
+mapping—including the 16 KiB metadata page—in both RW and RX directions.
+Ordinary `mprotect` must not be reintroduced for cache demotion because it may
+merge adjacent VM entries and destroy the exact per-cache ownership invariant.

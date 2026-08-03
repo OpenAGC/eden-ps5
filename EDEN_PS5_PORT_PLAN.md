@@ -270,9 +270,34 @@ and native-present stage checkpoints, together with a constexpr policy test
 that proves readback ends after sequence seven without gating the remaining
 592 frames. The rebuilt integrated Prospero ELF is SHA-256
 `b65b173188b432ba82528a01ed967aa5d8b1bf0ea86045635042d5b3d2a4ed23`.
-All FW 5.50 wrappers pin these bytes; the next hardware action is the mandatory
-cleanup-first sequence-zero canary, followed by the 600-frame 2048 diagnostic
-and, after it proves continuous progress, the identical two-run gate.
+The mandatory cleanup-first sequence-zero canary passed in
+`20260803T094735Z-swapchain-run1.log`: eight native presents, exact-magenta
+readback, bounded native teardown, PID 109 absence, and global exact
+`eboot.bin` absence all passed. The immediately following 600-frame run
+`20260803T094822Z-swapchain-run1.log` failed before its first Composite call:
+the first Dynarmic cache's exact full-map RW-to-RX transition at raw base
+`0x303200000`, size `0x2004000`, returned `EFAULT` and terminated fail-closed.
+Cleanup retired PID 111 and left no exact process. The repeated unsupported
+format messages are capability discovery and are not the cause of this run.
+
+The `0x4000` difference between the logged code base and protected raw base is
+intentional allocator metadata, not an unmapped guard. The audit instead found
+that initial and RX-to-RW demotions still used ordinary `mprotect` on the full
+mapping. Two caches are adjacent, so those calls may structurally merge equal-
+protection VM entries and invalidate later per-cache exact ownership checks.
+Eden commit `6bf7b4d` now uses `kernel_mprotect_exact` for the initial demotion
+and for both directions of every full-map transition; no retry or execution
+after failure is permitted. The GPU-free probe mirrors the production policy.
+The rebuilt probe is SHA-256
+`9e25987d640a5ebbe8ca4e2f1e1623217d4b419196767c095380f6fba2daea9c` and the
+rebuilt full ELF is SHA-256
+`24aacb2e4198b282b7d30328c7f194705230edc1689dafdc8838d18961519f77`.
+All FW 5.50 wrappers pin these bytes. The next gate is the 20-process GPU-free
+W^X probe, followed by the cleanup-first sequence-zero canary, 20-process 2048
+JIT stress, and only then the identical two-run 600-frame gate. If a fresh
+full-map exact transition still returns `EFAULT`, stop this incremental path
+and implement PS5 JIT shared-memory aliases with explicit RW/executable pointer
+translation; never retry a failed raw-tree mutation or use fixed placement.
 
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
