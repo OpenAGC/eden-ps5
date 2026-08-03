@@ -279,6 +279,28 @@ The integrated clipped-scissor retry ELF embeds Eden revision
 and is pinned by the Flappy wrapper for the next cleanup-first 110-second
 diagnostic.
 
+The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
+reached the next draw-preparation boundary at about 98 seconds. The guest draw
+reported `descriptors=0 vertex_buffers=0`; descriptor preparation had returned
+success without marking the bindings ready, so vertex-buffer preparation was
+not attempted. The operator still saw magenta. Two sampled raw guest frames
+remained opaque black, while the calibration composite submitted and one
+native present returned. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T144235Z-swapchain-run1.log`.
+PID 164 exited, and the wrapper again passed both PID-scoped and global exact
+`eboot.bin` absence checks twice. The crash occurred before orderly teardown,
+so final pipeline/cache telemetry and the 120-frame oracle remain unproven.
+
+The descriptor failure exposed a state-contract asymmetry. Graphics image
+descriptors and vertex buffers prepare their exact native usage at the command
+that consumes them, but graphics buffer descriptors merely returned not-ready
+when a preceding global barrier correctly left their typed state unchanged.
+Vulkan-PS5 commit `51a263a` now derives ShaderRead or ShaderWrite from reflected
+descriptor access and prepares the exact bound buffer range before binding.
+The regression forces a storage descriptor through CopyDestination before its
+draw and proves use-site recovery. Command-recording, lifecycle, validation,
+and the Prospero static build pass.
+
 The zero-stride replay, PID 148, closes the pipeline-creation blocker: all
 guest pipelines compile/create, two opaque-black raw guest frames are observed,
 the first composite submits, and one native present returns successfully. The
