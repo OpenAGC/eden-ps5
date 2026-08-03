@@ -15,9 +15,9 @@ cleanup_elf=${EDEN_PS5_CLEANUP_ELF:-$vulkan_repo/build-prospero-msaa/vulkan_ps5_
 homebrew=${EDEN_PS5_FLAPPY_BIRD_NRO:-$repo_dir/../Flappy_Bird_NX.nro}
 sidecar="$repo_dir/src/ps5/eden-flappy-bird.launch"
 log_dir="$vulkan_repo/examples/qualification-logs/flappy-bird"
-pinned_eden_sha256=72ca7527cd1dfbe2565d8bbc6e118789011b633ee2e0c38d3549b96a2e9502ed
+pinned_eden_sha256=4533e94528e6c1cebb28787bdaa1cfca27af94c4ae7781a4ab8f0a3dbd2fd69d
 pinned_cleanup_sha256=ff88ac293a55ec4ba5636a6556b74ffbeaf5d1093e96f86208cc55ce262565c5
-pinned_runner_sha256=1c2da402df3ca3eb30e7121e91abeb83c7da06aa4ff9c4e48e18fac5ec778552
+pinned_runner_sha256=96e396e42d6b3a73eef0ed7de78fe0e318b1aa51cdcf8ff2c89a54b013452c08
 pinned_process_helper_sha256=8dff282cdbc7ac1f4a037ad9e2a0e800fa82838cd1342b804b1eaff65ffd1ef6
 pinned_pyps4debug_commit=8f1443bb97bd6e2a77ed5ea2cc9145975d3152eb
 pinned_pyps4debug_lock_sha256=c9eb85e0f0bc1bde6c4e00f1112a1aea982dc7eed024eb973fca91e436051033
@@ -110,6 +110,8 @@ VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_5="$telemetry_baseline_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_6='Prospero Dynarmic memory path: core=0 sparse_page_table=true callback_fallback=true' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_7="$pipeline_created_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_8="$record_written_pattern" \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_9='Prospero audio policy: sink=null fail_soft=true' \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_10='^\[openagc\] backend=direct-dev-gc fd_open=true capability=0x[0-9A-Fa-f]+$' \
 VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
 VULKAN_PS5_FW550_LOG_DIR="$log_dir" \
 VULKAN_PS5_WEBSRV_TIMEOUT="$websrv_timeout" \

@@ -361,6 +361,7 @@ static int EdenMain(int argc, char** argv) {
     // SDL3 currently has no qualified PS5 audio driver. Keep emulated audio
     // timing active through the null sink until the native AudioOut sink lands.
     Settings::values.sink_id.SetValue(Settings::AudioEngine::Null);
+    LOG_INFO(Frontend, "Prospero audio policy: sink=null fail_soft=true");
 #endif
 
     // apply the log_filter setting
