@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <optional>
@@ -24,6 +26,7 @@
 #include "video_core/gpu.h"
 #include "video_core/present.h"
 #include "video_core/renderer_vulkan/present/util.h"
+#include "video_core/renderer_vulkan/ps5_qualification_trace.h"
 #include "video_core/renderer_vulkan/renderer_vulkan.h"
 #include "video_core/renderer_vulkan/vk_blit_screen.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
@@ -176,6 +179,14 @@ RendererVulkan::~RendererVulkan() {
 }
 
 void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebuffers) {
+#ifdef __PROSPERO__
+    static std::atomic<u32> composite_sequence{0};
+    const u32 sequence = composite_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = ShouldTracePS5QualificationFrame(sequence);
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: composite sequence=%u stage=entry\n", sequence);
+    }
+#endif
     SCOPE_EXIT {
         render_window.OnFrameDisplayed();
     };
@@ -187,15 +198,40 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu
     }
 
     RenderScreenshot(framebuffers);
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: composite sequence=%u stage=get-frame-before\n", sequence);
+    }
+#endif
     Frame* frame = present_manager.GetRenderFrame();
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: composite sequence=%u stage=get-frame-after\n", sequence);
+    }
+#endif
 
     scheduler.RequestOutsideRenderPassOperationContext();
     blit_swapchain.DrawToFrame(device, rasterizer, frame, framebuffers,
                                render_window.GetFramebufferLayout(), swapchain.GetImageCount(),
                                swapchain.GetImageViewFormat());
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: composite sequence=%u stage=draw-after\n", sequence);
+    }
+#endif
     scheduler.Flush(*frame->render_ready);
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: composite sequence=%u stage=flush-after\n", sequence);
+    }
+#endif
 
     present_manager.Present(frame);
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: composite sequence=%u stage=present-after\n", sequence);
+    }
+#endif
 
     gpu.RendererFrameEndNotify();
     rasterizer.TickFrame();

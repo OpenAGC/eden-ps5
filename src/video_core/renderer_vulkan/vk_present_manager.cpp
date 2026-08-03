@@ -10,6 +10,7 @@
 #include "common/settings.h"
 #include "common/thread.h"
 #include "core/frontend/emu_window.h"
+#include "video_core/renderer_vulkan/ps5_qualification_trace.h"
 #include "video_core/renderer_vulkan/vk_present_manager.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_swapchain.h"
@@ -174,6 +175,15 @@ PresentManager::PresentManager(const vk::Instance& instance_,
 PresentManager::~PresentManager() = default;
 
 Frame* PresentManager::GetRenderFrame() {
+#ifdef __PROSPERO__
+    static std::atomic<u32> get_frame_sequence{0};
+    const u32 sequence = get_frame_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = ShouldTracePS5QualificationFrame(sequence);
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: get-render-frame sequence=%u stage=queue-wait-before\n",
+                     sequence);
+    }
+#endif
 
     // Wait for free presentation frames
     std::unique_lock lock{free_mutex};
@@ -182,9 +192,21 @@ Frame* PresentManager::GetRenderFrame() {
     // Take the frame from the queue
     Frame* frame = free_queue.front();
     free_queue.pop_front();
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: get-render-frame sequence=%u stage=fence-wait-before\n",
+                     sequence);
+    }
+#endif
 
     // Wait for the presentation to be finished so all frame resources are free
     frame->present_done.Wait();
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: get-render-frame sequence=%u stage=fence-wait-after\n",
+                     sequence);
+    }
+#endif
 #ifdef __PROSPERO__
     if (frame->qualification_readback_pending) {
         frame->qualification_readback.Invalidate();
@@ -209,6 +231,11 @@ Frame* PresentManager::GetRenderFrame() {
     }
 #endif
     frame->present_done.Reset();
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: get-render-frame sequence=%u stage=return\n", sequence);
+    }
+#endif
 
     return frame;
 }
@@ -221,8 +248,29 @@ void PresentManager::Present(Frame* frame) {
             frame_cv.notify_one();
         });
     } else {
+#ifdef __PROSPERO__
+        static std::atomic<u32> present_sequence{0};
+        const u32 sequence = present_sequence.fetch_add(1, std::memory_order_relaxed);
+        const bool trace_qualification = ShouldTracePS5QualificationFrame(sequence);
+        if (trace_qualification) {
+            std::fprintf(stderr, "eden-ps5: present-manager sequence=%u stage=worker-wait-before\n",
+                         sequence);
+        }
+#endif
         scheduler.WaitWorker();
+#ifdef __PROSPERO__
+        if (trace_qualification) {
+            std::fprintf(stderr, "eden-ps5: present-manager sequence=%u stage=worker-wait-after\n",
+                         sequence);
+        }
+#endif
         CopyToSwapchain(frame);
+#ifdef __PROSPERO__
+        if (trace_qualification) {
+            std::fprintf(stderr, "eden-ps5: present-manager sequence=%u stage=copy-after\n",
+                         sequence);
+        }
+#endif
         free_queue.push_back(frame);
     }
 }
@@ -376,6 +424,15 @@ void PresentManager::CopyToSwapchain(Frame* frame) {
 }
 
 void PresentManager::CopyToSwapchainImpl(Frame* frame) {
+#ifdef __PROSPERO__
+    static std::atomic<u32> qualification_sequence{0};
+    const u32 sequence = qualification_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = ShouldTracePS5QualificationFrame(sequence);
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: copy-to-swapchain sequence=%u stage=acquire-before\n",
+                     sequence);
+    }
+#endif
 
     // If the size of the incoming frames has changed, recreate the swapchain
     // to account for that.
@@ -389,6 +446,12 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
     while (swapchain.AcquireNextImage()) {
         RecreateSwapchain(frame);
     }
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: copy-to-swapchain sequence=%u stage=acquire-after\n",
+                     sequence);
+    }
+#endif
 
     const vk::CommandBuffer cmdbuf{frame->cmdbuf};
     cmdbuf.Begin({
@@ -481,11 +544,8 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
                            {}, {}, pre_barriers);
 
 #ifdef __PROSPERO__
-    static std::atomic<u32> qualification_sequence{0};
-    const u32 sequence = qualification_sequence.fetch_add(1, std::memory_order_relaxed);
-    const bool capture_qualification_frames =
-        sequence < 8u && frame->width > 0u && frame->height > 0u && extent.width > 0u &&
-        extent.height > 0u;
+    const bool capture_qualification_frames = ShouldCapturePS5QualificationReadback(
+        sequence, frame->width, frame->height, extent.width, extent.height);
     if (capture_qualification_frames) {
         std::array<VkBufferImageCopy, 16> sample_regions{};
         for (u32 i = 0; i < sample_regions.size(); ++i) {
@@ -570,6 +630,12 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
                            {}, {}, post_barriers);
 
     cmdbuf.End();
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        std::fprintf(stderr, "eden-ps5: copy-to-swapchain sequence=%u stage=command-end\n",
+                     sequence);
+    }
+#endif
 
     const VkSemaphore present_semaphore = swapchain.CurrentPresentSemaphore();
     const VkSemaphore render_semaphore = swapchain.CurrentRenderSemaphore();
@@ -595,6 +661,12 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
     // Submit the image copy/blit to the swapchain
     {
         std::scoped_lock submit_lock{scheduler.submit_mutex};
+#ifdef __PROSPERO__
+        if (trace_qualification) {
+            std::fprintf(stderr, "eden-ps5: copy-to-swapchain sequence=%u stage=submit-before\n",
+                         sequence);
+        }
+#endif
         switch (const VkResult result =
                     device.GetGraphicsQueue().Submit(submit_info, *frame->present_done)) {
         case VK_SUCCESS:
@@ -606,10 +678,30 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
             vk::Check(result);
             break;
         }
+#ifdef __PROSPERO__
+        if (trace_qualification) {
+            std::fprintf(stderr, "eden-ps5: copy-to-swapchain sequence=%u stage=submit-after\n",
+                         sequence);
+        }
+#endif
     }
 
     // Present
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        std::fprintf(stderr,
+                     "eden-ps5: copy-to-swapchain sequence=%u stage=native-present-before\n",
+                     sequence);
+    }
+#endif
     swapchain.Present(render_semaphore);
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        std::fprintf(stderr,
+                     "eden-ps5: copy-to-swapchain sequence=%u stage=native-present-after\n",
+                     sequence);
+    }
+#endif
 }
 
 } // namespace Vulkan

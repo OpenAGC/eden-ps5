@@ -272,7 +272,8 @@ if (YUZU_TESTS)
     add_executable(eden_ps5_thread_budget_tests
         tests/input_common/host_thread_budget.cpp
         tests/video_core/gpu_thread.cpp
-        tests/video_core/pipeline_worker_budget.cpp)
+        tests/video_core/pipeline_worker_budget.cpp
+        tests/video_core/ps5_qualification_trace.cpp)
     target_link_libraries(eden_ps5_thread_budget_tests PRIVATE Catch2::Catch2WithMain)
     add_test(NAME eden.ps5_thread_budget COMMAND eden_ps5_thread_budget_tests)
 endif()
