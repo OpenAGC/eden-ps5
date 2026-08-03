@@ -97,6 +97,13 @@ therefore uses a bounded 55-second host deadline, giving the process enough
 time for the remaining 44 frames without approaching the rejected 150-second
 diagnostic window.
 
+Final automated FW 5.50 evidence is
+`20260803T232023Z-swapchain-run1.log`: exact FW and direct backend, fail-soft
+audio, two-press stop, 5/5 graphics-cache reload with zero rejection, exactly
+300 presented frames, orderly destructor telemetry, and repeated PID/global
+exact-process absence all pass. Operator-visible confirmation of this exact
+ELF remains mandatory before declaring the canary complete.
+
 The first Flappy hardware attempt reached its accelerated GLES2 renderer and
 one native present, then exposed an eager allocation in the guest GPU
 `MultiLevelPageTable`: a 37-bit `nvhost-as-gpu` address space tried to commit a

@@ -4157,6 +4157,24 @@ now uses a bounded 55-second host deadline, leaving roughly ten seconds of
 margin for the final 44 frames and teardown while remaining far below the
 rejected 150-second diagnostic window.
 
+The cleanup-first final automated run passes at
+`Vulkan-PS5/examples/qualification-logs/flappy-bird/20260803T232023Z-swapchain-run1.log`
+with target klog `20260803T232023Z-swapchain-run1-target.klog`. It identifies
+exact FW `5.500.008`, uses only the direct `/dev/gc` backend, reports fail-soft
+null audio, stops input at exactly two presses, loads all five discovered guest
+graphics pipelines with zero rejected records, and emits
+`eden-ps5: GAME PASS 300 frames`. Orderly teardown reaches the pipeline-cache
+destructor with the same 5/5/0 counters. The guarded runner accepts only the
+known raw-ELF `0x4000` warning, reports the canary PASS, and independently
+proves PID 128 and the global exact `eboot.bin` name absent twice after exit.
+Pinned identities are Eden ELF
+`4fbccbe733095447f6d851110986c58c7eb0ce363be581043e808b3b5628d67d`,
+sidecar `44f0abd17639f09a237074de03db839c755d7e0767a9d32e1de99f35977ff5f2`,
+NRO `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`,
+and wrapper `f8d51a5d7a7533985975faf47ac888ef40ae80971f73681c9cb29326609225ed`.
+The exact current ELF still requires operator confirmation that Flappy output
+was visible on the display before this active goal can be marked complete.
+
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
    through Vulkan-PS5 into `openagc-psbc`, record it in versioned shader
