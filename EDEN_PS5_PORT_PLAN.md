@@ -11,9 +11,9 @@ cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
 Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
-The current unlaunched producer-wakeup fix Eden ELF is SHA-256
-`a5cc0b995caa8e930657af080f4c75e293b4ef7bdfac305513bc43470d8e91e4`,
-embeds Eden `a166af2753`, and incorporates Vulkan-PS5 checkpoint-retirement
+The current unlaunched BufferQueue lifecycle diagnostic Eden ELF is SHA-256
+`9e323f6be18db7ddbcc5be5b52b36943b5534118db6daaa0d01c80686e1cd49b`,
+embeds Eden `60db38bdca`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
 usage fix `2d84b89`.
 
@@ -914,7 +914,10 @@ by no second dequeue, a producer blocked inside dequeue, and a dequeued frame
 that never reaches queue commit. Host `core` and the strict Prospero build
 pass. The monolithic host test target still cannot link because its configured
 `_deps/ffmpeg-build/libavcodec/libavcodec.a` is absent; no focused
-Nvnflinger test target is registered.
+Nvnflinger test target is registered. Revision `60db38b` contains the bounded
+trace and PID 170 evidence. Its rebuilt ELF embeds `60db38bdca`, has SHA-256
+`9e323f6be18db7ddbcc5be5b52b36943b5534118db6daaa0d01c80686e1cd49b`, and
+is pinned for exactly one cleanup-first 30-second replay.
 
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
