@@ -560,6 +560,24 @@ pinned for one cleanup-first 30-second replay. Success requires the prior
 `Read64 @ 0x8` to disappear; advancing beyond it is evidence for the fix but
 does not by itself satisfy the full 120-frame canary.
 
+PID 125 disproved block linking as the sole cause in
+`examples/qualification-logs/flappy-bird/20260803T163958Z-swapchain-run1.log`:
+the same invalid read recurred at 13.94 seconds with all four cleanup absence
+checks passing. The direct callback PC is the address after the guest
+`ldr x0,[x19,#0x70]`, so the access itself computed `0x8`: the live generated
+copy of guest `x19` was null while the architectural JIT-state snapshot still
+held the valid audio-device pointer. This narrows ownership to optimization or
+register preservation within callback-mode generated code, not only the
+linked terminal.
+
+Revision `099a032` disables unsafe transforms and all optional Dynarmic IR
+optimizations only on Prospero. This is a diagnostic quarantine, not the final
+performance policy; flags must be re-enabled individually after correctness is
+proven. The strict integrated Prospero build passes. Its ELF has SHA-256
+`e532431659976cf507f33bb221dd166ce618e070c477638de31beed27636e321` and is
+pinned for one cleanup-first replay. If the low read persists, the remaining
+owner is the x64 callback ABI/register allocator rather than an IR pass.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
