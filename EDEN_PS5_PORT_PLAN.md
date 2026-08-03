@@ -310,6 +310,11 @@ barrier regression, command-recording, lifecycle, and validation host tests,
 and the Prospero static-library build pass. A rebuilt cleanup-first Flappy
 retry is next; visible output remains unproven.
 
+The integrated retry ELF embeds Eden revision
+`52bb02c80d7e6487ea67c14dd623984c5d9de743`, has SHA-256
+`160359f69b65933c47cc8dbc02987189413a8009dd7859d5d414eb3a8840b27f`,
+and is pinned by the Flappy wrapper.
+
 Format value 122 is `VK_FORMAT_B10G11R11_UFLOAT_PACK32`. The same run shows
 Eden's broad optimal-tiling feature probe (`0xc083`) rejecting it and both
 configured alternatives because Vulkan-PS5 currently advertises sampled,
