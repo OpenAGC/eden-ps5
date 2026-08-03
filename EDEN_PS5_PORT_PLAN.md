@@ -418,6 +418,14 @@ unambiguously to NRO offsets. It embeds Eden revision
 `8e3dfb5dba5a24dad69124ecdde66cd2d1d0f701` and has SHA-256
 `5665857fa32867fffb9dc1fcd8ecfc663f9060be5d44b705571b86c8a1aa5706`.
 
+PID 101 fixed the module-relative location: entry `0x808e7000`, basic block
+`+0x1666d4`, and caller return `+0x13b054`. Disassembly shows the callee
+walking `[object+0x90] -> [+0x60] -> [+0x8]` after an indirect call; the
+intermediate pointer is null. Eden now invokes its existing guest backtrace
+and symbolication at this exact invalid read. The backtrace diagnostic embeds
+revision `e9a550e7327916a4d3090e3e2f8f95018bc47ace` and has SHA-256
+`4198a0080a1e3f271c333a471d32a661b50282ab3b0af7c90fd650cf43986c8e`.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
