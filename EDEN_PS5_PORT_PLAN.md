@@ -298,6 +298,12 @@ with OpenAGC. Its regression declares all 32 legal bindings, provides an
 attribute only on binding 0, binds only buffer 0, and completes the native draw.
 Command-recording, lifecycle, validation, and the Prospero static build pass.
 
+The integrated reflected-binding retry ELF embeds Eden revision
+`e6b201f59a39e2375df8b23861b1175549fc55f8`, has SHA-256
+`42e76eb3b6d1628286d8338c80cf37d8ab35015eab9d79b3e189bdda3a1e287d`,
+and is pinned by the Flappy wrapper for the next cleanup-first 110-second
+diagnostic.
+
 The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
 reached the next draw-preparation boundary at about 98 seconds. The guest draw
 reported `descriptors=0 vertex_buffers=0`; descriptor preparation had returned
