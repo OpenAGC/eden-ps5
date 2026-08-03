@@ -39,6 +39,7 @@ u32 DynarmicCallbacks64::MemoryRead32(u64 vaddr) {
 u64 DynarmicCallbacks64::MemoryRead64(u64 vaddr) {
     if (!m_memory.IsValidVirtualAddressRange(vaddr, sizeof(u64))) {
         m_invalid_read64_address = vaddr;
+        const auto registers = m_parent.m_jit->GetRegisters();
         constexpr u64 ThreadVarsOffset = 0x1e0;
         constexpr u64 ThreadVarsSize = 0x20;
         const u64 tls = m_tpidrro_el0;
@@ -57,6 +58,27 @@ u64 DynarmicCallbacks64::MemoryRead64(u64 vaddr) {
             LOG_CRITICAL(Core_ARM,
                          "A64 guest TLS unavailable: tpidrro={:#x} scheduler_tls={:#x}", tls,
                          m_parent.m_current_thread_tls);
+        }
+        // Flappy's repeatable fault is on its SDL audio worker. x19 remains the audio-device
+        // base across the worker loop, so inspect the buffer/mutex/thread/driver fields without
+        // assuming that the JIT's pre-abort PC is current.
+        constexpr u64 AudioDeviceFieldEnd = 0x98;
+        const u64 audio_device = registers[19];
+        if (audio_device <= std::numeric_limits<u64>::max() - AudioDeviceFieldEnd &&
+            m_memory.IsValidVirtualAddressRange(audio_device, AudioDeviceFieldEnd)) {
+            const u64 mutex = m_memory.Read64(audio_device + 0x70);
+            LOG_CRITICAL(Core_ARM,
+                         "A64 guest audio object: device={:#x} buffer={:#x} mutex={:#x} "
+                         "thread={:#x} lock_owner={:#x} hidden={:#x}",
+                         audio_device, m_memory.Read64(audio_device + 0x60), mutex,
+                         m_memory.Read64(audio_device + 0x78),
+                         m_memory.Read64(audio_device + 0x80),
+                         m_memory.Read64(audio_device + 0x90));
+            if (m_memory.IsValidVirtualAddressRange(mutex, 0xc)) {
+                LOG_CRITICAL(Core_ARM, "A64 guest audio mutex: value={:#x} owner={:#x} count={}",
+                             m_memory.Read32(mutex), m_memory.Read32(mutex + 0x4),
+                             m_memory.Read32(mutex + 0x8));
+            }
         }
     }
     CheckMemoryAccess(vaddr, 8, Kernel::DebugWatchpointType::Read);
