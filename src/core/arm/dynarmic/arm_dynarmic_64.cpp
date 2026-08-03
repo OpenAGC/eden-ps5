@@ -18,11 +18,25 @@ namespace Core {
 
 using namespace Common::Literals;
 
+namespace {
+
+bool ShouldCheckMemoryAccess(bool debugger_enabled) {
+#if defined(__PROSPERO__)
+    // The PS5 callback-only memory path requires a synchronous MemoryAbort so Dynarmic can
+    // report the exact guest instruction and return before an invalid host-side memory read.
+    // Do not let the unsafe ignore-memory-aborts setting defeat that fail-closed contract.
+    return true;
+#else
+    return debugger_enabled || !Settings::values.cpuopt_ignore_memory_aborts.GetValue();
+#endif
+}
+
+} // Anonymous namespace
+
 DynarmicCallbacks64::DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess* process)
     : m_parent{parent}, m_memory(process->GetMemory()), m_process(process),
       m_debugger_enabled{parent.m_system.DebuggerEnabled()},
-      m_check_memory_access{m_debugger_enabled ||
-                            !Settings::values.cpuopt_ignore_memory_aborts.GetValue()} {}
+      m_check_memory_access{ShouldCheckMemoryAccess(m_debugger_enabled)} {}
 
 u8 DynarmicCallbacks64::MemoryRead8(u64 vaddr) {
     CheckMemoryAccess(vaddr, 1, Kernel::DebugWatchpointType::Read);
