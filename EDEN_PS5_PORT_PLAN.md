@@ -323,6 +323,28 @@ those formats. This is a separate format-capability qualification item, not
 the format-51 barrier failure above; storage must be hardware-qualified before
 it is advertised.
 
+The broad-GENERAL retry, PID 158, passed the format-51 image transition and
+advanced to a global `VkMemoryBarrier` at about 97 seconds. The exact scope is
+source `VK_ACCESS_MEMORY_WRITE_BIT` (`0x10000`) to destination
+`VK_ACCESS_TRANSFER_READ_BIT|VK_ACCESS_TRANSFER_WRITE_BIT` (`0x1800`). A
+global Vulkan barrier neither names a resource nor changes its typed usage;
+Vulkan-PS5 incorrectly tried to reduce both access masks to single resource
+states and rejected the two valid transfer directions. The operator-visible
+result remained magenta. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T142729Z-swapchain-run1.log`.
+PID 158 exited, and the wrapper passed both PID-scoped and global exact-absence
+checks twice.
+
+OpenAGC commit `a79d7ca` adds the public `agcCmdMemoryBarrier` path. It flushes
+color/depth metadata, performs an EOP data/cache release, then acquires all GPU
+caches without changing tracked per-resource state; non-graphics queues remain
+fail-closed. Vulkan-PS5 commit `f9112cd` validates global access masks and emits
+one such dependency for the Vulkan barrier instead of inventing resource-state
+transitions. OpenAGC's 20,110 direct assertions and native API reference check,
+the exact Vulkan `0x10000 -> 0x1800` regression, neighboring lifecycle and
+validation tests, and the Prospero Vulkan/OpenAGC static build pass. Rebuild,
+hash pinning, and a cleanup-first replay are next.
+
 The diagnostic replay, PID 142, again cleaned up with two PID-scoped and two
 global absence checks. Its request fingerprint rules out alpha-to-coverage,
 MSAA, depth/stencil tests, and unknown dynamic enums. Each rejected guest
