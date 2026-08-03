@@ -27,7 +27,6 @@
 #include <cstdio>
 #include <cstring>
 #include <limits>
-#include <mutex>
 
 #include "common/assert.h"
 #include "dynarmic/mcl/bit.hpp"
@@ -37,6 +36,7 @@
 #include "dynarmic/backend/x64/abi.h"
 #include "dynarmic/backend/x64/hostloc.h"
 #include "dynarmic/backend/x64/perf_map.h"
+#include "dynarmic/backend/x64/prospero_jit_vm_lock.h"
 #include "dynarmic/backend/x64/stack_layout.h"
 
 namespace Dynarmic::Backend::X64 {
@@ -111,6 +111,7 @@ public:
     uint8_t* alloc(size_t size) override {
         // Waste a page to store the size
 #if defined(__PROSPERO__)
+        const auto vm_lock = LockProsperoJitVm();
         if (size > std::numeric_limits<size_t>::max() - DYNARMIC_PAGE_SIZE -
                        (PROSPERO_PAGE_SIZE - 1)) {
             FailProsperoJitOperation("code-cache size overflow", nullptr, size, EOVERFLOW);
@@ -181,6 +182,9 @@ public:
     }
 
     void free(uint8_t* p) override {
+#if defined(__PROSPERO__)
+        const auto vm_lock = LockProsperoJitVm();
+#endif
         size_t size;
         std::memcpy(&size, p - DYNARMIC_PAGE_SIZE, sizeof(size_t));
 #if defined(__PROSPERO__)
@@ -213,8 +217,7 @@ void ProtectMemory(const void* base, size_t size, bool is_executable) {
     VirtualProtect(const_cast<void*>(base), size, is_executable ? PAGE_EXECUTE_READ : PAGE_READWRITE, &oldProtect);
 #    else
 #        if defined(__PROSPERO__)
-    static std::mutex protection_mutex;
-    const std::scoped_lock lock{protection_mutex};
+    const auto vm_lock = LockProsperoJitVm();
     constexpr size_t pageSize = PROSPERO_PAGE_SIZE;
 #        else
     static const size_t pageSize = sysconf(_SC_PAGESIZE);

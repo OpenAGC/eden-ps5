@@ -12,6 +12,7 @@
 
 #include "dynarmic/backend/x64/abi.h"
 #include "dynarmic/backend/x64/hostloc.h"
+#include "dynarmic/backend/x64/prospero_jit_vm_lock.h"
 #include "dynarmic/common/spin_lock.h"
 
 #ifdef DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT
@@ -76,9 +77,23 @@ void EmitSpinLockUnlock(Xbyak::CodeGenerator& code, Xbyak::Reg64 ptr, Xbyak::Reg
 
 namespace {
 struct SpinLockImpl {
+#if defined(__PROSPERO__)
+    ~SpinLockImpl() noexcept {
+        // Xbyak's destructor first restores RW protection and then frees its
+        // executable mapping. Destroy it under the same process-global guard
+        // as its construction and BlockOfCode's VM operations.
+        const auto vm_lock = Backend::X64::LockProsperoJitVm();
+        code.reset();
+    }
+#endif
+
     void Initialize() noexcept;
     static void GlobalInitialize() noexcept;
+#if defined(__PROSPERO__)
+    std::optional<Xbyak::CodeGenerator> code;
+#else
     Xbyak::CodeGenerator code = Xbyak::CodeGenerator(4096, default_cg_mode);
+#endif
     void (*lock)(volatile int*) = nullptr;
     void (*unlock)(volatile int*) = nullptr;
 };
@@ -90,21 +105,35 @@ std::once_flag flag;
 std::optional<SpinLockImpl> impl;
 
 void SpinLockImpl::Initialize() noexcept {
+#if defined(__PROSPERO__)
+    code.emplace(4096, default_cg_mode);
+    auto& generator = *code;
+#else
+    auto& generator = code;
+#endif
     // Needed for W^X systems (i.e SElinux, OpenBSD)
-    code.setProtectMode(Xbyak::CodeArray::ProtectMode::PROTECT_RW);
+    generator.setProtectMode(Xbyak::CodeArray::ProtectMode::PROTECT_RW);
     Xbyak::Reg64 const ABI_PARAM1 = Backend::X64::HostLocToReg64(Backend::X64::ABI_PARAM1);
-    code.align();
-    lock = code.getCurr<void (*)(volatile int*)>();
-    EmitSpinLockLock(code, ABI_PARAM1, code.eax, false);
-    code.ret();
-    code.align();
-    unlock = code.getCurr<void (*)(volatile int*)>();
-    EmitSpinLockUnlock(code, ABI_PARAM1, code.eax);
-    code.ret();
-    code.setProtectMode(Xbyak::CodeArray::ProtectMode::PROTECT_RE);
+    generator.align();
+    lock = generator.getCurr<void (*)(volatile int*)>();
+    EmitSpinLockLock(generator, ABI_PARAM1, generator.eax, false);
+    generator.ret();
+    generator.align();
+    unlock = generator.getCurr<void (*)(volatile int*)>();
+    EmitSpinLockUnlock(generator, ABI_PARAM1, generator.eax);
+    generator.ret();
+    generator.setProtectMode(Xbyak::CodeArray::ProtectMode::PROTECT_RE);
 }
 
 void SpinLockImpl::GlobalInitialize() noexcept {
+#if defined(__PROSPERO__)
+    // CodeGenerator construction may request executable mmap eligibility, and
+    // Initialize() later changes that mapping RW then RX. Hold the same outer
+    // VM-operation guard as BlockOfCode for that complete sequence. Do not
+    // wrap mprotect itself: the payload SDK's executable mmap path calls its
+    // kernel helper internally.
+    const auto vm_lock = Backend::X64::LockProsperoJitVm();
+#endif
     impl.emplace();
     impl->Initialize();
 }

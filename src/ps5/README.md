@@ -139,3 +139,12 @@ retains the same cleanup-first, identical-ELF, firmware, native-present,
 pipeline-cache, bounded-teardown, and exact-process gates. `2048.nro` remains
 the sequence-zero visual smoke workload; it is not used as evidence for the
 continuous 600-present gate.
+
+Before rerunning the long gate after a Dynarmic or payload-SDK protection
+change, run `tools/run_fw550_dynarmic_jit_wx.sh`. It pins the GPU-free probe,
+cleanup ELF, guarded runner, exact-process helper, and PyPS4debug toolchain,
+then requires 20 fresh cleanup-first processes. Each process exercises four
+OS-chosen `0x2004000` mappings through four full-map RW-to-RX/execute/RX-to-RW
+cycles. The generated known-return stub is called only after a successful RX
+transition; any mapping, protection, execution, or teardown failure prevents
+the pass oracle. This is a JIT W^X preflight, not renderer evidence.

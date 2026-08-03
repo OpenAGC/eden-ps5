@@ -7,23 +7,27 @@
 The current `build-prospero-full-audit2` CMake cache resolves both
 `CMAKE_TOOLCHAIN_FILE` and `PS5_PAYLOAD_SDK` through the installed prefix
 `/Users/bizkut/ps5-payload-sdk`. That directory is an installed SDK tree, not a
-Git checkout or symlink. The currently consumed pre-hardening artifacts are
+Git checkout or symlink. The pre-hardening artifacts linked into ELF
+`18295a780e72d724c4f2eeb4bcf4a868c4ba2fe3c122b7de0dab43b922251f22` were
 `target/lib/libc.a` SHA-256
 `dc258aae03c1a8c8c7725cfee413c205c7254668966c46eb0b8fc26b289c02c6`
 and `target/lib/crt1.o` SHA-256
 `04ec94435cdf2dd70e36b61fd0ccd949927c96149d78dfacbd132c1e8c7237d4`.
-Those bytes, rather than an assumed source checkout, identify the SDK linked
-into the current pinned Eden ELF.
+Those bytes, rather than an assumed source checkout, identify its SDK.
 
-The source candidate for the RW-to-RX hardening is
+The RW-to-RX hardening source is
 `/Users/bizkut/Downloads/PS5/homebrew/ps5debug-NG/ps5-payload-sdk`, owned by
-the `ps5debug-NG` repository at revision
-`d32d2d001dbbfd4cd2c0b7d6335b9a49d8a1cb86`. Its existing unrelated debugger
+the `ps5debug-NG` repository. Commit `439746c` serializes each complete shared
+kernel-copy pipe transaction and each full VM-entry protection walk with a
+bootstrap-safe atomic guard, and preserves the helper's actual errno through
+`mmap`/`mprotect`. Its existing unrelated debugger
 changes and untracked `sce_stubs/libSceAgcDriver.c` are outside this work and
-must remain untouched. Before rebuilding Eden, install only a reviewed,
-committed SDK hardening from that source into `/Users/bizkut/ps5-payload-sdk`,
-record the replacement `libc.a` and `crt1.o` hashes here, and rebuild the
-identical qualification ELF against those exact installed bytes.
+remain untouched. The committed sources were rebuilt and only their CRT/libc
+targets installed into `/Users/bizkut/ps5-payload-sdk`. The active installed
+artifacts are `target/lib/libc.a` SHA-256
+`5484751c8efeddc91dc8138ce0948e637cffdb340b5b445f75e790d85e5ea078`
+and `target/lib/crt1.o` SHA-256
+`52695631412a50bc6d6af238288b2c5497cb110ecea92ea2636d3d9e40bc673b`.
 
 Solve the intermittent Dynarmic RW-to-RX `mprotect` `EPERM` without weakening
 the Prospero W^X or fail-closed contracts. The active implementation must use
@@ -55,6 +59,22 @@ geometry and that every failed transition prevents execution. Target proof
 requires repeated cleanup-first transition cycles followed by two identical
 600-native-present InvadersNX runs on FW 5.50, bounded teardown, and exact
 process absence. Only then resume the wider completion goal below.
+
+Eden now serializes every Prospero Dynarmic executable-VM operation with one
+process-lifetime guard: cache eligibility allocation and initial demotion,
+full-entry RW/RX transitions, unmap, and the separate lazy Xbyak spin-lock code
+generator's construction, protection changes, and teardown. Non-Prospero
+Xbyak ownership remains unchanged. The GPU-free
+`eden-ps5-dynarmic-jit-wx-probe.elf` uses OS-chosen anonymous addresses only and
+exercises four exact `0x2004000` mappings through four bounded W^X cycles each,
+executing a known-return stub only after a successful RX transition and
+unmapping every established mapping. The rebuilt probe is SHA-256
+`4c08c78a084211a38749ca2d165e36f01c2d1fd71edf3d282b45b0a4391287b8`;
+the rebuilt full Eden ELF is SHA-256
+`629ccf4adc7b1521818af9934b9de9b42fc2b4f3c7359970ddac060129855811`.
+Both are build artifacts, not target evidence. The pinned probe wrapper must
+complete all 20 fresh cleanup-first launches before the full ELF is eligible
+for the InvadersNX gate.
 
 ## Active construction diagnostic (2026-08-02)
 
