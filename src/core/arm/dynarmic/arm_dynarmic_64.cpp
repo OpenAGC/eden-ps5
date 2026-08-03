@@ -7,6 +7,7 @@
 #include <limits>
 
 #include "common/settings.h"
+#include "common/swap.h"
 #include "core/arm/dynarmic/arm_dynarmic.h"
 #include "core/arm/dynarmic/arm_dynarmic_64.h"
 #include "core/arm/dynarmic/dynarmic_exclusive_monitor.h"
@@ -38,76 +39,103 @@ DynarmicCallbacks64::DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess
       m_debugger_enabled{parent.m_system.DebuggerEnabled()},
       m_check_memory_access{ShouldCheckMemoryAccess(m_debugger_enabled)} {}
 
+#if defined(__PROSPERO__)
+template <typename T>
+DynarmicCallbacks64::ProsperoScalarStatus DynarmicCallbacks64::ReadProsperoScalar(u64 vaddr,
+                                                                                  T& value) {
+    // ReadBlock fuses validity checking, sparse translation, cache coherency, and copying into
+    // one page-table walk. The previous callback path translated every ordinary access twice.
+    if (m_debugger_enabled) {
+        return ProsperoScalarStatus::Fallback;
+    }
+    if (!m_memory.ReadBlock(vaddr, &value, sizeof(value))) {
+        m_parent.m_jit->HaltExecution(DataAbort);
+        return ProsperoScalarStatus::Invalid;
+    }
+    return ProsperoScalarStatus::Success;
+}
+
+template <typename T>
+DynarmicCallbacks64::ProsperoScalarStatus DynarmicCallbacks64::WriteProsperoScalar(u64 vaddr,
+                                                                                   const T& value) {
+    if (m_debugger_enabled ||
+        sizeof(value) > Core::Memory::YUZU_PAGESIZE - (vaddr & Core::Memory::YUZU_PAGEMASK)) {
+        return ProsperoScalarStatus::Fallback;
+    }
+    if (!m_memory.WriteBlock(vaddr, &value, sizeof(value))) {
+        m_parent.m_jit->HaltExecution(DataAbort);
+        return ProsperoScalarStatus::Invalid;
+    }
+    return ProsperoScalarStatus::Success;
+}
+#endif
+
 u8 DynarmicCallbacks64::MemoryRead8(u64 vaddr) {
-    CheckMemoryAccess(vaddr, 1, Kernel::DebugWatchpointType::Read);
+#if defined(__PROSPERO__)
+    u8 value{};
+    if (ReadProsperoScalar(vaddr, value) != ProsperoScalarStatus::Fallback) {
+        return value;
+    }
+#endif
+    if (!CheckMemoryAccess(vaddr, 1, Kernel::DebugWatchpointType::Read)) {
+        return {};
+    }
     return m_memory.Read8(vaddr);
 }
 u16 DynarmicCallbacks64::MemoryRead16(u64 vaddr) {
-    CheckMemoryAccess(vaddr, 2, Kernel::DebugWatchpointType::Read);
+#if defined(__PROSPERO__)
+    u16_le value{};
+    if (ReadProsperoScalar(vaddr, value) != ProsperoScalarStatus::Fallback) {
+        return value;
+    }
+#endif
+    if (!CheckMemoryAccess(vaddr, 2, Kernel::DebugWatchpointType::Read)) {
+        return {};
+    }
     return m_memory.Read16(vaddr);
 }
 u32 DynarmicCallbacks64::MemoryRead32(u64 vaddr) {
-    CheckMemoryAccess(vaddr, 4, Kernel::DebugWatchpointType::Read);
+#if defined(__PROSPERO__)
+    u32_le value{};
+    if (ReadProsperoScalar(vaddr, value) != ProsperoScalarStatus::Fallback) {
+        return value;
+    }
+#endif
+    if (!CheckMemoryAccess(vaddr, 4, Kernel::DebugWatchpointType::Read)) {
+        return {};
+    }
     return m_memory.Read32(vaddr);
 }
 u64 DynarmicCallbacks64::MemoryRead64(u64 vaddr) {
-    if (!m_memory.IsValidVirtualAddressRange(vaddr, sizeof(u64))) {
-        m_invalid_read64_address = vaddr;
-        const auto registers = m_parent.m_jit->GetRegisters();
-        constexpr u64 ThreadVarsOffset = 0x1e0;
-        constexpr u64 ThreadVarsSize = 0x20;
-        const u64 tls = m_tpidrro_el0;
-        constexpr u64 ThreadVarsEnd = ThreadVarsOffset + ThreadVarsSize;
-        if (tls <= std::numeric_limits<u64>::max() - ThreadVarsEnd &&
-            m_memory.IsValidVirtualAddressRange(tls + ThreadVarsOffset, ThreadVarsSize)) {
-            LOG_CRITICAL(Core_ARM,
-                         "A64 guest TLS: tpidrro={:#x} scheduler_tls={:#x} magic={:#x} "
-                         "thread_ptr={:#x} reent={:#x} handle={:#x}",
-                         tls, m_parent.m_current_thread_tls,
-                         m_memory.Read32(tls + ThreadVarsOffset),
-                         m_memory.Read64(tls + ThreadVarsOffset + 0x8),
-                         m_memory.Read64(tls + ThreadVarsOffset + 0x10),
-                         m_memory.Read64(tls + ThreadVarsOffset + 0x18));
-        } else {
-            LOG_CRITICAL(Core_ARM,
-                         "A64 guest TLS unavailable: tpidrro={:#x} scheduler_tls={:#x}", tls,
-                         m_parent.m_current_thread_tls);
+#if defined(__PROSPERO__)
+    if (!m_debugger_enabled) {
+        u64_le value{};
+        if (ReadProsperoScalar(vaddr, value) == ProsperoScalarStatus::Success) {
+            return value;
         }
-        // Flappy's repeatable fault is on its SDL audio worker. x19 remains the audio-device
-        // base across the worker loop, so inspect the buffer/mutex/thread/driver fields without
-        // assuming that the JIT's pre-abort PC is current.
-        constexpr u64 AudioDeviceFieldEnd = 0x98;
-        const u64 audio_device = registers[19];
-        if (audio_device <= std::numeric_limits<u64>::max() - AudioDeviceFieldEnd &&
-            m_memory.IsValidVirtualAddressRange(audio_device, AudioDeviceFieldEnd)) {
-            const u64 mutex = m_memory.Read64(audio_device + 0x70);
-            const u64 hidden = m_memory.Read64(audio_device + 0x90);
-            LOG_CRITICAL(Core_ARM,
-                         "A64 guest audio object: device={:#x} buffer={:#x} mutex={:#x} "
-                         "thread={:#x} lock_owner={:#x} hidden={:#x}",
-                         audio_device, m_memory.Read64(audio_device + 0x60), mutex,
-                         m_memory.Read64(audio_device + 0x78),
-                         m_memory.Read64(audio_device + 0x80), hidden);
-            if (m_memory.IsValidVirtualAddressRange(hidden, 0x70)) {
-                LOG_CRITICAL(Core_ARM,
-                             "A64 guest audout buffers: first={:#x} second={:#x} released={:#x} "
-                             "released_count={}",
-                             m_memory.Read64(hidden), m_memory.Read64(hidden + 0x8),
-                             m_memory.Read64(hidden + 0x60), m_memory.Read32(hidden + 0x68));
-            }
-            if (m_memory.IsValidVirtualAddressRange(mutex, 0xc)) {
-                LOG_CRITICAL(Core_ARM, "A64 guest audio mutex: value={:#x} owner={:#x} count={}",
-                             m_memory.Read32(mutex), m_memory.Read32(mutex + 0x4),
-                             m_memory.Read32(mutex + 0x8));
-            }
-        }
+        RecordInvalidRead64(vaddr);
+        return {};
     }
-    CheckMemoryAccess(vaddr, 8, Kernel::DebugWatchpointType::Read);
+#endif
+    if (!m_memory.IsValidVirtualAddressRange(vaddr, sizeof(u64))) {
+        RecordInvalidRead64(vaddr);
+    }
+    if (!CheckMemoryAccess(vaddr, 8, Kernel::DebugWatchpointType::Read)) {
+        return {};
+    }
     return m_memory.Read64(vaddr);
 }
 
 Dynarmic::A64::Vector DynarmicCallbacks64::MemoryRead128(u64 vaddr) {
-    CheckMemoryAccess(vaddr, 16, Kernel::DebugWatchpointType::Read);
+#if defined(__PROSPERO__)
+    std::array<u64_le, 2> value{};
+    if (ReadProsperoScalar(vaddr, value) != ProsperoScalarStatus::Fallback) {
+        return {value[0], value[1]};
+    }
+#endif
+    if (!CheckMemoryAccess(vaddr, 16, Kernel::DebugWatchpointType::Read)) {
+        return {};
+    }
     return {m_memory.Read64(vaddr), m_memory.Read64(vaddr + 8)};
 }
 
@@ -123,26 +151,55 @@ std::optional<u32> DynarmicCallbacks64::MemoryReadCode(u64 vaddr) {
 }
 
 void DynarmicCallbacks64::MemoryWrite8(u64 vaddr, u8 value) {
+#if defined(__PROSPERO__)
+    if (WriteProsperoScalar(vaddr, value) != ProsperoScalarStatus::Fallback) {
+        return;
+    }
+#endif
     if (CheckMemoryAccess(vaddr, 1, Kernel::DebugWatchpointType::Write)) {
         m_memory.Write8(vaddr, value);
     }
 }
 void DynarmicCallbacks64::MemoryWrite16(u64 vaddr, u16 value) {
+#if defined(__PROSPERO__)
+    const u16_le little_value{value};
+    if (WriteProsperoScalar(vaddr, little_value) != ProsperoScalarStatus::Fallback) {
+        return;
+    }
+#endif
     if (CheckMemoryAccess(vaddr, 2, Kernel::DebugWatchpointType::Write)) {
         m_memory.Write16(vaddr, value);
     }
 }
 void DynarmicCallbacks64::MemoryWrite32(u64 vaddr, u32 value) {
+#if defined(__PROSPERO__)
+    const u32_le little_value{value};
+    if (WriteProsperoScalar(vaddr, little_value) != ProsperoScalarStatus::Fallback) {
+        return;
+    }
+#endif
     if (CheckMemoryAccess(vaddr, 4, Kernel::DebugWatchpointType::Write)) {
         m_memory.Write32(vaddr, value);
     }
 }
 void DynarmicCallbacks64::MemoryWrite64(u64 vaddr, u64 value) {
+#if defined(__PROSPERO__)
+    const u64_le little_value{value};
+    if (WriteProsperoScalar(vaddr, little_value) != ProsperoScalarStatus::Fallback) {
+        return;
+    }
+#endif
     if (CheckMemoryAccess(vaddr, 8, Kernel::DebugWatchpointType::Write)) {
         m_memory.Write64(vaddr, value);
     }
 }
 void DynarmicCallbacks64::MemoryWrite128(u64 vaddr, Dynarmic::A64::Vector value) {
+#if defined(__PROSPERO__)
+    const std::array<u64_le, 2> little_value{value[0], value[1]};
+    if (WriteProsperoScalar(vaddr, little_value) != ProsperoScalarStatus::Fallback) {
+        return;
+    }
+#endif
     if (CheckMemoryAccess(vaddr, 16, Kernel::DebugWatchpointType::Write)) {
         m_memory.Write64(vaddr, value[0]);
         m_memory.Write64(vaddr + 8, value[1]);
@@ -272,6 +329,56 @@ bool DynarmicCallbacks64::CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWat
     }
 
     return true;
+}
+
+void DynarmicCallbacks64::RecordInvalidRead64(u64 vaddr) {
+    m_invalid_read64_address = vaddr;
+    const auto registers = m_parent.m_jit->GetRegisters();
+    constexpr u64 ThreadVarsOffset = 0x1e0;
+    constexpr u64 ThreadVarsSize = 0x20;
+    const u64 tls = m_tpidrro_el0;
+    constexpr u64 ThreadVarsEnd = ThreadVarsOffset + ThreadVarsSize;
+    if (tls <= std::numeric_limits<u64>::max() - ThreadVarsEnd &&
+        m_memory.IsValidVirtualAddressRange(tls + ThreadVarsOffset, ThreadVarsSize)) {
+        LOG_CRITICAL(Core_ARM,
+                     "A64 guest TLS: tpidrro={:#x} scheduler_tls={:#x} magic={:#x} "
+                     "thread_ptr={:#x} reent={:#x} handle={:#x}",
+                     tls, m_parent.m_current_thread_tls, m_memory.Read32(tls + ThreadVarsOffset),
+                     m_memory.Read64(tls + ThreadVarsOffset + 0x8),
+                     m_memory.Read64(tls + ThreadVarsOffset + 0x10),
+                     m_memory.Read64(tls + ThreadVarsOffset + 0x18));
+    } else {
+        LOG_CRITICAL(Core_ARM, "A64 guest TLS unavailable: tpidrro={:#x} scheduler_tls={:#x}", tls,
+                     m_parent.m_current_thread_tls);
+    }
+    // Flappy's repeatable fault is on its SDL audio worker. x19 remains the audio-device
+    // base across the worker loop, so inspect the buffer/mutex/thread/driver fields without
+    // assuming that the JIT's pre-abort PC is current.
+    constexpr u64 AudioDeviceFieldEnd = 0x98;
+    const u64 audio_device = registers[19];
+    if (audio_device <= std::numeric_limits<u64>::max() - AudioDeviceFieldEnd &&
+        m_memory.IsValidVirtualAddressRange(audio_device, AudioDeviceFieldEnd)) {
+        const u64 mutex = m_memory.Read64(audio_device + 0x70);
+        const u64 hidden = m_memory.Read64(audio_device + 0x90);
+        LOG_CRITICAL(Core_ARM,
+                     "A64 guest audio object: device={:#x} buffer={:#x} mutex={:#x} "
+                     "thread={:#x} lock_owner={:#x} hidden={:#x}",
+                     audio_device, m_memory.Read64(audio_device + 0x60), mutex,
+                     m_memory.Read64(audio_device + 0x78), m_memory.Read64(audio_device + 0x80),
+                     hidden);
+        if (m_memory.IsValidVirtualAddressRange(hidden, 0x70)) {
+            LOG_CRITICAL(Core_ARM,
+                         "A64 guest audout buffers: first={:#x} second={:#x} released={:#x} "
+                         "released_count={}",
+                         m_memory.Read64(hidden), m_memory.Read64(hidden + 0x8),
+                         m_memory.Read64(hidden + 0x60), m_memory.Read32(hidden + 0x68));
+        }
+        if (m_memory.IsValidVirtualAddressRange(mutex, 0xc)) {
+            LOG_CRITICAL(Core_ARM, "A64 guest audio mutex: value={:#x} owner={:#x} count={}",
+                         m_memory.Read32(mutex), m_memory.Read32(mutex + 0x4),
+                         m_memory.Read32(mutex + 0x8));
+        }
+    }
 }
 
 void DynarmicCallbacks64::MemoryAccessAbort(u64 pc) {
@@ -451,6 +558,12 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
         config.fastmem_pointer = std::nullopt;
         config.fastmem_exclusive_access = false;
     }
+#if defined(__PROSPERO__)
+    LOG_INFO(Core_ARM,
+             "Prospero Dynarmic memory path: core={} sparse_callbacks=true "
+             "single_lookup_scalars=true fastmem={} address_space_bits={}",
+             m_core_index, config.fastmem_pointer.has_value(), address_space_bits);
+#endif
     m_jit.emplace(config);
 }
 
