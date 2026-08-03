@@ -939,7 +939,7 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   there is no wall-clock stop thread and teardown remains on the main frontend
   path. The counter saturates at its limit, and the post-shutdown verdict
   compares the observed count before printing its exact frame oracle. The guarded
-  `tools/run_fw550_2048.sh` pins and re-verifies the local
+  The original `tools/run_fw550_2048.sh` gate pins and re-verifies the local
   `2048.nro` (`cd7e7f343830920196590d99c82a9f1ab8a375eeaeb943fa6c671aa68250a20d`),
   uploads a committed 600-frame game sidecar, requires `GAME PASS 600 frames` only after
   `ShutdownMainProcess`, and repeats immediately. The second launch also
@@ -950,7 +950,8 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   shared runner's matching/missing-oracle coverage, and the complete Release
   Prospero frontend build pass; the current discovery ELF hash is
   `5bdedb4c7f342fa82adc0b073bc12a34beca3e6eeaf2f16872a019be04fad019`.
-  The 2048 result is not claimed until the FW 5.50 guarded run executes.
+  This describes the original 2048 long-run gate; the current InvadersNX
+  substitution and its required evidence are recorded below.
 - Eden now has an explicit `__PROSPERO__` guest-memory backend instead of the
   unsuitable FreeBSD anonymous-SHM path. It disables 4 KiB fastmem on the
   16 KiB PS5 host, reserves one contiguous backing range, maps it from tracked
@@ -1451,8 +1452,35 @@ readbacks are also nonzero and the application emits `GAME PASS 8 frames`.
 The scoped kernel log records PID 89, same-app `KillApp`, `All processes
 exited`, no crash/XoM violation, and only the accepted raw-ELF `0x4000` warning;
 independent PID-scoped and global exact-name checks both find no `eboot.bin`.
-This closes the automated black-scanout regression. User-visible confirmation
-is still pending, so the two-run 600-frame wrapper has not been launched.
+This closes the automated black-scanout regression. A second cleanup-first
+replay, `20260803T020317Z-swapchain-run1.log`, also passed with PID 91 and no
+remaining exact `eboot.bin`; the user saw magenta followed by the 2048 board.
+The board colors were correct but faint, leaving brightness/gamma quality as a
+later issue rather than a missing-channel or black-scanout blocker.
+
+`2048.nro` is retained as that short visible sequence-zero smoke workload, but
+it is no longer the active continuous 600-present workload. Attempts
+`20260803T020440Z-swapchain-run1.log` and
+`20260803T020648Z-swapchain-run1.log` reached only eight native presentation
+successes before their 60- and 90-second bounds. Both runs were cleaned up and
+left no exact `eboot.bin`; the longer run continued advancing the host input
+injector without another native present, so it did not satisfy either the
+`GAME PASS 600 frames` or independent native 600-success oracle. Increasing
+the timeout would not turn that result into qualification evidence.
+
+The active FW 5.50 long gate instead uses the user-selected pinned
+`InvadersNX.nro` (SHA-256
+`4ad1a05d7e7edba203d086151bf83d2be02bf2ead8695ce4d21f21b4bdf27433`).
+Its reference source loops while `appletMainLoop()` remains active and calls
+`SDL_RenderPresent()` unconditionally after update and render on every
+iteration. Input only changes game state, with Minus as the normal exit, so
+the 600-frame sidecar omits `input_cycle=1`. The NRO uses an SDL2 software
+renderer and embedded `romfs:/` resources; SDL2_mixer initialization failure
+disables audio without aborting the application. The two-run wrapper must
+still require Vulkan-PS5's independent native 600-success marker in addition
+to Eden's post-shutdown game verdict, exact FW 5.500.008, a nonzero second-run
+pipeline count, bounded teardown, and exact process absence. This workload
+substitution does not change the pinned Eden ELF or relax any completion gate.
 
 The successful PS4 port uses Eden's native `renderer_gnm` over `opengnm`, not
 Vulkan. That is relevant evidence for a future direct `renderer_agc`: its

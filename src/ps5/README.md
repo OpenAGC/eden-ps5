@@ -121,10 +121,21 @@ After an address32/compiler change, do not start with the long gate. Run
 accepts the run only when sequence zero reads back exact BGRA magenta from both
 the renderer intermediate and the swapchain image, FW 5.50 is identified, the
 bounded teardown completes, and no exact `eboot.bin` remains. Obtain visual
-confirmation before advancing to `tools/run_fw550_2048.sh`, which performs the
-two cleanup-first 600-frame runs with identical ELF, sidecar, and ROM hashes.
-Both wrappers pin the current Eden ELF, cleanup ELF, guarded Vulkan runner,
-exact-process helper hashes, canonical PyPS4debug source revision, and exact
-PyPS4debug lockfile bytes. Their mandatory failure pattern cannot be replaced,
-and the web-service deadline is restricted to 1-120 seconds (60 by default);
-callers may only append additional rejection patterns.
+confirmation before advancing to `tools/run_fw550_invadersnx.sh`, which
+performs the two cleanup-first 600-frame runs with identical ELF, sidecar, and
+ROM hashes. Both active wrappers pin the current Eden ELF, cleanup ELF, guarded
+Vulkan runner, exact-process helper hashes, canonical PyPS4debug source
+revision, and exact PyPS4debug lockfile bytes. Their mandatory failure pattern
+cannot be replaced, and the web-service deadline is restricted to 1-120
+seconds (60 by default); callers may only append additional rejection patterns.
+
+The address32 build passed that 2048 sequence-zero gate and was confirmed
+visible on the console: magenta appeared before the 2048 board, whose colors
+were correct but faint. The long-run workload is now `InvadersNX.nro`, invoked
+by `tools/run_fw550_invadersnx.sh`. Its source calls `SDL_RenderPresent()` on
+every applet-loop iteration, so the committed 600-frame sidecar deliberately
+does not enable the SDL input injector. The wrapper pins the NRO and otherwise
+retains the same cleanup-first, identical-ELF, firmware, native-present,
+pipeline-cache, bounded-teardown, and exact-process gates. `2048.nro` remains
+the sequence-zero visual smoke workload; it is not used as evidence for the
+continuous 600-present gate.
