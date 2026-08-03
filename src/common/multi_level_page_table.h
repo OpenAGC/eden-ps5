@@ -29,10 +29,15 @@ public:
                                                                           other.page_bits, 0)},
           first_level_shift{std::exchange(other.first_level_shift, 0)},
           first_level_chunk_size{std::exchange(other.first_level_chunk_size, 0)},
+          alloc_size{std::exchange(other.alloc_size, 0)},
           first_level_map{std::move(other.first_level_map)}, base_ptr{std::exchange(other.base_ptr,
                                                                                     nullptr)} {}
 
     MultiLevelPageTable& operator=(MultiLevelPageTable&& other) noexcept {
+        if (this == &other) {
+            return *this;
+        }
+        Release();
         address_space_bits = std::exchange(other.address_space_bits, 0);
         first_level_bits = std::exchange(other.first_level_bits, 0);
         page_bits = std::exchange(other.page_bits, 0);
@@ -47,11 +52,11 @@ public:
     void ReserveRange(u64 start, std::size_t size);
 
     [[nodiscard]] const BaseAddr& operator[](std::size_t index) const {
-        return base_ptr[index];
+        return EntryAt(index);
     }
 
     [[nodiscard]] BaseAddr& operator[](std::size_t index) {
-        return base_ptr[index];
+        return EntryAt(index);
     }
 
     [[nodiscard]] BaseAddr* data() {
@@ -63,7 +68,10 @@ public:
     }
 
 private:
+    [[nodiscard]] const BaseAddr& EntryAt(std::size_t index) const;
+    [[nodiscard]] BaseAddr& EntryAt(std::size_t index);
     void AllocateLevel(u64 level);
+    void Release() noexcept;
 
     std::size_t address_space_bits{};
     std::size_t first_level_bits{};

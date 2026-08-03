@@ -29,6 +29,16 @@ target_link_libraries(tests PRIVATE ${PLATFORM_LIBRARIES} Catch2::Catch2WithMain
 
 add_test(NAME tests COMMAND tests)
 
+add_executable(eden_multi_level_page_table_tests
+    common/multi_level_page_table.cpp
+)
+target_link_libraries(eden_multi_level_page_table_tests PRIVATE
+    common
+    Catch2::Catch2WithMain
+    Threads::Threads
+)
+add_test(NAME eden.multi_level_page_table COMMAND eden_multi_level_page_table_tests)
+
 # needed for vma
 if (NOT MSVC)
     target_compile_options(tests PRIVATE
