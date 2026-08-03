@@ -34,12 +34,6 @@ class System;
 
 class DynarmicCallbacks64 : public Dynarmic::A64::UserCallbacks {
 public:
-    enum class ProsperoScalarStatus {
-        Fallback,
-        Success,
-        Invalid,
-    };
-
     explicit DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess* process);
 
     u8 MemoryRead8(u64 vaddr) override;
@@ -69,10 +63,6 @@ public:
     void AddTicks(u64 ticks) override;
     u64 GetTicksRemaining() override;
     u64 GetCNTPCT() override;
-    template <typename T>
-    ProsperoScalarStatus ReadProsperoScalar(u64 vaddr, T& value);
-    template <typename T>
-    ProsperoScalarStatus WriteProsperoScalar(u64 vaddr, const T& value);
     bool CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWatchpointType type);
     void RecordInvalidRead64(u64 vaddr);
     void MemoryAccessAbort(u64 pc) override;

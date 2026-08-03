@@ -209,6 +209,18 @@ public:
     u64 Read64(Common::ProcessAddress addr);
 
     /**
+     * Reads a fixed-width scalar only when its complete guest range is mapped.
+     *
+     * These helpers combine validation, sparse page translation, rasterizer coherency, and the
+     * copy. They return false without exposing a partial value when any byte is unmapped.
+     */
+    [[nodiscard]] bool Read8Checked(Common::ProcessAddress addr, u8& value);
+    [[nodiscard]] bool Read16Checked(Common::ProcessAddress addr, u16& value);
+    [[nodiscard]] bool Read32Checked(Common::ProcessAddress addr, u32& value);
+    [[nodiscard]] bool Read64Checked(Common::ProcessAddress addr, u64& value);
+    [[nodiscard]] bool Read128Checked(Common::ProcessAddress addr, u64& low, u64& high);
+
+    /**
      * Writes an 8-bit unsigned integer to the given virtual address in
      * the current process' address space.
      *
@@ -251,6 +263,18 @@ public:
      * @post The memory range [addr, sizeof(data)) contains the given data value.
      */
     void Write64(Common::ProcessAddress addr, u64 data);
+
+    /**
+     * Writes a fixed-width scalar only when its complete guest range is mapped.
+     *
+     * Cross-page writes validate the whole range before changing guest memory, so an invalid
+     * access cannot leave a partially written scalar behind.
+     */
+    [[nodiscard]] bool Write8Checked(Common::ProcessAddress addr, u8 value);
+    [[nodiscard]] bool Write16Checked(Common::ProcessAddress addr, u16 value);
+    [[nodiscard]] bool Write32Checked(Common::ProcessAddress addr, u32 value);
+    [[nodiscard]] bool Write64Checked(Common::ProcessAddress addr, u64 value);
+    [[nodiscard]] bool Write128Checked(Common::ProcessAddress addr, u64 low, u64 high);
 
     /**
      * Writes a 8-bit unsigned integer to the given virtual address in

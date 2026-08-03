@@ -39,41 +39,13 @@ DynarmicCallbacks64::DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess
       m_debugger_enabled{parent.m_system.DebuggerEnabled()},
       m_check_memory_access{ShouldCheckMemoryAccess(m_debugger_enabled)} {}
 
-#if defined(__PROSPERO__)
-template <typename T>
-DynarmicCallbacks64::ProsperoScalarStatus DynarmicCallbacks64::ReadProsperoScalar(u64 vaddr,
-                                                                                  T& value) {
-    // ReadBlock fuses validity checking, sparse translation, cache coherency, and copying into
-    // one page-table walk. The previous callback path translated every ordinary access twice.
-    if (m_debugger_enabled) {
-        return ProsperoScalarStatus::Fallback;
-    }
-    if (!m_memory.ReadBlock(vaddr, &value, sizeof(value))) {
-        m_parent.m_jit->HaltExecution(DataAbort);
-        return ProsperoScalarStatus::Invalid;
-    }
-    return ProsperoScalarStatus::Success;
-}
-
-template <typename T>
-DynarmicCallbacks64::ProsperoScalarStatus DynarmicCallbacks64::WriteProsperoScalar(u64 vaddr,
-                                                                                   const T& value) {
-    if (m_debugger_enabled ||
-        sizeof(value) > Core::Memory::YUZU_PAGESIZE - (vaddr & Core::Memory::YUZU_PAGEMASK)) {
-        return ProsperoScalarStatus::Fallback;
-    }
-    if (!m_memory.WriteBlock(vaddr, &value, sizeof(value))) {
-        m_parent.m_jit->HaltExecution(DataAbort);
-        return ProsperoScalarStatus::Invalid;
-    }
-    return ProsperoScalarStatus::Success;
-}
-#endif
-
 u8 DynarmicCallbacks64::MemoryRead8(u64 vaddr) {
 #if defined(__PROSPERO__)
-    u8 value{};
-    if (ReadProsperoScalar(vaddr, value) != ProsperoScalarStatus::Fallback) {
+    if (!m_debugger_enabled) {
+        u8 value{};
+        if (!m_memory.Read8Checked(vaddr, value)) {
+            m_parent.m_jit->HaltExecution(DataAbort);
+        }
         return value;
     }
 #endif
@@ -84,8 +56,11 @@ u8 DynarmicCallbacks64::MemoryRead8(u64 vaddr) {
 }
 u16 DynarmicCallbacks64::MemoryRead16(u64 vaddr) {
 #if defined(__PROSPERO__)
-    u16_le value{};
-    if (ReadProsperoScalar(vaddr, value) != ProsperoScalarStatus::Fallback) {
+    if (!m_debugger_enabled) {
+        u16 value{};
+        if (!m_memory.Read16Checked(vaddr, value)) {
+            m_parent.m_jit->HaltExecution(DataAbort);
+        }
         return value;
     }
 #endif
@@ -96,8 +71,11 @@ u16 DynarmicCallbacks64::MemoryRead16(u64 vaddr) {
 }
 u32 DynarmicCallbacks64::MemoryRead32(u64 vaddr) {
 #if defined(__PROSPERO__)
-    u32_le value{};
-    if (ReadProsperoScalar(vaddr, value) != ProsperoScalarStatus::Fallback) {
+    if (!m_debugger_enabled) {
+        u32 value{};
+        if (!m_memory.Read32Checked(vaddr, value)) {
+            m_parent.m_jit->HaltExecution(DataAbort);
+        }
         return value;
     }
 #endif
@@ -109,12 +87,12 @@ u32 DynarmicCallbacks64::MemoryRead32(u64 vaddr) {
 u64 DynarmicCallbacks64::MemoryRead64(u64 vaddr) {
 #if defined(__PROSPERO__)
     if (!m_debugger_enabled) {
-        u64_le value{};
-        if (ReadProsperoScalar(vaddr, value) == ProsperoScalarStatus::Success) {
-            return value;
+        u64 value{};
+        if (!m_memory.Read64Checked(vaddr, value)) {
+            m_parent.m_jit->HaltExecution(DataAbort);
+            RecordInvalidRead64(vaddr);
         }
-        RecordInvalidRead64(vaddr);
-        return {};
+        return value;
     }
 #endif
     if (!m_memory.IsValidVirtualAddressRange(vaddr, sizeof(u64))) {
@@ -128,9 +106,13 @@ u64 DynarmicCallbacks64::MemoryRead64(u64 vaddr) {
 
 Dynarmic::A64::Vector DynarmicCallbacks64::MemoryRead128(u64 vaddr) {
 #if defined(__PROSPERO__)
-    std::array<u64_le, 2> value{};
-    if (ReadProsperoScalar(vaddr, value) != ProsperoScalarStatus::Fallback) {
-        return {value[0], value[1]};
+    if (!m_debugger_enabled) {
+        u64 low{};
+        u64 high{};
+        if (!m_memory.Read128Checked(vaddr, low, high)) {
+            m_parent.m_jit->HaltExecution(DataAbort);
+        }
+        return {low, high};
     }
 #endif
     if (!CheckMemoryAccess(vaddr, 16, Kernel::DebugWatchpointType::Read)) {
@@ -152,7 +134,10 @@ std::optional<u32> DynarmicCallbacks64::MemoryReadCode(u64 vaddr) {
 
 void DynarmicCallbacks64::MemoryWrite8(u64 vaddr, u8 value) {
 #if defined(__PROSPERO__)
-    if (WriteProsperoScalar(vaddr, value) != ProsperoScalarStatus::Fallback) {
+    if (!m_debugger_enabled) {
+        if (!m_memory.Write8Checked(vaddr, value)) {
+            m_parent.m_jit->HaltExecution(DataAbort);
+        }
         return;
     }
 #endif
@@ -162,8 +147,10 @@ void DynarmicCallbacks64::MemoryWrite8(u64 vaddr, u8 value) {
 }
 void DynarmicCallbacks64::MemoryWrite16(u64 vaddr, u16 value) {
 #if defined(__PROSPERO__)
-    const u16_le little_value{value};
-    if (WriteProsperoScalar(vaddr, little_value) != ProsperoScalarStatus::Fallback) {
+    if (!m_debugger_enabled) {
+        if (!m_memory.Write16Checked(vaddr, value)) {
+            m_parent.m_jit->HaltExecution(DataAbort);
+        }
         return;
     }
 #endif
@@ -173,8 +160,10 @@ void DynarmicCallbacks64::MemoryWrite16(u64 vaddr, u16 value) {
 }
 void DynarmicCallbacks64::MemoryWrite32(u64 vaddr, u32 value) {
 #if defined(__PROSPERO__)
-    const u32_le little_value{value};
-    if (WriteProsperoScalar(vaddr, little_value) != ProsperoScalarStatus::Fallback) {
+    if (!m_debugger_enabled) {
+        if (!m_memory.Write32Checked(vaddr, value)) {
+            m_parent.m_jit->HaltExecution(DataAbort);
+        }
         return;
     }
 #endif
@@ -184,8 +173,10 @@ void DynarmicCallbacks64::MemoryWrite32(u64 vaddr, u32 value) {
 }
 void DynarmicCallbacks64::MemoryWrite64(u64 vaddr, u64 value) {
 #if defined(__PROSPERO__)
-    const u64_le little_value{value};
-    if (WriteProsperoScalar(vaddr, little_value) != ProsperoScalarStatus::Fallback) {
+    if (!m_debugger_enabled) {
+        if (!m_memory.Write64Checked(vaddr, value)) {
+            m_parent.m_jit->HaltExecution(DataAbort);
+        }
         return;
     }
 #endif
@@ -195,8 +186,10 @@ void DynarmicCallbacks64::MemoryWrite64(u64 vaddr, u64 value) {
 }
 void DynarmicCallbacks64::MemoryWrite128(u64 vaddr, Dynarmic::A64::Vector value) {
 #if defined(__PROSPERO__)
-    const std::array<u64_le, 2> little_value{value[0], value[1]};
-    if (WriteProsperoScalar(vaddr, little_value) != ProsperoScalarStatus::Fallback) {
+    if (!m_debugger_enabled) {
+        if (!m_memory.Write128Checked(vaddr, value[0], value[1])) {
+            m_parent.m_jit->HaltExecution(DataAbort);
+        }
         return;
     }
 #endif
@@ -561,7 +554,8 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
 #if defined(__PROSPERO__)
     LOG_INFO(Core_ARM,
              "Prospero Dynarmic memory path: core={} sparse_callbacks=true "
-             "single_lookup_scalars=true fastmem={} address_space_bits={}",
+             "single_lookup_scalars=true checked_width_scalars=true fastmem={} "
+             "address_space_bits={}",
              m_core_index, config.fastmem_pointer.has_value(), address_space_bits);
 #endif
     m_jit.emplace(config);
