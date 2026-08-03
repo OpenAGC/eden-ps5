@@ -550,9 +550,14 @@ PipelineCache::PipelineCache(Tegra::MaxwellDeviceMemoryManager& device_memory_,
 void PipelineCache::LogProsperoGuestCacheTelemetry(const char* const reason) const {
     LOG_INFO(Render_Vulkan,
              "Prospero guest pipeline cache live: reason={} graphics_created={} "
-             "compute_created={} records_written={} records_skipped={}",
+             "compute_created={} records_written={} records_skipped={} "
+             "graphics_discovered={} compute_discovered={} graphics_loaded={} "
+             "compute_loaded={} records_rejected={}",
              reason, runtime_graphics_pipelines.load(), runtime_compute_pipelines.load(),
-             transferable_records_written.load(), transferable_records_skipped.load());
+             transferable_records_written.load(), transferable_records_skipped.load(),
+             disk_graphics_records_discovered.load(), disk_compute_records_discovered.load(),
+             disk_graphics_pipelines_loaded.load(), disk_compute_pipelines_loaded.load(),
+             disk_records_rejected.load());
 }
 #endif
 
@@ -637,6 +642,9 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
         state.statistics = std::make_unique<PipelineStatistics>(device);
     }
     const auto load_compute{[&](std::ifstream& file, FileEnvironment env) {
+#ifdef __PROSPERO__
+        disk_compute_records_discovered.fetch_add(1);
+#endif
         ComputePipelineCacheKey key;
         file.read(reinterpret_cast<char*>(&key), sizeof(key));
 
@@ -644,9 +652,13 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
             ShaderPools pools;
             auto pipeline{CreateComputePipeline(pools, key, env_, state.statistics.get(), false)};
             std::scoped_lock lock{state.mutex};
+            [[maybe_unused]] const bool loaded{static_cast<bool>(pipeline)};
             if (pipeline) {
                 compute_cache.emplace(key, std::move(pipeline));
             }
+#ifdef __PROSPERO__
+            (loaded ? disk_compute_pipelines_loaded : disk_records_rejected).fetch_add(1);
+#endif
             ++state.built;
             if (state.has_loaded) {
                 callback(VideoCore::LoadCallbackStage::Build, state.built, state.total);
@@ -655,6 +667,9 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
         ++state.total;
     }};
     const auto load_graphics{[&](std::ifstream& file, std::vector<FileEnvironment> envs) {
+#ifdef __PROSPERO__
+        disk_graphics_records_discovered.fetch_add(1);
+#endif
         GraphicsPipelineCacheKey key;
         file.read(reinterpret_cast<char*>(&key), sizeof(key));
 
@@ -672,17 +687,26 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
                 dynamic_features.has_color_write_enable ||
             (key.state.dynamic_vertex_input != 0) !=
                 dynamic_features.has_dynamic_vertex_input) {
+#ifdef __PROSPERO__
+            disk_records_rejected.fetch_add(1);
+#endif
             return;
         }
 
         const bool key_requests_provoking_last = key.state.provoking_vertex_last != 0;
         if (key_requests_provoking_last && !dynamic_features.has_provoking_vertex_last_mode) {
+#ifdef __PROSPERO__
+            disk_records_rejected.fetch_add(1);
+#endif
             return;
         }
 
         const bool key_uses_transform_feedback = key.state.xfb_enabled != 0;
         if (key_uses_transform_feedback && key_requests_provoking_last &&
             !dynamic_features.has_provoking_vertex_tf_preserve) {
+#ifdef __PROSPERO__
+            disk_records_rejected.fetch_add(1);
+#endif
             return;
         }
 
@@ -696,9 +720,13 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
                                                  state.statistics.get(), false)};
 
             std::scoped_lock lock{state.mutex};
+            [[maybe_unused]] const bool loaded{static_cast<bool>(pipeline)};
             if (pipeline) {
                 graphics_cache.emplace(key, std::move(pipeline));
             }
+#ifdef __PROSPERO__
+            (loaded ? disk_graphics_pipelines_loaded : disk_records_rejected).fetch_add(1);
+#endif
             ++state.built;
             if (state.has_loaded) {
                 callback(VideoCore::LoadCallbackStage::Build, state.built, state.total);
@@ -717,6 +745,9 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
     lock.unlock();
 
     workers.WaitForRequests(stop_loading);
+#ifdef __PROSPERO__
+    LogProsperoGuestCacheTelemetry("disk-load-complete");
+#endif
 
     if (use_vulkan_pipeline_cache) {
         SerializeVulkanPipelineCache(vulkan_pipeline_cache_filename, vulkan_pipeline_cache,

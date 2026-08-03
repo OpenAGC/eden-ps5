@@ -11,19 +11,12 @@ cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
 Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
-The current pinned guest startup diagnostic Eden ELF is SHA-256
-`4533e94528e6c1cebb28787bdaa1cfca27af94c4ae7781a4ab8f0a3dbd2fd69d`,
-embeds Eden `0463e02`, and incorporates OpenAGC byte-granular transfer commit
-`4719611` plus Vulkan-PS5 first-command diagnostics `237ba9f`, buffer-image
-failure telemetry `ed9eada`, and exact buffer-image range preparation
-`edba96d`. It also includes OpenAGC capacity diagnostics `7e87dd8` and the
-Vulkan-PS5 256-KiB native DCB plus old-budget regression at `d518591`, empty
-native scissors `993952e`, signed Vulkan scissor clipping `f9ae5ad`, and
-buffer-image validation telemetry `aa82230`. Vulkan-PS5 `dab93b4` adds the
-first tiled D32 depth-plane meta upload, while `dbe9973` adds the matching
-packed S8 upload. OpenAGC `f49bf8e` adds the authoritative successful direct
-`/dev/gc` marker. The guarded ELF pin and audio/backend gates are Eden commit
-`26f385e`.
+The current pinned guest diagnostic Eden ELF is SHA-256
+`01a0aa1da1469078243127777a725d5cf84b09d85403ff3d1ca16263b2490a83`.
+It includes OpenAGC command-state span and capacity fixes through `d7ed7f2`,
+Vulkan-PS5 fragmented vertex/copy preparation through `1a62d45`, and explicit
+Eden disk-cache discovery/load/rejection telemetry. The guarded wrapper pins
+these exact bytes for the immediate cache-reload replay.
 
 Before launch, pin the ELF, NRO, sidecar, cleanup ELF, guarded runner,
 exact-process helper, and PyPS4debug revision/lockfile. Run only the direct
@@ -45,7 +38,9 @@ audio failure, hang, or crash fails this canary.
 Shader-cache promotion requires separate evidence. Telemetry must first prove
 that the guest creates at least one Maxwell graphics or compute pipeline. Only
 then may a nonempty transferable cache record written by run one and a nonzero
-loaded `Total Pipeline Count` on an identical immediate relaunch be accepted.
+successfully loaded graphics/compute count on an identical immediate relaunch
+be accepted. `Total Pipeline Count` alone records parsed entries and is not a
+load-success oracle.
 Host ACO/PSBC presentation pipelines and the standard Vulkan cache header do
 not satisfy this oracle. If Flappy Bird remains entirely inside its packaged
 Mesa/SDL software or GLES translation path without guest Maxwell pipelines,
@@ -4074,6 +4069,33 @@ followed by the Flappy Bird intro. PID 113 and the global exact `eboot.bin`
 name were absent in both post-run checks. This is visible guest presentation
 evidence, but not yet the automated 300-present or immediate cache-reload
 completion gate because the static intro stops submitting new frames.
+
+The requested format-122/130 OpenAGC audit found no missing native format
+implementation to add. Vulkan `VK_FORMAT_B10G11R11_UFLOAT_PACK32` maps to
+OpenAGC `AGC_FORMAT_R11G11B10_FLOAT`; its four-byte layouts, sampled image
+views, color-target tuple, pipeline export validation, transfers, and FW 5.50
+hardware qualification are already present. Vulkan
+`VK_FORMAT_D32_SFLOAT_S8_UINT` maps to
+`AGC_FORMAT_D32_FLOAT_S8_UINT`; OpenAGC already implements split D32/S8
+planes, layouts, views, aspect-specific state, target binding, transfers,
+clears, and combined HTILE. Vulkan-PS5 deliberately advertises format 130 for
+depth/stencil attachment and transfer use, but not combined-format sampling;
+that narrower advertisement remains fail-closed until combined sampled-aspect
+behavior is qualified. OpenAGC's current host suite passes 36,396 assertions,
+and Vulkan-PS5's lifecycle, clear-color/depth-stencil, and command-recording
+format regressions pass. The unrelated full Vulkan-PS5 build currently stops
+in stale `tests/pipeline.c` calls to the expanded meta-attachment helper; this
+does not invalidate the focused format results and must be repaired as its own
+test-maintenance slice.
+
+The current Eden cache telemetry removes the last ambiguity in the warm Flappy
+run. `disk-load-complete` separately reports graphics/compute records
+discovered, pipelines successfully built, and rejected records. The wrapper
+now requires a nonzero graphics load under cache identity
+`ee7cd9a1a22a0102`; historical run `20260803T224657Z` remains the run-one
+creation/write evidence. The updated Prospero build completes and produces
+ELF SHA-256
+`01a0aa1da1469078243127777a725d5cf84b09d85403ff3d1ca16263b2490a83`.
 
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value

@@ -59,15 +59,16 @@ output and exact bounded teardown, and treats SDL2_mixer initialization as
 fail-soft only. Do not promote Flappy Bird to the two-run cache gate until run
 one proves guest pipeline creation and writes a transferable record.
 
-Run the first canary with `tools/run_fw550_flappy_bird.sh`. It presents exactly
-120 frames, cycles A/B/directions without another input thread, defaults to a
-30-second host deadline, and performs two independently separated absence
-checks. The guest cache emits a zero baseline plus every graphics/compute
-creation and transferable-record outcome as it happens, so forced bounded
-cleanup does not erase the evidence. The wrapper requires both a guest
-pipeline-created transition and a nonzero record-written transition before it
-can pass. Zero counts may still document a lifecycle canary, but they do not
-qualify cache reuse.
+Run the canary with `tools/run_fw550_flappy_bird.sh`. It requests exactly 300
+presented frames, cycles sustained A/B/directional input without another input
+thread, defaults to a 45-second host deadline, and performs two independently
+separated absence checks. Run one has already created two guest graphics
+pipelines and written two transferable records. The current wrapper is the
+immediate-relaunch gate: it requires a nonzero discovered and successfully
+loaded graphics-record count from the new `disk-load-complete` telemetry under
+the same derived cache identity. Runtime creation/write counts remain separate
+from disk discovery/load/rejection counts so a warm-cache replay cannot be
+mistaken for a fresh compile.
 
 The first Flappy hardware attempt reached its accelerated GLES2 renderer and
 one native present, then exposed an eager allocation in the guest GPU

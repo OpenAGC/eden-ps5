@@ -182,6 +182,11 @@ private:
     std::atomic<u32> runtime_compute_pipelines{};
     std::atomic<u32> transferable_records_written{};
     std::atomic<u32> transferable_records_skipped{};
+    std::atomic<u32> disk_graphics_records_discovered{};
+    std::atomic<u32> disk_compute_records_discovered{};
+    std::atomic<u32> disk_graphics_pipelines_loaded{};
+    std::atomic<u32> disk_compute_pipelines_loaded{};
+    std::atomic<u32> disk_records_rejected{};
 #endif
     DynamicFeatures dynamic_features;
 };

@@ -15,7 +15,7 @@ cleanup_elf=${EDEN_PS5_CLEANUP_ELF:-$vulkan_repo/build-prospero-msaa/vulkan_ps5_
 homebrew=${EDEN_PS5_FLAPPY_BIRD_NRO:-$repo_dir/../Flappy_Bird_NX.nro}
 sidecar="$repo_dir/src/ps5/eden-flappy-bird.launch"
 log_dir="$vulkan_repo/examples/qualification-logs/flappy-bird"
-pinned_eden_sha256=3a6e8d9524f62a7bb4eff67297d919d6651eabb75b116d56901249092d7355b2
+pinned_eden_sha256=01a0aa1da1469078243127777a725d5cf84b09d85403ff3d1ca16263b2490a83
 pinned_cleanup_sha256=ff88ac293a55ec4ba5636a6556b74ffbeaf5d1093e96f86208cc55ce262565c5
 pinned_runner_sha256=96e396e42d6b3a73eef0ed7de78fe0e318b1aa51cdcf8ff2c89a54b013452c08
 pinned_process_helper_sha256=8dff282cdbc7ac1f4a037ad9e2a0e800fa82838cd1342b804b1eaff65ffd1ef6
@@ -84,10 +84,9 @@ fi
 
 firmware_pattern='^\[openagc\] system software raw=0x05500008 string= 5\.500\.008$'
 input_cycle_pattern='PS5 qualification input cycle: enabled=true interval_ms=250'
-telemetry_baseline_pattern='Prospero guest pipeline cache live: reason=baseline graphics_created=0 compute_created=0 records_written=0 records_skipped=0'
+telemetry_baseline_pattern='Prospero guest pipeline cache live: reason=baseline graphics_created=0 compute_created=0 records_written=0 records_skipped=0 graphics_discovered=0 compute_discovered=0 graphics_loaded=0 compute_loaded=0 records_rejected=0'
 telemetry_pattern='Prospero guest pipeline cache live:'
-pipeline_created_pattern='Prospero guest pipeline cache live: reason=(graphics|compute)-created graphics_created=[0-9]+ compute_created=[0-9]+ records_written=[0-9]+ records_skipped=[0-9]+'
-record_written_pattern='Prospero guest pipeline cache live: reason=(graphics|compute)-record-written graphics_created=[0-9]+ compute_created=[0-9]+ records_written=[1-9][0-9]* records_skipped=[0-9]+'
+cache_reload_pattern='Prospero guest pipeline cache live: reason=disk-load-complete graphics_created=0 compute_created=0 records_written=0 records_skipped=0 graphics_discovered=[1-9][0-9]* compute_discovered=[0-9]+ graphics_loaded=[1-9][0-9]* compute_loaded=[0-9]+ records_rejected=[0-9]+'
 reject_pattern='(allocation|mapping|mmap|mprotect) failed|^eden-ps5 dynarmic .* failed:'
 reject_pattern="$reject_pattern|invalid JIT mapping|Failed to (present|derive|obtain|load)"
 reject_pattern="$reject_pattern|GPU thread failure|^vulkan-ps5: .*failed|PS5 presented-frame oracle failed|CPUCore not initialized"
@@ -101,17 +100,16 @@ VULKAN_PS5_CLEANUP_ELF="$cleanup_elf" \
 VULKAN_PS5_QUALIFICATION_REMOTE_NAME=eden_ps5 \
 VULKAN_PS5_QUALIFICATION_LABEL=eden-flappy-bird-run1 \
 VULKAN_PS5_QUALIFICATION_PASS_PATTERN='^eden-ps5: GAME PASS 300 frames$' \
-VULKAN_PS5_QUALIFICATION_PASS_DESCRIPTION='Flappy Bird, 300 presented frames, cache telemetry, and bounded teardown' \
+VULKAN_PS5_QUALIFICATION_PASS_DESCRIPTION='Flappy Bird, 300 presented frames, nonzero graphics-cache reload, and bounded teardown' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN="$firmware_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2="$input_cycle_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_3="EdenMain: Prospero shader-cache identity: $cache_identity" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4='^\[psbc\] Parameter exports: stage=0 count=1$' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_5="$telemetry_baseline_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_6='Prospero Dynarmic memory path: core=0 sparse_page_table=true callback_fallback=true' \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_7="$pipeline_created_pattern" \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_8="$record_written_pattern" \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_9='Prospero audio policy: sink=null fail_soft=true' \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_10='^\[openagc\] backend=direct-dev-gc fd_open=true capability=0x[0-9A-Fa-f]+$' \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_7="$cache_reload_pattern" \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_8='Prospero audio policy: sink=null fail_soft=true' \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_9='^\[openagc\] backend=direct-dev-gc fd_open=true capability=0x[0-9A-Fa-f]+$' \
 VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
 VULKAN_PS5_FW550_LOG_DIR="$log_dir" \
 VULKAN_PS5_WEBSRV_TIMEOUT="$websrv_timeout" \
