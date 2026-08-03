@@ -5,7 +5,12 @@
 // SPDX-FileCopyrightText: 2021 Skyline Team and Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <atomic>
+
 #include "common/logging.h"
+#ifdef __PROSPERO__
+#include "common/ps5_qualification_trace.h"
+#endif
 #include "common/scope_exit.h"
 #include "common/string_util.h"
 #include "core/core.h"
@@ -85,6 +90,16 @@ void NVDRV::Ioctl2(HLERequestContext& ctx) {
     IPC::RequestParser rp{ctx};
     const auto fd = rp.Pop<DeviceFD>();
     const auto command = rp.PopRaw<Ioctl>();
+#ifdef __PROSPERO__
+    static std::atomic<u32> ioctl2_sequence{0};
+    const u32 sequence = ioctl2_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = Common::ShouldTracePS5QualificationSequence(sequence);
+    if (trace_qualification) {
+        LOG_INFO(Service_NVDRV,
+                 "PS5 NVDRV ioctl2: sequence={} stage=entry fd={} command={:#x}", sequence, fd,
+                 command.raw);
+    }
+#endif
     LOG_DEBUG(Service_NVDRV, "called fd={}, ioctl={:#08x}", fd, command.raw);
 
     if (!is_initialized) {
@@ -99,6 +114,13 @@ void NVDRV::Ioctl2(HLERequestContext& ctx) {
 
     const auto nv_result =
         nvdrv->Ioctl2(fd, command, input_buffer, input_inlined_buffer, output_buffer);
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        LOG_INFO(Service_NVDRV,
+                 "PS5 NVDRV ioctl2: sequence={} stage=device-return result={:#x} output_size={}",
+                 sequence, static_cast<u32>(nv_result), output_buffer.size());
+    }
+#endif
     if (command.is_out != 0) {
         ctx.WriteBuffer(output_buffer);
     }
@@ -106,6 +128,11 @@ void NVDRV::Ioctl2(HLERequestContext& ctx) {
     IPC::ResponseBuilder rb{ctx, 3};
     rb.Push(ResultSuccess);
     rb.PushEnum(nv_result);
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        LOG_INFO(Service_NVDRV, "PS5 NVDRV ioctl2: sequence={} stage=response-ready", sequence);
+    }
+#endif
 }
 
 void NVDRV::Ioctl3(HLERequestContext& ctx) {

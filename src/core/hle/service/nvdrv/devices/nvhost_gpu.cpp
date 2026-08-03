@@ -438,6 +438,11 @@ NvResult nvhost_gpu::SubmitGPFIFOBase1(IoctlSubmitGpfifo& params,
 
 NvResult nvhost_gpu::SubmitGPFIFOBase2(IoctlSubmitGpfifo& params,
                                        std::span<const Tegra::CommandListHeader> commands) {
+#ifdef __PROSPERO__
+    static std::atomic<u32> base2_sequence{0};
+    const u32 sequence = base2_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = Common::ShouldTracePS5QualificationSequence(sequence);
+#endif
     if (params.num_entries > commands.size()) {
         UNIMPLEMENTED();
         return NvResult::InvalidSize;
@@ -446,7 +451,16 @@ NvResult nvhost_gpu::SubmitGPFIFOBase2(IoctlSubmitGpfifo& params,
     Tegra::CommandList entries(params.num_entries);
     std::memcpy(entries.command_lists.data(), commands.data(),
                 params.num_entries * sizeof(Tegra::CommandListHeader));
-    return SubmitGPFIFOImpl(params, std::move(entries));
+    const NvResult result = SubmitGPFIFOImpl(params, std::move(entries));
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        LOG_INFO(Service_NVDRV,
+                 "PS5 GPFIFO base2: sequence={} stage=return result={:#x} fence={}:{} flags={:#x}",
+                 sequence, static_cast<u32>(result), params.fence.id, params.fence.value,
+                 params.flags.raw);
+    }
+#endif
+    return result;
 }
 
 NvResult nvhost_gpu::GetWaitbase(IoctlGetWaitbase& params) {
