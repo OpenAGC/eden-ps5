@@ -89,12 +89,17 @@ public:
     void CallFunction(F fn) {
 #if defined(__PROSPERO__)
         // Payload callbacks have not reliably preserved the SysV callee-save GPRs. Preserve
-        // them at the generated-code boundary without changing register-allocation pressure.
-        ABI_PushCalleeSaveRegistersAndAdjustStack(*this);
+        // them at translated-block boundaries without changing register-allocation pressure.
+        // Keep the size-sensitive fixed prelude unchanged.
+        if (prelude_complete) {
+            ABI_PushCalleeSaveRegistersAndAdjustStack(*this);
+        }
 #endif
         ::Common::X64::CallFarFunction(*this, fn);
 #if defined(__PROSPERO__)
-        ABI_PopCalleeSaveRegistersAndAdjustStack(*this);
+        if (prelude_complete) {
+            ABI_PopCalleeSaveRegistersAndAdjustStack(*this);
+        }
 #endif
     }
 
@@ -102,11 +107,15 @@ public:
     template<typename Lambda>
     void CallLambda(Lambda l) {
 #if defined(__PROSPERO__)
-        ABI_PushCalleeSaveRegistersAndAdjustStack(*this);
+        if (prelude_complete) {
+            ABI_PushCalleeSaveRegistersAndAdjustStack(*this);
+        }
 #endif
         ::Common::X64::CallFarFunction(*this, Common::FptrCast(l));
 #if defined(__PROSPERO__)
-        ABI_PopCalleeSaveRegistersAndAdjustStack(*this);
+        if (prelude_complete) {
+            ABI_PopCalleeSaveRegistersAndAdjustStack(*this);
+        }
 #endif
     }
 
