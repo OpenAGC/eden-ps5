@@ -545,6 +545,13 @@ PipelineCache::PipelineCache(Tegra::MaxwellDeviceMemoryManager& device_memory_,
 
 PipelineCache::~PipelineCache() {
     serialization_thread.WaitForRequests();
+#ifdef __PROSPERO__
+    LOG_INFO(Render_Vulkan,
+             "Prospero guest pipeline cache telemetry: graphics_created={} compute_created={} "
+             "records_written={} records_skipped={}",
+             runtime_graphics_pipelines.load(), runtime_compute_pipelines.load(),
+             transferable_records_written.load(), transferable_records_skipped.load());
+#endif
     if (use_vulkan_pipeline_cache && !vulkan_pipeline_cache_filename.empty()) {
         SerializeVulkanPipelineCache(vulkan_pipeline_cache_filename, vulkan_pipeline_cache,
                                      CACHE_VERSION);
@@ -873,7 +880,17 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline() {
     main_pools.ReleaseContents();
     auto pipeline{
         CreateGraphicsPipeline(main_pools, graphics_key, environments.Span(), nullptr, true)};
+#ifdef __PROSPERO__
+    if (pipeline) {
+        runtime_graphics_pipelines.fetch_add(1);
+    }
+#endif
     if (!pipeline || pipeline_cache_filename.empty()) {
+#ifdef __PROSPERO__
+        if (pipeline) {
+            transferable_records_skipped.fetch_add(1);
+        }
+#endif
         return pipeline;
     }
     serialization_thread.QueueWork([this, key = graphics_key, envs = std::move(environments.envs)] {
@@ -884,7 +901,11 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline() {
                 env_ptrs.push_back(&envs[index]);
             }
         }
-        SerializePipeline(key, env_ptrs, pipeline_cache_filename, CACHE_VERSION);
+        [[maybe_unused]] const bool written =
+            SerializePipeline(key, env_ptrs, pipeline_cache_filename, CACHE_VERSION);
+#ifdef __PROSPERO__
+        (written ? transferable_records_written : transferable_records_skipped).fetch_add(1);
+#endif
     });
     return pipeline;
 }
@@ -898,12 +919,26 @@ std::unique_ptr<ComputePipeline> PipelineCache::CreateComputePipeline(
 
     main_pools.ReleaseContents();
     auto pipeline{CreateComputePipeline(main_pools, key, env, nullptr, true)};
+#ifdef __PROSPERO__
+    if (pipeline) {
+        runtime_compute_pipelines.fetch_add(1);
+    }
+#endif
     if (!pipeline || pipeline_cache_filename.empty()) {
+#ifdef __PROSPERO__
+        if (pipeline) {
+            transferable_records_skipped.fetch_add(1);
+        }
+#endif
         return pipeline;
     }
     serialization_thread.QueueWork([this, key, env_ = std::move(env)] {
-        SerializePipeline(key, std::array<const GenericEnvironment*, 1>{&env_},
-                          pipeline_cache_filename, CACHE_VERSION);
+        [[maybe_unused]] const bool written =
+            SerializePipeline(key, std::array<const GenericEnvironment*, 1>{&env_},
+                              pipeline_cache_filename, CACHE_VERSION);
+#ifdef __PROSPERO__
+        (written ? transferable_records_written : transferable_records_skipped).fetch_add(1);
+#endif
     });
     return pipeline;
 }

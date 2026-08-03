@@ -459,7 +459,8 @@ std::unique_ptr<GraphicsPipeline> ShaderCache::CreateGraphicsPipeline() {
             env_ptrs.push_back(&environments.envs[index]);
         }
     }
-    SerializePipeline(graphics_key, env_ptrs, shader_cache_filename, CACHE_VERSION);
+    static_cast<void>(
+        SerializePipeline(graphics_key, env_ptrs, shader_cache_filename, CACHE_VERSION));
     return pipeline;
 }
 
@@ -580,8 +581,8 @@ std::unique_ptr<ComputePipeline> ShaderCache::CreateComputePipeline(
     if (!pipeline || shader_cache_filename.empty()) {
         return pipeline;
     }
-    SerializePipeline(key, std::array<const GenericEnvironment*, 1>{&env}, shader_cache_filename,
-                      CACHE_VERSION);
+    static_cast<void>(SerializePipeline(key, std::array<const GenericEnvironment*, 1>{&env},
+                                        shader_cache_filename, CACHE_VERSION));
     return pipeline;
 }
 

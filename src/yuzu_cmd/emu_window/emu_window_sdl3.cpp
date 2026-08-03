@@ -137,9 +137,11 @@ void EmuWindow_SDL3::AdvanceQualificationInputCycle() {
         return;
     }
     constexpr u64 StepIntervalMs = 50;
-    // B starts a new 2048 game after a completed board; the remaining keys
-    // exercise the default left-stick mapping without a separate input thread.
-    constexpr std::array<int, 5> QualificationKeys{
+    // A advances common title/tutorial screens, B starts a new 2048 game after
+    // a completed board, and the remaining keys exercise the default
+    // left-stick mapping without a separate input thread.
+    constexpr std::array<int, 6> QualificationKeys{
+        SDL_SCANCODE_A,
         SDL_SCANCODE_S,
         SDL_SCANCODE_LEFT,
         SDL_SCANCODE_UP,

@@ -7,6 +7,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <filesystem>
 #include <memory>
@@ -172,6 +173,12 @@ private:
 
     Common::ThreadWorker workers;
     Common::ThreadWorker serialization_thread;
+#ifdef __PROSPERO__
+    std::atomic<u32> runtime_graphics_pipelines{};
+    std::atomic<u32> runtime_compute_pipelines{};
+    std::atomic<u32> transferable_records_written{};
+    std::atomic<u32> transferable_records_skipped{};
+#endif
     DynamicFeatures dynamic_features;
 };
 
