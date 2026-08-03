@@ -1400,6 +1400,41 @@ native presentation, GPFIFO, and live audio; the current InvadersNX binary
 still exits before all of those. Switching binaries now would reduce evidence
 unless InvadersNX is first rebuilt with fail-soft optional audio.
 
+Revision `799a596795051d3b50567ec009159e7c5d0bf485` then tested the
+remaining out-of-line cache-hit call directly. The common hit check is
+force-inlined into each checked width, while epoch reset and page-table miss
+resolution remain in one no-inline cold helper. The generated Prospero
+`ReadChecked<u8>` body fell from 360 to 308 bytes; its hit path contains no
+cache-helper or assertion call, and only an invalid address, cache miss, or
+epoch change can call a slow path. The runtime marker adds
+`scalar_cache_hit_inline=true`. Host core and Prospero `yuzu-cmd` builds and
+the same five focused tests pass.
+
+The cleanup-first PID 230 measurement is preserved at
+`examples/qualification-logs/flappy-bird/20260803T203033Z-swapchain-run1.log`
+(SHA-256
+`ae3bc4dcb807b5f7509ef85206b2423b70e5d27835acd9ed2cb71cb8fc36a582`).
+It reached the third `0x90000` mapping at 22.021 seconds and the following
+`0x3c0000` mappings at 25.254 and 25.322 seconds. That is approximately
+0.35--0.41 seconds slower than PID 227 and close to PID 221, so eliminating
+the helper call is currently a neutral hardware result, not a demonstrated
+speedup. It again committed one BufferQueue frame, submitted one GPFIFO,
+maintained fail-soft AudioOut, returned every recorded SVC, and emitted only
+the zero guest-cache baseline. No guest pipeline, transferable record, second
+commit, or 120-frame verdict appeared. No invalid checked access, JIT/memory
+failure, or fatal diagnostic appeared, and cleanup proved PID-specific and
+global exact-process absence twice each.
+
+The PID 230 ELF is SHA-256
+`f3bff16b9977820d5391c59088751f7a5c829e451f511102aa79ccd5cbcc0946`
+and embeds `799a596795`. Its repinned wrapper is SHA-256
+`9d5a624cc0e096b0b2fcfa0e32ee2dd466f990ca749c7b7e6112c2765ae4bcb6`
+and was committed at `db9ce2d182d748bf3b026250f821267377b6b9bd` before launch.
+The next optimization must target a larger callback-memory cost or avoid this
+font-rasterization bottleneck without changing the NRO or 30-second gate;
+another micro-change or an Invaders binary that exits before presentation is
+not a justified hardware run.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the
