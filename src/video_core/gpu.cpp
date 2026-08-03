@@ -35,6 +35,9 @@
 #include "video_core/host1x/syncpoint_manager.h"
 #include "video_core/memory_manager.h"
 #include "video_core/renderer_base.h"
+#ifdef __PROSPERO__
+#include "video_core/renderer_vulkan/ps5_qualification_trace.h"
+#endif
 #include "video_core/shader_notify.h"
 
 namespace Tegra {
@@ -224,7 +227,18 @@ struct GPU::Impl {
         gpu_thread.FlushAndInvalidateRegion(addr, size, is_async);
     }
 
-    void RequestComposite(std::vector<Tegra::FramebufferConfig>&& layers, std::vector<Service::Nvidia::NvFence>&& fences) {
+    void RequestComposite(std::vector<Tegra::FramebufferConfig>&& layers,
+                          std::vector<Service::Nvidia::NvFence>&& fences) {
+#ifdef __PROSPERO__
+        static std::atomic<u32> composite_request_sequence{0};
+        const u32 request_sequence =
+            composite_request_sequence.fetch_add(1, std::memory_order_relaxed);
+        const bool trace_qualification = Vulkan::ShouldTracePS5QualificationFrame(request_sequence);
+        if (trace_qualification) {
+            LOG_INFO(HW_GPU, "PS5 composite request: sequence={} stage=entry layers={} fences={}",
+                     request_sequence, layers.size(), fences.size());
+        }
+#endif
         size_t num_fences{fences.size()};
         size_t current_request_counter{};
         {
@@ -238,25 +252,91 @@ struct GPU::Impl {
                 free_swap_counters.pop_front();
             }
         }
-        const auto wait_fence = RequestSyncOperation([this, current_request_counter, &layers, &fences, num_fences] {
-            auto& syncpoint_manager = system.Host1x().GetSyncpointManager();
-            if (num_fences == 0) {
-                renderer->Composite(layers);
-            }
-            const auto executer = [this, current_request_counter, layers_copy = layers]() {
-                {
-                    std::unique_lock<std::mutex> lk(request_swap_mutex);
-                    if (--request_swap_counters[current_request_counter] != 0) {
+        const auto wait_fence =
+            RequestSyncOperation([this, current_request_counter, &layers, &fences, num_fences
+#ifdef __PROSPERO__
+                                  ,
+                                  request_sequence, trace_qualification
+#endif
+        ] {
+                auto& syncpoint_manager = system.Host1x().GetSyncpointManager();
+#ifdef __PROSPERO__
+                if (trace_qualification) {
+                    LOG_INFO(HW_GPU, "PS5 composite request: sequence={} stage=sync-dispatch",
+                             request_sequence);
+                }
+#endif
+                if (num_fences == 0) {
+#ifdef __PROSPERO__
+                    if (trace_qualification) {
+                        LOG_INFO(HW_GPU,
+                                 "PS5 composite request: sequence={} stage=direct-composite-before",
+                                 request_sequence);
+                    }
+#endif
+                    renderer->Composite(layers);
+#ifdef __PROSPERO__
+                    if (trace_qualification) {
+                        LOG_INFO(HW_GPU,
+                                 "PS5 composite request: sequence={} stage=direct-composite-after",
+                                 request_sequence);
+                    }
+#endif
+                }
+                const auto executer = [this, current_request_counter, layers_copy = layers
+#ifdef __PROSPERO__
+                                       ,
+                                       request_sequence, trace_qualification
+#endif
+                ]() {
+                    size_t remaining_fences{};
+                    {
+                        std::unique_lock<std::mutex> lk(request_swap_mutex);
+                        remaining_fences = --request_swap_counters[current_request_counter];
+                        if (remaining_fences == 0) {
+                            free_swap_counters.push_back(current_request_counter);
+                        }
+                    }
+#ifdef __PROSPERO__
+                    if (trace_qualification && remaining_fences != 0) {
+                        LOG_INFO(HW_GPU,
+                                 "PS5 composite request: sequence={} stage=fence-signaled "
+                                 "remaining={}",
+                                 request_sequence, remaining_fences);
+                    }
+#endif
+                    if (remaining_fences != 0) {
                         return;
                     }
-                    free_swap_counters.push_back(current_request_counter);
+#ifdef __PROSPERO__
+                    if (trace_qualification) {
+                        LOG_INFO(HW_GPU,
+                                 "PS5 composite request: sequence={} stage=fences-complete-before",
+                                 request_sequence);
+                    }
+#endif
+                    renderer->Composite(layers_copy);
+#ifdef __PROSPERO__
+                    if (trace_qualification) {
+                        LOG_INFO(HW_GPU,
+                                 "PS5 composite request: sequence={} stage=fences-complete-after",
+                                 request_sequence);
+                    }
+#endif
+                };
+                for (size_t i = 0; i < num_fences; i++) {
+#ifdef __PROSPERO__
+                    if (trace_qualification) {
+                        LOG_INFO(HW_GPU,
+                                 "PS5 composite request: sequence={} stage=fence-register index={} "
+                                 "id={} expected={} current={}",
+                                 request_sequence, i, fences[i].id, fences[i].value,
+                                 syncpoint_manager.GetGuestSyncpointValue(fences[i].id));
+                    }
+#endif
+                    syncpoint_manager.RegisterGuestAction(fences[i].id, fences[i].value, executer);
                 }
-                renderer->Composite(layers_copy);
-            };
-            for (size_t i = 0; i < num_fences; i++) {
-                syncpoint_manager.RegisterGuestAction(fences[i].id, fences[i].value, executer);
-            }
-        });
+            });
         gpu_thread.TickGPU(is_async);
         WaitForSyncOperation(wait_fence);
     }

@@ -11,7 +11,7 @@ cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
 Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
-The current unlaunched restored-throughput Eden ELF is SHA-256
+The latest launched restored-throughput Eden ELF is SHA-256
 `50b914312a42af0eb6cf7fc395f3f24cf210bac51a4ea69c9f008db8409e0552`,
 embeds Eden `90db104f0a`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
@@ -838,6 +838,30 @@ quarantines. The host `core` target and strict integrated Prospero build pass.
 The rebuilt ELF embeds `90db104f0a`, has SHA-256
 `50b914312a42af0eb6cf7fc395f3f24cf210bac51a4ea69c9f008db8409e0552`, and
 is pinned for the cleanup-first throughput A/B.
+
+That A/B ran as PID 164 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T175438Z-swapchain-run1.log`.
+It retained the corrected AudioOut contract: two nonzero tags were appended,
+then released in order at approximately 85 ms intervals without an invalid
+guest read. It also had no Dynarmic, W^X, Vulkan, OpenAGC, or GPU-thread
+failure. Restoring normal JIT block formation and optimization did not change
+the presentation result, however: the run entered
+`RendererVulkan::Composite` exactly once, completed exactly one native
+present, and produced no second composite entry before the 30-second bound.
+The wrapper rejected the missing 120-frame oracle, ran cleanup, and proved
+both PID-scoped and global exact `eboot.bin` absence twice. CPU optimization
+is therefore no longer the active explanation for the one-present stall.
+
+The next diagnostic traces the immediately preceding display boundary rather
+than extending the timeout. On Prospero, `GPU::Impl::RequestComposite` now
+records a bounded sequence of request entries, layer and acquire-fence counts,
+sync-dispatch, each fence's expected and current guest syncpoint values, fence
+completion, and the direct or fence-gated renderer call. It uses the same
+first-16-then-power-of-two trace policy as the renderer/present path. One
+30-second cleanup-first replay can therefore distinguish no second guest
+display request from a later request held behind an unsignaled acquire fence,
+without changing presentation or synchronization behavior. The host `core`
+target and strict integrated Prospero build pass.
 
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
