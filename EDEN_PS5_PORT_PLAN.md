@@ -4118,12 +4118,18 @@ costs roughly ten host seconds in the current run. Perpetual A injection can
 therefore re-enter a loading scene after death/restart and consume most of the
 bounded window. The sidecar grammar now accepts `input_cycle=N`: legacy value
 one remains unbounded, while values 2-10000 cap synthesized key presses without
-restoring blocking SDL event waits. Flappy is pinned to 64 presses, after which
-input stops but rendering/event polling continues. Parser coverage passes 47
-assertions, the Prospero build completes, the sidecar SHA-256 is
-`1cc0da7595693d255c9ac46c9b30b22d5e1851e243b0d6c0d5352393ce8feee4`,
-and the new ELF SHA-256 is
+restoring blocking SDL event waits. Parser coverage passes 47 assertions, the
+Prospero build completes, and the new ELF SHA-256 is
 `4fbccbe733095447f6d851110986c58c7eb0ce363be581043e808b3b5628d67d`.
+
+The first capped-input replay,
+`20260803T231149Z-swapchain-run1.log`, proved the mechanism: it emitted
+`stopped presses=64 limit=64`, retained 5/5 cache reload with zero rejection,
+and cleaned PID 119 plus the global exact name. It still reached only present
+sequence 63 because the 64th press had already entered one final loading
+delay. The next sidecar stops earlier at 48 presses, keeps the identical ELF,
+and has SHA-256
+`55f2678db0d2c92dcaf887ba3ba7555ba39d00016156555267110f8e602df81c`.
 
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value

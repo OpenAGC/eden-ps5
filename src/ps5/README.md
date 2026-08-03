@@ -79,8 +79,8 @@ qualifies immediate cache reload, but not the separate 300-present gate: the
 
 Qualification sidecars may use `input_cycle=N`. `input_cycle=1` preserves the
 legacy unbounded cycle; values from 2 through 10000 stop key injection after
-exactly N presses while retaining nonblocking event polling. Flappy uses 64 so
-the initial title/tutorial flow advances without repeatedly restarting into a
+exactly N presses while retaining nonblocking event polling. Flappy currently
+uses 48 so the initial flow advances before the next restart can enter another
 guest-time loading delay. Its wrapper requires the exact stop marker before a
 300-present result can pass.
 
