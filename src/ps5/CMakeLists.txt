@@ -31,6 +31,15 @@ if (TARGET common)
         -Wall -Wextra -Wpedantic -Werror)
     target_link_libraries(eden-ps5-dynarmic-jit-wx-probe PRIVATE common SceSystemService)
     set_target_properties(eden-ps5-dynarmic-jit-wx-probe PROPERTIES SUFFIX ".elf")
+
+    add_executable(eden-ps5-dynarmic-jit-dual-alias-probe
+        dynarmic_jit_dual_alias_probe.cpp
+        runtime.cpp)
+    target_compile_features(eden-ps5-dynarmic-jit-dual-alias-probe PRIVATE cxx_std_20)
+    target_compile_options(eden-ps5-dynarmic-jit-dual-alias-probe PRIVATE
+        -Wall -Wextra -Wpedantic -Werror)
+    target_link_libraries(eden-ps5-dynarmic-jit-dual-alias-probe PRIVATE common SceSystemService)
+    set_target_properties(eden-ps5-dynarmic-jit-dual-alias-probe PROPERTIES SUFFIX ".elf")
 endif()
 
 if (NOT TARGET VulkanPS5::ICD)
