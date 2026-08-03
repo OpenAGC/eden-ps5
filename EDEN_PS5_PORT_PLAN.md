@@ -231,6 +231,22 @@ rebuilt Eden ELF embeds revision
 `d76f2440c04f53ec500724d93361c2bf3df7e4cfe7fb3c91f942dd42d27b8c08`,
 and is pinned by the Flappy wrapper for the next cleanup-first hardware retry.
 
+That retry, PID 139, still remained on magenta and failed all three guest
+graphics pipelines with `VK_ERROR_FEATURE_NOT_PRESENT`; it therefore does not
+yet prove that the three newly supported dynamic states were the only pipeline
+gap. It did prove clean process handling: the bounded runner relaunched the
+pinned cleanup ELF and both PID-scoped and global exact-name checks found no
+`eboot.bin`. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T135622Z-swapchain-run1.log`.
+Vulkan-PS5 commit `0860274` adds a temporary Prospero-only request fingerprint
+covering dynamic enum values, topology, rasterization, multisampling,
+alpha-to-coverage/alpha-to-one, blend attachment count, and depth/stencil
+enables. An attempted unconditional alpha-to-coverage acceptance was rejected
+by the host regression because OpenAGC deliberately keeps that state outside
+its qualified multisample subset; that unsafe change was reverted. The next
+cleanup-first retry must use the diagnostic build to identify the remaining
+exact `-8` branch before extending support.
+
 ### Payload SDK identity
 
 The current `build-prospero-full-audit2` CMake cache resolves both
