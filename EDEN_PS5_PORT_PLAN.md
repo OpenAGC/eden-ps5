@@ -251,6 +251,28 @@ The diagnostic ELF embeds revision
 `933be07ee5a9a044db74bd01c6dd476891012e377cfb6bebfb713688e62f4234`,
 and is pinned by the Flappy wrapper.
 
+The global-barrier retry, PID 161, passed the new public dependency and reached
+a native draw at about 97 seconds. It then failed viewport/scissor resolution
+with `VK_ERROR_INITIALIZATION_FAILED` while a render pass remained active; the
+last accepted command was `vkCmdDraw`. The operator still saw magenta. The
+accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T143649Z-swapchain-run1.log`.
+PID 161 exited, and both PID-scoped and global exact-absence checks passed
+twice.
+
+The failing rule required dynamic scissor right/bottom edges to fit the current
+framebuffer. Vulkan permits a scissor to extend beyond the attachment and clips
+rasterization to framebuffer bounds. Vulkan-PS5 commit `2af3a28` performs that
+clipping for nonempty intersections and retains fail-closed handling for a
+fully disjoint scissor until an empty-rasterization path is qualified. The
+oversized-scissor regression, neighboring command/lifecycle/validation tests,
+and Prospero static build pass.
+
+Diagnostic runs now default to 110 seconds because every useful Flappy blocker
+has appeared by 97-98 seconds. Longer windows are reserved for candidates that
+have already demonstrated guest-frame progress and need the full 120-frame
+pass oracle.
+
 The zero-stride replay, PID 148, closes the pipeline-creation blocker: all
 guest pipelines compile/create, two opaque-black raw guest frames are observed,
 the first composite submits, and one native present returns successfully. The
