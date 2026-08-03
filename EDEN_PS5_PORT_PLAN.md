@@ -223,6 +223,20 @@ static build, and the source-order/busy-fallback audit pass. The rebuilt,
 never-launched Eden ELF is SHA-256
 `c42a553ac9336ea58c31ccf377d36b609b672d33e6bce8df69b27fb44b41fa46`.
 
+That canary (`20260803T085925Z-swapchain-run1.log`) confirmed the busy fallback
+reaches successful checked handle close, then reported
+`sceKernelDeleteEqueue == 0x80020009` after the queue had already been retired.
+The operator also confirmed visible magenta followed by the 2048 game with its
+faint but correct color palette, so presentation remained intact through this
+teardown diagnostic.
+This exact terminal `EBADF` result is recorded across numerous earlier stable
+FW 5.50 1,800-flip qualifications. OpenAGC commit `e2427a9` accepts only that
+exact already-retired descriptor status after VideoOut ownership has been
+released; all other queue-delete results still fail closed. The host suite,
+Prospero build, and source audit pass. The next never-launched Eden ELF is
+SHA-256
+`3b22a7cea17af3fd300dc8d5e8d8160b5bba592fbeeef18cb1b4aa2b83716c2e`.
+
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
 process-lifetime guard: cache eligibility allocation and initial demotion,
