@@ -12,8 +12,8 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current unlaunched guest command-completion diagnostic Eden ELF is SHA-256
-`d6e8da3e9627e881d4d5f9505a286fbc1f6f83526bac080efd59aec031067126`,
-embeds Eden `5b60c5b251`, and incorporates Vulkan-PS5 checkpoint-retirement
+`73a69a5dd91237dbdd8cca6c4ed12a57c4cf5f49e9f27c58cc4ed2322ad4f64f`,
+embeds Eden `0f5ef44ea7`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
 usage fix `2d84b89`.
 
@@ -965,6 +965,26 @@ syncpoint increment, and the deferred host increment callback. Host `core` and
 the strict Prospero build pass. Revision `5b60c5b` contains this telemetry and
 the PID 176 evidence. Its rebuilt ELF embeds `5b60c5b251`, has SHA-256
 `d6e8da3e9627e881d4d5f9505a286fbc1f6f83526bac080efd59aec031067126`, and
+is pinned for exactly one cleanup-first 30-second replay.
+
+That replay ran as PID 179 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T182949Z-swapchain-run1.log`.
+It rules out a stalled GPFIFO or syncpoint completion path. The GPU thread
+dispatched both submitted headers; the 1,011-word main header and three-word
+fence header completed. Syncpoint one advanced guest `0 -> 1`, its deferred
+host callback advanced host `0 -> 1`, DMA flush returned, and the GPU-thread
+dispatch completed, all within about 1.9 milliseconds. No second BufferQueue
+commit followed. The run emitted no fatal diagnostic, audio remained correctly
+paced, and cleanup proved PID 179 and global `eboot.bin` absence twice each.
+
+The next boundary is the guest-visible NVDRV response. Prospero now sparsely
+traces `SubmitGPFIFOBase2` return, the enclosing `Ioctl2` device return,
+output-buffer copy-back, and response construction. This proves whether the
+guest receives the successful output fence or remains inside the service call
+despite completed GPU work. Host `core` and the strict Prospero build pass.
+Revision `0f5ef44` contains the response telemetry and PID 179 evidence. Its
+rebuilt ELF embeds `0f5ef44ea7`, has SHA-256
+`73a69a5dd91237dbdd8cca6c4ed12a57c4cf5f49e9f27c58cc4ed2322ad4f64f`, and
 is pinned for exactly one cleanup-first 30-second replay.
 
 PID 137 completed the 30-second observation without the low read, allocator
