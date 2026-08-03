@@ -11,9 +11,9 @@ cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
 Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
-The current unlaunched telemetry and sparse-GPU-page-table Eden ELF is SHA-256
-`2577d3f8264b02dfccfdd636a0fd278b53436483a864e1964e22f9b99576bba5`,
-embeds Eden `31ecfa8fdd`, and incorporates Vulkan-PS5 checkpoint-retirement
+The current unlaunched fail-closed checked-memory Eden ELF is SHA-256
+`b6fc1ad3c5b05cfe0f73b1164293609ec9d077b2f2dfc483a713a6f101e1ede0`,
+embeds Eden `7330a527e0`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
 usage fix `2d84b89`.
 
@@ -56,7 +56,7 @@ passes and default count one preserves existing callers.
 
 `tools/run_fw550_flappy_bird.sh` pins the telemetry ELF, 120-frame sidecar,
 NRO, cleanup ELF, updated runner, exact-process helper, and PyPS4debug source
-and lockfile. It uses a 240-second default and 360-second hard ceiling, forces
+and lockfile. It uses a 30-second default and 360-second hard ceiling, forces
 continuous klog, requires two absence observations separated by one second,
 and accepts the lifecycle canary only with exact firmware, cache identity,
 input-cycle, PSBC, telemetry-summary, frame, teardown, and process oracles. A
@@ -684,6 +684,30 @@ the strict integrated Prospero build passes. The rebuilt ELF embeds `c3ea295`
 and has SHA-256
 `109c0140e3c390420383436496ce34f7e6bbbba1ef76140afed5ecbbd13f8826`.
 It is pinned for a cleanup-first bounded A/B of the standard callback ABI.
+
+PID 146 disproved the custom checked-read ABI as the source of the failure.
+The standard one-address callback still received `Read64 @ 0x8` at 14.126
+seconds after guest graphics-pipeline creation and one completed native
+present. Guest `x19`, TLS, the SDL audio object and mutex, and both audout
+buffers remained valid. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T171731Z-swapchain-run1.log`;
+cleanup again proved both PID-specific and global exact-process absence twice.
+
+That replay also exposed a validation mismatch: Prospero configured Dynarmic
+to inspect `MemoryAbort` after every callback access, while Eden could disable
+the callback's address validation through `cpuopt_ignore_memory_aborts`. The
+unmapped read consequently reached `Memory::Read64`, and
+`MemoryAccessAbort` never received the current instruction PC; the reported
+`0x807ffb18` was only the last committed JIT-state PC. Revision `7330a52`
+forces checked memory access for the Prospero callback-only path, independent
+of the unsafe setting. Invalid reads now request a synchronous abort, preserve
+the exact guest PC, and return from the translated block before subsequent
+guest execution. The host `core` target and strict integrated Prospero build
+pass. The rebuilt ELF embeds `7330a527e0` and has SHA-256
+`b6fc1ad3c5b05cfe0f73b1164293609ec9d077b2f2dfc483a713a6f101e1ede0`.
+It is pinned for the next cleanup-first 30-second diagnostic; the live-klog
+deadline is bounded to 60 seconds rather than retaining the former 150-second
+diagnostic window.
 
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
