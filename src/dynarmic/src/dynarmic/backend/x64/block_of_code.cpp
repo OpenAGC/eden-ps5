@@ -16,6 +16,10 @@
 #    include <unistd.h>
 #endif
 
+#if defined(__PROSPERO__)
+#    include <ps5/kernel.h>
+#endif
+
 #ifdef __APPLE__
 #    include <errno.h>
 #    include <fmt/format.h>
@@ -237,7 +241,13 @@ void ProtectMemory(const void* base, size_t size, bool is_executable) {
     const size_t protectAddr = roundAddr;
     const size_t protect_size = size + (iaddr - roundAddr);
 #        endif
-    const int result = mprotect(reinterpret_cast<void*>(protectAddr), protect_size, mode);
+    const int result = is_executable
+#        if defined(__PROSPERO__)
+                           ? kernel_mprotect_exact(-1, protectAddr, protect_size, mode)
+#        else
+                           ? mprotect(reinterpret_cast<void*>(protectAddr), protect_size, mode)
+#        endif
+                           : mprotect(reinterpret_cast<void*>(protectAddr), protect_size, mode);
     if (result != 0) {
 #        if defined(__PROSPERO__)
         FailProsperoJitOperation(is_executable ? "code-cache RW->RX mprotect"

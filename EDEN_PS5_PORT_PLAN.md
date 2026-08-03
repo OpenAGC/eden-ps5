@@ -17,26 +17,33 @@ Those bytes, rather than an assumed source checkout, identify its SDK.
 
 The RW-to-RX hardening source is
 `/Users/bizkut/Downloads/PS5/homebrew/ps5debug-NG/ps5-payload-sdk`, owned by
-the `ps5debug-NG` repository. Commit `439746c` serializes each complete shared
-kernel-copy pipe transaction and each full VM-entry protection walk with a
-bootstrap-safe atomic guard, and preserves the helper's actual errno through
-`mmap`/`mprotect`. Its existing unrelated debugger
+the `ps5debug-NG` repository. Commit `439746c` first serialized each complete
+shared kernel-copy pipe transaction and each full VM-entry protection walk.
+Commit `5342f3c` adds the process-wide, bootstrap-safe VM-operation lock,
+locked libc `mmap`/`mprotect`/`munmap`, locked private runtime-loader and
+resolver mappings, and a JIT-only exact-entry protection helper. Executable
+`mmap` promotes the exact 16 KiB-rounded entry while the operation lock is
+held; generic loader segment protection remains multi-entry-capable. Weak CRT
+symbols retain the former shared-object fallback instead of becoming null
+calls. Its existing unrelated debugger
 changes and untracked `sce_stubs/libSceAgcDriver.c` are outside this work and
 remain untouched. The committed sources were rebuilt and only their CRT/libc
-targets installed into `/Users/bizkut/ps5-payload-sdk`. The active installed
-artifacts are `target/lib/libc.a` SHA-256
-`5484751c8efeddc91dc8138ce0948e637cffdb340b5b445f75e790d85e5ea078`
-and `target/lib/crt1.o` SHA-256
-`52695631412a50bc6d6af238288b2c5497cb110ecea92ea2636d3d9e40bc673b`.
+and public-header targets installed into `/Users/bizkut/ps5-payload-sdk`. The
+active installed artifacts are `target/lib/libc.a` SHA-256
+`16ddcdb481c8372fd464075c6a9e7646da267c0a458c4f8e13790dc2da6514b8`,
+`target/lib/crt1.o` SHA-256
+`9f02746532314b7971e19ebdd3d73ef601d5130b6648147305641003b759adca`,
+and `target/include/ps5/kernel.h` SHA-256
+`61f008b9b1d3890b399ed9347bd9a4d3e67e05a52636cd5ca5238189d3785d8b`.
 
 Solve the intermittent Dynarmic RW-to-RX `mprotect` `EPERM` without weakening
 the Prospero W^X or fail-closed contracts. The active implementation must use
 OS-chosen virtual addresses, keep write and execute permissions mutually
 exclusive, never execute after an inconclusive or failed transition, and
-release every mapping on bounded teardown. In-process retry after an `EPERM`
-is not accepted as a fix because the payload SDK collapses every
-`kernel_mprotect` helper failure to `EPERM` and the mapping's partial state is
-then unknown.
+release every mapping on bounded teardown. In-process retry after a failed
+transition is not accepted because the mapping's partial state is then
+unknown. The preserved error from the production failure is `EFAULT`; older
+artifacts flattened that helper failure to `EPERM`.
 
 The immediate evidence is the cleanup-first InvadersNX run
 `Vulkan-PS5/examples/qualification-logs/20260803T022033Z-swapchain-run1.log`.
@@ -47,18 +54,25 @@ terminated fail-closed; the cleanup trap ran and both PID-scoped and global
 checks found no exact `eboot.bin`. This is neither an InvadersNX failure nor a
 qualification pass.
 
-Next, add a bounded, GPU-free, cleanup-gated diagnostic that records the raw
-`kernel_mprotect` result and exact mapping/cache role/transition sequence while
-using only OS-chosen addresses. Use it to distinguish transient VM-entry lookup
-failure from a stable capability or mapping-contract rejection. Implement the
-smallest safe same-address protection correction supported by that evidence;
-do not restore the rejected JIT-shm-plus-generic-`mprotect` hybrid. A dual-alias
-JIT-shm design is acceptable only with systematic Dynarmic RW-to-RX pointer
-translation and complete handle/alias teardown. Host tests must prove full-map
-geometry and that every failed transition prevents execution. Target proof
-requires repeated cleanup-first transition cycles followed by two identical
-600-native-present InvadersNX runs on FW 5.50, bounded teardown, and exact
-process absence. Only then resume the wider completion goal below.
+The correction is cooperative process-map serialization, not a cached kernel
+`vm_map_entry *`. Cached entries were rejected because split/merge/delete and
+teardown can free or replace them before validation. The SDK always performs a
+fresh lookup; Dynarmic's RW-to-RX path then requires one exact entry whose
+start/end match the complete owned mapping and fails closed otherwise. Regular
+SDK VM syscalls, Eden's direct SCE mappings, and OpenAGC's production direct
+SCE mappings all use the same lock with the fixed order VM-operation lock then
+kernel-copy pipe lock. OpenAGC commit `47ca983` contains its scoped wrappers.
+The lock protects participating Eden/OpenAGC/SDK paths; it is not claimed to
+replace the unavailable kernel `vm_map` lock against unknown nonparticipating
+mutators.
+
+The GPU-free probe now adds a second thread with exactly 128 bounded anonymous
+map/write/unmap cycles while the four Dynarmic-sized mappings execute their W^X
+cycles. It uses no GPU API, fixed address, retry, or execution after failure.
+Target proof requires 20 cleanup-first concurrent probe processes followed by
+20 cleanup-first production 2048 startup/presentation processes on FW 5.50,
+bounded teardown, and exact process absence. Only after that repeated gate may
+the fix be considered hardware-qualified and the wider renderer goal resume.
 
 Eden now serializes every Prospero Dynarmic executable-VM operation with one
 process-lifetime guard: cache eligibility allocation and initial demotion,
@@ -130,10 +144,10 @@ checks pass. Because the same bytes complete 320 serial probe promotions and
 the owned range is exact, this identifies a live VM-entry lookup race during
 concurrent process-map mutation, not missing JIT permission or invalid cache
 geometry. The stress wrapper correctly stops at run one; the production EPERM
-goal remains open. Do not retry the failed in-process transition. The next
-implementation must eliminate racy repeated tree lookup while validating that
-any cached entry still exactly owns the expected mapping before each
-fail-closed protection update.
+goal remains open. Do not retry the failed in-process transition. The
+cooperative VM-operation serialization and exact fresh-lookup implementation
+above is built and independently reviewed, but remains hardware-pending; no ELF
+from this new slice has been launched yet.
 
 ## Active construction diagnostic (2026-08-02)
 

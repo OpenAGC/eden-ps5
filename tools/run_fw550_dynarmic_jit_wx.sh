@@ -22,7 +22,7 @@ qualification_runs=20
 reject_pattern='allocation failed|mapping failed|mmap failed|mprotect failed'
 reject_pattern="$reject_pattern|dynarmic-jit-wx probe: FAIL|RW-to-RX.*result=-1"
 reject_pattern="$reject_pattern|RX-to-RW.*result=-1|initial-RW-demotion.*result=-1"
-reject_pattern="$reject_pattern|munmap.*result=-1"
+reject_pattern="$reject_pattern|munmap.*result=-1|map-mutator.*result=FAIL"
 reject_pattern="$reject_pattern|terminating without executing an invalid JIT mapping"
 
 verify_file_sha256() {
@@ -68,7 +68,7 @@ while [ "$run" -le "$qualification_runs" ]; do
     VULKAN_PS5_QUALIFICATION_REMOTE_NAME=eden_jit_wx_probe \
     VULKAN_PS5_QUALIFICATION_LABEL="eden-jit-wx-run${run}" \
     VULKAN_PS5_QUALIFICATION_PASS_PATTERN='^eden-ps5 dynarmic-jit-wx probe: PASS caches=4 size=0x2004000 cycles=4$' \
-    VULKAN_PS5_QUALIFICATION_PASS_DESCRIPTION='four exact-size Dynarmic caches, bounded W^X cycles, and teardown' \
+    VULKAN_PS5_QUALIFICATION_PASS_DESCRIPTION='four exact-size Dynarmic caches, concurrent bounded map mutation, W^X cycles, and teardown' \
     VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
     VULKAN_PS5_SWAPCHAIN_EXPECTED_SHA256="$pinned_probe_sha256" \
     VULKAN_PS5_CLEANUP_EXPECTED_SHA256="$pinned_cleanup_sha256" \

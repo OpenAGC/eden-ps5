@@ -62,6 +62,10 @@
 #include "common/host_memory.h"
 #include "common/logging.h"
 
+#if defined(__PROSPERO__)
+#include <ps5/kernel.h>
+#endif
+
 #if defined(__ANDROID__) && __ANDROID_API__ < 30
 #include <sys/syscall.h>
 #ifndef MFD_CLOEXEC
@@ -78,6 +82,20 @@ namespace Common {
 [[maybe_unused]] constexpr size_t HugePageSize = 0x200000;
 
 #if defined(__PROSPERO__)
+namespace {
+
+class ProsperoVmOperationGuard {
+public:
+    ProsperoVmOperationGuard() {
+        kernel_vm_operation_lock();
+    }
+    ~ProsperoVmOperationGuard() {
+        kernel_vm_operation_unlock();
+    }
+};
+
+} // namespace
+
 extern "C" {
 int sceKernelAllocateDirectMemory(int64_t search_start, int64_t search_end, size_t length,
                                   uint64_t alignment, int memory_type,
@@ -536,8 +554,13 @@ public:
             return false;
 
         void* reservation = nullptr;
-        if (sceKernelReserveVirtualRange(&reservation, backing_size, 0, DirectAlignment) != 0 ||
-            reservation == nullptr) {
+        int reserve_result;
+        {
+            const ProsperoVmOperationGuard vm_guard;
+            reserve_result =
+                sceKernelReserveVirtualRange(&reservation, backing_size, 0, DirectAlignment);
+        }
+        if (reserve_result != 0 || reservation == nullptr) {
             LOG_CRITICAL(HW_Memory, "sceKernelReserveVirtualRange failed for {:#x} bytes",
                          backing_size);
             return false;
@@ -548,9 +571,14 @@ public:
         for (size_t offset = 0; offset < backing_size; offset += ChunkSize) {
             const size_t size = (std::min)(ChunkSize, backing_size - offset);
             Chunk chunk{backing_base + offset, 0, size};
-            if (sceKernelAllocateDirectMemory(0, static_cast<int64_t>(direct_memory_size), size,
-                                              DirectAlignment, DirectMemoryType,
-                                              &chunk.physical_address) != 0) {
+            int allocate_result;
+            {
+                const ProsperoVmOperationGuard vm_guard;
+                allocate_result = sceKernelAllocateDirectMemory(
+                    0, static_cast<int64_t>(direct_memory_size), size, DirectAlignment,
+                    DirectMemoryType, &chunk.physical_address);
+            }
+            if (allocate_result != 0) {
                 LOG_CRITICAL(HW_Memory,
                              "guest backing direct allocation failed at {:#x}/{:#x}", offset,
                              backing_size);
@@ -560,9 +588,13 @@ public:
             chunks.push_back(chunk);
 
             void* mapping = chunk.virtual_address;
-            if (sceKernelMapDirectMemory(&mapping, size, CpuGpuReadWrite, MAP_FIXED,
-                                         chunk.physical_address, DirectAlignment) != 0 ||
-                mapping != chunk.virtual_address) {
+            int map_result;
+            {
+                const ProsperoVmOperationGuard vm_guard;
+                map_result = sceKernelMapDirectMemory(&mapping, size, CpuGpuReadWrite, MAP_FIXED,
+                                                      chunk.physical_address, DirectAlignment);
+            }
+            if (map_result != 0 || mapping != chunk.virtual_address) {
                 LOG_CRITICAL(HW_Memory,
                              "guest backing direct mapping failed at {:#x}/{:#x}", offset,
                              backing_size);
@@ -591,11 +623,16 @@ private:
 
     void Release() {
         if (backing_base) {
-            (void)sceKernelMunmap(backing_base, backing_size);
+            {
+                const ProsperoVmOperationGuard vm_guard;
+                (void)sceKernelMunmap(backing_base, backing_size);
+            }
             backing_base = nullptr;
         }
-        for (const Chunk& chunk : chunks)
+        for (const Chunk& chunk : chunks) {
+            const ProsperoVmOperationGuard vm_guard;
             (void)sceKernelReleaseDirectMemory(chunk.physical_address, chunk.size);
+        }
         chunks.clear();
     }
 

@@ -8,6 +8,9 @@
 #include <windows.h>
 #else
 #include <cstdio>
+#if defined(__PROSPERO__)
+#include <ps5/kernel.h>
+#endif
 #include <sys/mman.h>
 #endif
 
@@ -21,6 +24,16 @@ namespace {
 
 constexpr std::size_t ProsperoPageSize = 0x4000;
 constexpr int ProsperoCpuReadWrite = 0x03;
+
+class ProsperoVmOperationGuard {
+public:
+    ProsperoVmOperationGuard() {
+        kernel_vm_operation_lock();
+    }
+    ~ProsperoVmOperationGuard() {
+        kernel_vm_operation_unlock();
+    }
+};
 
 constexpr std::size_t AlignUp(std::size_t value, std::size_t alignment) noexcept {
     return (value + alignment - 1) / alignment * alignment;
@@ -47,8 +60,11 @@ void* AllocateMemoryPages(std::size_t size) noexcept {
         return nullptr;
     const std::size_t aligned_size = AlignUp(size, ProsperoPageSize);
     void* base = nullptr;
-    const int result =
-        sceKernelMapFlexibleMemory(&base, aligned_size, ProsperoCpuReadWrite, 0);
+    int result;
+    {
+        const ProsperoVmOperationGuard vm_guard;
+        result = sceKernelMapFlexibleMemory(&base, aligned_size, ProsperoCpuReadWrite, 0);
+    }
     if (result != 0) {
         std::fprintf(stderr,
                      "eden-ps5 virtual buffer allocation failed: requested=0x%zx "
@@ -73,8 +89,17 @@ void FreeMemoryPages(void* base, [[maybe_unused]] std::size_t size) noexcept {
 #elif defined(__PROSPERO__)
     ASSERT(size <= SIZE_MAX - (ProsperoPageSize - 1));
     const std::size_t aligned_size = AlignUp(size, ProsperoPageSize);
-    const int release_result = sceKernelReleaseFlexibleMemory(base, aligned_size);
-    ASSERT(release_result == 0 || sceKernelMunmap(base, aligned_size) == 0);
+    int release_result;
+    {
+        const ProsperoVmOperationGuard vm_guard;
+        release_result = sceKernelReleaseFlexibleMemory(base, aligned_size);
+    }
+    int unmap_result = 0;
+    if (release_result != 0) {
+        const ProsperoVmOperationGuard vm_guard;
+        unmap_result = sceKernelMunmap(base, aligned_size);
+    }
+    ASSERT(release_result == 0 || unmap_result == 0);
 #else
     ASSERT(munmap(base, size) == 0);
 #endif

@@ -4,14 +4,18 @@
 #include "ps5/runtime.h"
 
 #include <array>
+#include <atomic>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <limits>
+#include <ps5/kernel.h>
 #include <sys/mman.h>
 #include <sys/thr.h>
+#include <thread>
 #include <unistd.h>
 
 namespace {
@@ -21,6 +25,7 @@ constexpr std::size_t MetadataSize = PageSize;
 constexpr std::size_t MappingSize = 0x2004000;
 constexpr std::size_t CacheCount = 4;
 constexpr std::size_t CycleCount = 4;
+constexpr std::size_t MutatorCycleCount = 128;
 constexpr std::size_t CodeOffset = MetadataSize;
 constexpr std::array<std::uint8_t, 6> KnownReturnStub{
     0xB8, 0x2A, 0x00, 0x00, 0x00, 0xC3,  // mov eax, 42; ret
@@ -44,6 +49,11 @@ struct ProcessInfo {
     long pid = -1;
     long tid = -1;
     int tid_result = -1;
+};
+
+struct MutatorResult {
+    std::size_t completed = 0;
+    int error = 0;
 };
 
 ProcessInfo GetProcessInfo() {
@@ -153,7 +163,8 @@ private:
                                 reinterpret_cast<char*>(entry + KnownReturnStub.size()));
 
         errno = 0;
-        const int rx_result = mprotect(mapping, MappingSize, PROT_READ | PROT_EXEC);
+        const int rx_result = kernel_mprotect_exact(
+            -1, reinterpret_cast<intptr_t>(mapping), MappingSize, PROT_READ | PROT_EXEC);
         const int rx_error = rx_result == 0 ? 0 : errno;
         LogOperation(info, cache, iteration_text, "RW-to-RX", mapping, rx_result, rx_error);
         if (rx_result != 0) {
@@ -186,10 +197,55 @@ private:
     bool cleanup_succeeded = true;
 };
 
+void RunMapMutationStress(std::atomic<bool>& ready, std::atomic<bool>& start,
+                          MutatorResult& result) {
+    ready.store(true, std::memory_order_release);
+    while (!start.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+
+    for (std::size_t cycle = 0; cycle < MutatorCycleCount; ++cycle) {
+        errno = 0;
+        void* const mapping = mmap(nullptr, PageSize, PROT_READ | PROT_WRITE,
+                                   MAP_PRIVATE | AnonymousMapFlag, -1, 0);
+        if (mapping == MAP_FAILED) {
+            result.error = errno;
+            return;
+        }
+        *static_cast<volatile std::uint8_t*>(mapping) = static_cast<std::uint8_t>(cycle);
+        errno = 0;
+        if (munmap(mapping, PageSize) != 0) {
+            result.error = errno;
+            return;
+        }
+        result.completed = cycle + 1;
+    }
+}
+
 bool RunProbe() {
     ProbeMappings mappings{GetProcessInfo()};
-    const bool passed = mappings.CreateAll() && mappings.ExerciseAll();
-    return mappings.Cleanup() && passed;
+    if (!mappings.CreateAll()) {
+        mappings.Cleanup();
+        return false;
+    }
+
+    std::atomic<bool> mutator_ready{false};
+    std::atomic<bool> start{false};
+    MutatorResult mutator_result{};
+    std::thread mutator{RunMapMutationStress, std::ref(mutator_ready), std::ref(start),
+                        std::ref(mutator_result)};
+    while (!mutator_ready.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    start.store(true, std::memory_order_release);
+    const bool exercised = mappings.ExerciseAll();
+    mutator.join();
+    const bool mutator_passed = mutator_result.completed == MutatorCycleCount;
+    std::printf("eden-ps5 dynarmic-jit-wx probe: map-mutator completed=%zu expected=%zu "
+                "errno=%d result=%s\n",
+                mutator_result.completed, MutatorCycleCount, mutator_result.error,
+                mutator_passed ? "PASS" : "FAIL");
+    return mappings.Cleanup() && exercised && mutator_passed;
 }
 
 } // namespace
