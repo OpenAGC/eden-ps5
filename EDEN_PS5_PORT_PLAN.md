@@ -182,6 +182,10 @@ close, WSI quarantine, exact-process, klog, or responsiveness failure stops
 the gate and requires a fresh reboot; no subsequent ELF may be sent in that
 boot.
 
+The sequence-zero canary wrapper now forces continuous klog itself, matching
+the two-run production wrapper. Callers cannot accidentally omit the
+pre-launch listener while still satisfying the wrapper's pinned-hash gate.
+
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
 process-lifetime guard: cache eligibility allocation and initial demotion,
