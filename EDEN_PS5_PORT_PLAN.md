@@ -12,14 +12,16 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current pinned guest startup diagnostic Eden ELF is SHA-256
-`acb1980f2d0ed07d6107aadfa334ad39b64dadf8f4b11a2abd5e404ef82b9705`,
-embeds Eden `815b136243`, and incorporates OpenAGC byte-granular transfer commit
+`e7817665a307558b593b31d33ef223312ce7d97a1cd0e81ad9a8d944b110ccf2`,
+embeds Eden `c838e1bb61`, and incorporates OpenAGC byte-granular transfer commit
 `4719611` plus Vulkan-PS5 first-command diagnostics `237ba9f`, buffer-image
 failure telemetry `ed9eada`, and exact buffer-image range preparation
 `edba96d`. It also includes OpenAGC capacity diagnostics `7e87dd8` and the
 Vulkan-PS5 256-KiB native DCB plus old-budget regression at `d518591`, empty
 native scissors `993952e`, signed Vulkan scissor clipping `f9ae5ad`, and
-buffer-image validation telemetry `aa82230`.
+buffer-image validation telemetry `aa82230`. Vulkan-PS5 `dab93b4` adds the
+first tiled D32 depth-plane meta upload. The guarded ELF pin is Eden commit
+`ad2b6ec`.
 
 Before launch, pin the ELF, NRO, sidecar, cleanup ELF, guarded runner,
 exact-process helper, and PyPS4debug revision/lockfile. Run only the direct
@@ -126,6 +128,23 @@ stencil plane fail-closed until an independently correct per-fragment stencil
 write path exists. Add exact D32/S8 aspect, row-pitch, offset, transition,
 descriptor, attachment, and teardown regressions before the next hardware
 retry.
+
+Vulkan-PS5 `dab93b4` now implements that D32 plane as a graphics meta draw:
+the fragment shader reads the exact staging-buffer span and writes
+`gl_FragDepth` into the public OpenAGC depth target. The host command regression
+records a valid D32 copy and proves that an S8-only copy remains fail-closed;
+the strict Prospero ICD build also passes. Cleanup-first PID 254 is preserved
+at `examples/qualification-logs/flappy-bird/20260803T214720Z-swapchain-run1.log`.
+It again reached eight native draws and the depth upload, but the real Eden
+command contains two buffer-image regions rather than PID 251's initially
+reported first region. The combined command returned
+`VK_ERROR_FEATURE_NOT_PRESENT` before a native upload because the new helper
+requires every region to be the depth aspect. This narrows the next slice to
+the separate S8 plane: log both regions exactly, implement packed-byte staging
+reads plus fragment stencil export through a stencil-write meta pipeline, and
+retain fail-closed validation for malformed or unsupported aspect mixtures.
+The guarded runner cleaned PID 254 and proved PID-specific and global exact
+`eboot.bin` absence twice.
 
 `InvadersNX.nro` remains the second workload and long-running presentation
 canary, not a substitute for the current diagnosis. Switch to it after Flappy
