@@ -307,8 +307,17 @@ backing memory, maps distinct RW and RX views, emits only through RW, executes a
 known-return stub only through RX, and requires both aliases and descriptors to
 tear down cleanly. The source-committed probe is SHA-256
 `0fee0f81169bd2ea77d7eed32de037802bfbbfebe90ea5d8960eee63acbc5e24`.
-Its cleanup-first 20-process FW 5.50 gate is next. Only after that primitive is
-proven may Xbyak keep executable `getCode`/`getCurr` pointers while routing all
+The first cleanup-first canary, `20260803T101454Z-swapchain-run1.log`, proved
+that `sceKernelJitMapSharedMemory` does not create distinct OS-chosen aliases
+when both destination inputs are null: both handles returned `0x9000d8000`.
+The probe rejected equality before writing or executing, then cleanly unmapped
+and closed every established resource; exact process absence passed. The next
+revision maps both handles with `mmap(nullptr, ...)`, matching the established
+PS4 alias pattern while retaining OS-chosen placement. Commit `5e7ba59` and
+SHA-256 `c9932445c3229881baab327cbd51031546e1effe62e7209d3d590e5124784592`
+pin that revision. Its cleanup-first 20-process FW 5.50 gate is next. Only
+after that primitive is proven may Xbyak keep executable `getCode`/`getCurr`
+pointers while routing all
 emission and patch writes through the paired RW alias. Constant-pool storage
 must likewise write through RW while retaining RX addresses for generated
 RIP-relative targets, and Prospero's separate startup spin-lock generator must
