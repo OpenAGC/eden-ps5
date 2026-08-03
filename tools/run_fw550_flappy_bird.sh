@@ -12,17 +12,19 @@ pyps4debug_dir=/Users/bizkut/Downloads/PS5/homebrew/PyPS4debug
 pyps4debug_lock="$pyps4debug_dir/uv.lock"
 elf=${EDEN_PS5_ELF:-$repo_dir/build-prospero-full-audit2/bin/eden-ps5.elf}
 cleanup_elf=${EDEN_PS5_CLEANUP_ELF:-$vulkan_repo/build-prospero-msaa/vulkan_ps5_process_cleanup.elf}
-homebrew=${EDEN_PS5_2048_NRO:-$repo_dir/../2048.nro}
-sidecar="$repo_dir/src/ps5/eden-2048-thread-budget.launch"
-pinned_eden_sha256=ad5160147212771bb43b98aea8f4a835bcb735c315b4c84e362761d9cdf956cb
+homebrew=${EDEN_PS5_FLAPPY_BIRD_NRO:-$repo_dir/../Flappy_Bird_NX.nro}
+sidecar="$repo_dir/src/ps5/eden-flappy-bird.launch"
+log_dir="$vulkan_repo/examples/qualification-logs/flappy-bird"
+pinned_eden_sha256=c125bf6e00d2f70734a87723f23b39e7430096e0baa69f6dd075f6ab0b3eeba8
 pinned_cleanup_sha256=9fd6b41cf2ea87989c4217234c6f34c96a1ca5dc482355af1258539db77d4d76
 pinned_runner_sha256=1c2da402df3ca3eb30e7121e91abeb83c7da06aa4ff9c4e48e18fac5ec778552
 pinned_process_helper_sha256=8dff282cdbc7ac1f4a037ad9e2a0e800fa82838cd1342b804b1eaff65ffd1ef6
 pinned_pyps4debug_commit=8f1443bb97bd6e2a77ed5ea2cc9145975d3152eb
 pinned_pyps4debug_lock_sha256=c9eb85e0f0bc1bde6c4e00f1112a1aea982dc7eed024eb973fca91e436051033
-sidecar_sha256=216b923630466a0be9cafae8d54b36617fe62309e0bbbdf65a3f566bda8eca67
-homebrew_sha256=cd7e7f343830920196590d99c82a9f1ab8a375eeaeb943fa6c671aa68250a20d
-websrv_timeout=${EDEN_PS5_WEBSRV_TIMEOUT:-60}
+sidecar_sha256=27fe1881da2e24df050ce7a896676835d95f1d6be1e9f9b67bffc6d0f881757c
+homebrew_sha256=6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d
+cache_identity=ee7cd9a1a22a0102
+websrv_timeout=${EDEN_PS5_WEBSRV_TIMEOUT:-240}
 
 verify_file_sha256() {
     file=$1
@@ -39,12 +41,14 @@ verify_file_sha256() {
     fi
 }
 
-if ! command -v shasum >/dev/null 2>&1; then
-    echo "shasum is required for the pinned qualification gate" >&2
+if ! command -v shasum >/dev/null 2>&1 || \
+   ! command -v curl >/dev/null 2>&1 || \
+   ! command -v uv >/dev/null 2>&1 || \
+   ! command -v git >/dev/null 2>&1; then
+    echo "shasum, curl, uv, and git are required for the pinned canary" >&2
     exit 2
 fi
-if ! command -v git >/dev/null 2>&1 || \
-   [ "$(git -C "$pyps4debug_dir" rev-parse --verify HEAD 2>/dev/null || true)" != \
+if [ "$(git -C "$pyps4debug_dir" rev-parse --verify HEAD 2>/dev/null || true)" != \
      "$pinned_pyps4debug_commit" ] || \
    ! git -C "$pyps4debug_dir" diff --quiet HEAD -- src/ps4debug pyproject.toml || \
    [ -n "$(git -C "$pyps4debug_dir" ls-files --others --exclude-standard -- \
@@ -52,26 +56,25 @@ if ! command -v git >/dev/null 2>&1 || \
     echo "PyPS4debug source does not match the pinned exact-process toolchain" >&2
     exit 2
 fi
+
+verify_file_sha256 "$elf" "$pinned_eden_sha256" 'current Eden ELF'
+verify_file_sha256 "$cleanup_elf" "$pinned_cleanup_sha256" 'cleanup ELF'
 verify_file_sha256 "$runner" "$pinned_runner_sha256" 'guarded Vulkan-PS5 runner'
 verify_file_sha256 "$process_helper" "$pinned_process_helper_sha256" \
     'exact-process helper'
 verify_file_sha256 "$pyps4debug_lock" "$pinned_pyps4debug_lock_sha256" \
     'PyPS4debug lockfile'
-if [ -n "${EDEN_PS5_EXPECTED_SHA256:-}" ] && \
-   [ "$EDEN_PS5_EXPECTED_SHA256" != "$pinned_eden_sha256" ]; then
-    echo "EDEN_PS5_EXPECTED_SHA256 does not match the pinned current ELF" >&2
-    exit 2
-fi
-if [ -n "${EDEN_PS5_CLEANUP_EXPECTED_SHA256:-}" ] && \
-   [ "$EDEN_PS5_CLEANUP_EXPECTED_SHA256" != "$pinned_cleanup_sha256" ]; then
-    echo "EDEN_PS5_CLEANUP_EXPECTED_SHA256 does not match the pinned cleanup ELF" >&2
-    exit 2
-fi
+verify_file_sha256 "$sidecar" "$sidecar_sha256" 'Flappy Bird sidecar'
+verify_file_sha256 "$homebrew" "$homebrew_sha256" 'Flappy Bird NRO'
+
 case "$websrv_timeout" in
-    ''|*[!0-9]*) echo "EDEN_PS5_WEBSRV_TIMEOUT must be 1-120 seconds" >&2; exit 2 ;;
+    ''|*[!0-9]*)
+        echo "EDEN_PS5_WEBSRV_TIMEOUT must be 1-360 seconds" >&2
+        exit 2
+        ;;
 esac
-if [ "$websrv_timeout" -lt 1 ] || [ "$websrv_timeout" -gt 120 ]; then
-    echo "EDEN_PS5_WEBSRV_TIMEOUT must be 1-120 seconds" >&2
+if [ "$websrv_timeout" -lt 1 ] || [ "$websrv_timeout" -gt 360 ]; then
+    echo "EDEN_PS5_WEBSRV_TIMEOUT must be 1-360 seconds" >&2
     exit 2
 fi
 if [ "${EDEN_PS5_QUALIFICATION_REJECT_PATTERN+x}" = x ]; then
@@ -79,35 +82,47 @@ if [ "${EDEN_PS5_QUALIFICATION_REJECT_PATTERN+x}" = x ]; then
     exit 2
 fi
 
-reject_pattern='allocation failed|mapping failed|mmap failed|mprotect failed|^eden-ps5 dynarmic .* failed:|terminating without executing an invalid JIT mapping|Failed to present|GPU thread failure|^vulkan-ps5: .*failed'
-reject_pattern="$reject_pattern|Failed to derive the Prospero shader-cache identity"
+firmware_pattern='^\[openagc\] system software raw=0x05500008 string= 5\.500\.008$'
+input_cycle_pattern='PS5 qualification input cycle: enabled=true interval_ms=50'
+telemetry_pattern='Prospero guest pipeline cache telemetry: graphics_created=[0-9]+ compute_created=[0-9]+ records_written=[0-9]+ records_skipped=[0-9]+'
+reject_pattern='(allocation|mapping|mmap|mprotect) failed|^eden-ps5 dynarmic .* failed:'
+reject_pattern="$reject_pattern|invalid JIT mapping|Failed to (present|derive|obtain|load)"
+reject_pattern="$reject_pattern|GPU thread failure|^vulkan-ps5: .*failed|PS5 presented-frame oracle failed|CPUCore not initialized"
 if [ -n "${EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN:-}" ]; then
     reject_pattern="$reject_pattern|$EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN"
 fi
 
+mkdir -p "$log_dir"
 VULKAN_PS5_QUALIFICATION_ELF="$elf" \
 VULKAN_PS5_CLEANUP_ELF="$cleanup_elf" \
 VULKAN_PS5_QUALIFICATION_REMOTE_NAME=eden_ps5 \
-VULKAN_PS5_QUALIFICATION_LABEL=eden-2048-sequence0 \
-VULKAN_PS5_QUALIFICATION_PASS_PATTERN='^eden-ps5: GAME PASS 8 frames$' \
-VULKAN_PS5_QUALIFICATION_PASS_DESCRIPTION='2048 sequence-zero exact-magenta scanout and bounded teardown' \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN='^eden-ps5: intermediate-frame samples sequence=0 nonzero_bytes=48 hash=6fc6b825c3dda003 first=ff00ffff$' \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2='^eden-ps5: swapchain-frame samples sequence=0 nonzero_bytes=48 hash=6fc6b825c3dda003 first=ff00ffff$' \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_3='^\[openagc\] system software raw=0x05500008 string= 5\.500\.008$' \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4='^eden-ps5 dynarmic dual-alias code cache: writable=[0-9a-f]+ executable=[0-9a-f]+ size=0x2000000$' \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_5='EdenMain: Prospero shader-cache identity: cd7e7f3438309201' \
+VULKAN_PS5_QUALIFICATION_LABEL=eden-flappy-bird-run1 \
+VULKAN_PS5_QUALIFICATION_PASS_PATTERN='^eden-ps5: GAME PASS 120 frames$' \
+VULKAN_PS5_QUALIFICATION_PASS_DESCRIPTION='Flappy Bird, 120 presented frames, cache telemetry, and bounded teardown' \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN="$firmware_pattern" \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2="$input_cycle_pattern" \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_3="EdenMain: Prospero shader-cache identity: $cache_identity" \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4='^\[psbc\] Parameter exports: stage=0 count=1$' \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_5="$telemetry_pattern" \
 VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
+VULKAN_PS5_FW550_LOG_DIR="$log_dir" \
 VULKAN_PS5_WEBSRV_TIMEOUT="$websrv_timeout" \
+VULKAN_PS5_LIVE_KLOG_TIMEOUT="$((websrv_timeout + 120))" \
 VULKAN_PS5_CONTINUOUS_KLOG=1 \
+VULKAN_PS5_ABSENCE_CHECK_COUNT=2 \
+VULKAN_PS5_ABSENCE_CHECK_DELAY=1 \
 VULKAN_PS5_SWAPCHAIN_EXPECTED_SHA256="$pinned_eden_sha256" \
 VULKAN_PS5_CLEANUP_EXPECTED_SHA256="$pinned_cleanup_sha256" \
 VULKAN_PS5_QUALIFICATION_SIDECAR="$sidecar" \
 VULKAN_PS5_QUALIFICATION_SIDECAR_REMOTE_NAME=eden.launch \
 VULKAN_PS5_QUALIFICATION_SIDECAR_EXPECTED_SHA256="$sidecar_sha256" \
 VULKAN_PS5_QUALIFICATION_ASSET="$homebrew" \
-VULKAN_PS5_QUALIFICATION_ASSET_REMOTE_NAME=2048.nro \
+VULKAN_PS5_QUALIFICATION_ASSET_REMOTE_NAME=Flappy_Bird_NX.nro \
 VULKAN_PS5_QUALIFICATION_ASSET_EXPECTED_SHA256="$homebrew_sha256" \
 PYPS4DEBUG_DIR="$pyps4debug_dir" \
     "$runner"
 
-echo "eden-ps5 FW 5.50 2048 sequence-zero gate: PASS"
+latest_log=$(ls -1t "$log_dir"/*-swapchain-run1.log | head -n 1)
+telemetry=$(grep -E "$telemetry_pattern" "$latest_log" | tail -n 1)
+echo "Flappy Bird cache observation: $telemetry"
+echo "eden-ps5 FW 5.50 Flappy Bird bounded canary: PASS"

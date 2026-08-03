@@ -2,6 +2,67 @@
 
 ## Current active slice (2026-08-03)
 
+### Active goal: Flappy Bird guest-pipeline canary
+
+The completed 2048 gate proves the FW 5.50 renderer lifecycle, native
+presentation, immediate relaunch, and teardown, but its SDL software renderer
+cannot prove guest Maxwell pipeline serialization. The next active goal is one
+cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
+Eden ELF. The local NRO is SHA-256
+`6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
+and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
+The current unlaunched telemetry-enabled Eden ELF is SHA-256
+`c125bf6e00d2f70734a87723f23b39e7430096e0baa69f6dd075f6ab0b3eeba8`,
+embeds Eden `b5dcdddc5b`, and incorporates Vulkan-PS5 checkpoint-retirement
+commit `93c7325` plus repeated-absence runner commit `b41393a`.
+
+Before launch, pin the ELF, NRO, sidecar, cleanup ELF, guarded runner,
+exact-process helper, and PyPS4debug revision/lockfile. Run only the direct
+`/dev/gc` backend in this boot. Launch the pinned cleanup ELF, wait for the
+settle interval, and independently prove exact `eboot.bin` absence twice.
+Reject the forbidden fixed-address ELF and every allocation, mapping, W^X,
+GPU-thread, Vulkan/OpenAGC, native-submit, presentation, teardown, or exact
+process failure.
+
+The canary must be bounded by a presented-frame sidecar and host deadline. It
+passes only with exact FW `5.500.008`, the derived cache identity, native PSBC
+activity, the exact `GAME PASS` frame count, bounded teardown, a responsive
+console, repeated PID/global exact-process absence, and operator-confirmed
+visible Flappy Bird output. Audio is not part of the emulation qualification:
+the NRO's SDL2_mixer path must either initialize without destabilizing Eden or
+fail softly while Eden's explicit null-audio fallback remains active. An
+audio failure, hang, or crash fails this canary.
+
+Shader-cache promotion requires separate evidence. Telemetry must first prove
+that the guest creates at least one Maxwell graphics or compute pipeline. Only
+then may a nonempty transferable cache record written by run one and a nonzero
+loaded `Total Pipeline Count` on an identical immediate relaunch be accepted.
+Host ACO/PSBC presentation pipelines and the standard Vulkan cache header do
+not satisfy this oracle. If Flappy Bird remains entirely inside its packaged
+Mesa/SDL software or GLES translation path without guest Maxwell pipelines,
+record that result and select a different workload rather than manufacturing a
+cache pass.
+
+Implementation is now staged for hardware qualification. Eden commit
+`b5dcddd` adds an A/B/directional input cycle suitable for Flappy's title and
+tutorial flow and emits a teardown summary with separate runtime guest
+graphics, guest compute, transferable-record-written, and record-skipped
+counts. `SerializePipeline` now reports whether it wrote a complete eligible
+record rather than merely creating the 12-byte header. The host `video_core`
+target and full Prospero build pass. Vulkan-PS5 commit `b41393a` adds bounded,
+configurable repeated PID/global absence checks; its guarded-runner regression
+passes and default count one preserves existing callers.
+
+`tools/run_fw550_flappy_bird.sh` pins the telemetry ELF, 120-frame sidecar,
+NRO, cleanup ELF, updated runner, exact-process helper, and PyPS4debug source
+and lockfile. It uses a 240-second default and 360-second hard ceiling, forces
+continuous klog, requires two absence observations separated by one second,
+and accepts the lifecycle canary only with exact firmware, cache identity,
+input-cycle, PSBC, telemetry-summary, frame, teardown, and process oracles. A
+successful canary prints the observed counters but does not claim cache
+persistence; only positive guest creation and record-write counts make an
+identical immediate relaunch eligible.
+
 ### Payload SDK identity
 
 The current `build-prospero-full-audit2` CMake cache resolves both

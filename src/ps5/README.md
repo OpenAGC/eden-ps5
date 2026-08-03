@@ -49,6 +49,23 @@ Hardware runs must use the guarded Vulkan-PS5 runner with the cleanup ELF and
 local/remote SHA-256 verification. FW 5.50 is the development endpoint; replay
 the final identical bytes on FW 11.60 only during final qualification.
 
+After the qualified two-run 2048 lifecycle gate, the active workload is a
+bounded `Flappy_Bird_NX.nro` canary. Its purpose is to determine whether this
+Mesa GLES2 title reaches Eden's guest Maxwell graphics/compute pipeline and
+transferable shader-cache paths; native PSBC presentation activity alone is
+not sufficient. The canary pins every local and tooling identity, performs
+cleanup plus repeated exact-process absence before launch, requires visible
+output and exact bounded teardown, and treats SDL2_mixer initialization as
+fail-soft only. Do not promote Flappy Bird to the two-run cache gate until run
+one proves guest pipeline creation and writes a transferable record.
+
+Run the first canary with `tools/run_fw550_flappy_bird.sh`. It presents exactly
+120 frames, cycles A/B/directions without another input thread, defaults to a
+240-second host deadline, and performs two independently separated absence
+checks. Its final cache observation distinguishes runtime guest graphics and
+compute creation from actually written transferable records. Zero counts may
+still document a lifecycle canary, but they do not qualify cache reuse.
+
 The full Prospero build also provides `eden-ps5-host-memory-probe.elf`. It
 exercises Eden's PS5 guest-memory backend independently of Vulkan: fastmem is
 disabled because the host uses 16 KiB pages, a contiguous 4 GiB guest backing
