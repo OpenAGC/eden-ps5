@@ -1368,11 +1368,18 @@ candidate; this is not yet proof of an address-encoding defect.
 
 An attempted fixed 64 GiB guest reservation is rejected evidence: ELF
 `b3122a9a6137a99985651f84a424577139ad1676322650fa1c972957d2a8d2a1`
-made the console unreachable in `20260802T235346Z-swapchain-run1.log`, so
-cleanup and exact process absence could not be verified. The source change was
-immediately reverted and must not be relaunched. Future address probes must
-use a bounded reservation-discovery or low display-allocation strategy rather
-than an unproven fixed 4 GiB mapping.
+made the console unreachable in `20260802T235346Z-swapchain-run1.log`; the
+user subsequently confirmed that the PS5 kernel panicked, so cleanup and exact
+process absence could not be verified. The source change was immediately
+reverted, but audit found that this unsafe binary still occupied Eden's default
+launch path. Vulkan-PS5 commit `40a777a` now rejects its exact SHA-256 before
+network access, and the refusal regression passes. Rebuilding `yuzu-cmd` from
+the reverted source replaced the default artifact with SHA-256
+`c740359b62fea2abc21b71928d2aa048f395e2bbd2b97e563dca90b3c07a3682`;
+this new hash is build evidence only and has not been launched. The rejected
+ELF must never be relaunched. Future address probes must use OS-chosen VA-only
+reservations without `MAP_FIXED`, report inconclusive placement explicitly,
+and retain the cleanup-first exact-process gate.
 
 The Mesa/OpenAGC address audit now isolates the high-placement defect more
 precisely. Sampled-image descriptors and color-target registers encode all
@@ -1390,7 +1397,12 @@ its resource arena naturally occupies the `0x2...` band. OpenAGC commit
 user-data emission; its host suite passes 19,995 assertions with zero failures.
 That guard prevents silent misaddressing but intentionally makes current Eden
 high-band recording fail until the compiler/runtime contract becomes
-device-selected.
+device-selected. `openagc-psbc` commit `00520bb` adds the required per-request
+`address32_hi` compiler input (including a successful high-3 host compile), and
+Vulkan-PS5 commit `40a777a` carries a device field into every compiler request.
+Vulkan still initializes that field to the currently qualified high-2 constant;
+the remaining production work is the dedicated OpenAGC resource arena, public
+device query, reflection/cache identity, and shader/device mismatch validation.
 
 The Prospero Dynarmic code cache remains fail-closed: every allocation,
 demotion, RW-to-RX, RX-to-RW, and unmap failure enters the noreturn PS5
