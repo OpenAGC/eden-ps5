@@ -96,9 +96,6 @@ struct UserCallbacks {
     virtual std::uint16_t MemoryRead16(VAddr vaddr) = 0;
     virtual std::uint32_t MemoryRead32(VAddr vaddr) = 0;
     virtual std::uint64_t MemoryRead64(VAddr vaddr) = 0;
-    virtual std::uint64_t MemoryRead64WithPC(VAddr /*pc*/, VAddr vaddr) {
-        return MemoryRead64(vaddr);
-    }
     virtual Vector MemoryRead128(VAddr vaddr) = 0;
 
     // Writes through these callbacks may not be aligned.

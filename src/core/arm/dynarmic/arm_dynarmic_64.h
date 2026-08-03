@@ -40,7 +40,6 @@ public:
     u16 MemoryRead16(u64 vaddr) override;
     u32 MemoryRead32(u64 vaddr) override;
     u64 MemoryRead64(u64 vaddr) override;
-    u64 MemoryRead64WithPC(u64 pc, u64 vaddr) override;
     Dynarmic::A64::Vector MemoryRead128(u64 vaddr) override;
     std::optional<u32> MemoryReadCode(u64 vaddr) override;
     void InstructionSynchronizationBarrierRaised() override {
@@ -73,7 +72,6 @@ public:
     u64 m_tpidrro_el0{};
     u64 m_tpidr_el0{};
     std::optional<u64> m_invalid_read64_address{};
-    std::optional<u64> m_read64_pc{};
     std::optional<u64> m_invalid_read64_pc{};
     Kernel::KProcess* m_process{};
     const bool m_debugger_enabled{};
