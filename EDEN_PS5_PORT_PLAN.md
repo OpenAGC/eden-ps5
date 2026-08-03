@@ -184,6 +184,26 @@ The rebuilt ELF embeds Eden revision
 `23a025593bd3e244a7f2815d127f09ecb30fcf2397894732f92e4eaa2bb38755`.
 The wrapper pins these bytes for the next cleanup-first retry.
 
+The exact attachment-view signal was then sent through public Vulkan-PS5 and
+OpenAGC before another Eden launch. Vulkan-PS5 commit `ac03c81` changes the
+existing depth example to the same one-layer `VK_IMAGE_VIEW_TYPE_2D_ARRAY`
+D32/S8 view. Pinned ELF SHA-256
+`13e110421882f2511801c358280086489872c8598643443a272d84e62994af70`
+ran as PID 133 on FW 5.500.008 and produced the exact hardware oracle
+`depth: PASS green=12288 red=9830 raw=54145/12288/9830 stencil=22118`.
+This proves the intended depth/stencil attachment, draw, synchronization, and
+readback signal crosses Vulkan-PS5/OpenAGC with the patched array view.
+
+The guarded run is retained as a graphics PASS but not a clean full-process
+qualification: after the oracle, the scoped kernel log recorded the known
+`SceCloudClientAppMain` user-process SIGSEGV during system-service app exit.
+The runner rejected the dirty teardown, relaunched the pinned cleanup ELF, and
+proved exact absence. Similar exit signatures exist in earlier unrelated
+qualification logs, so this evidence does not implicate the D32/S8 command
+stream, but it must not be counted as clean teardown. The accepted graphics log
+is `examples/qualification-logs/depth-array/20260803T134154Z-swapchain-run1.log`;
+the rejected teardown evidence is its `-target.klog` companion.
+
 ### Payload SDK identity
 
 The current `build-prospero-full-audit2` CMake cache resolves both
