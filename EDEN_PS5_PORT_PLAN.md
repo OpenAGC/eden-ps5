@@ -11,9 +11,9 @@ cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
 Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
-The current unlaunched null-sink consumption Eden ELF is SHA-256
-`de844f685bd0bf5e9769e871eb9537a4b1a2c3f514fb21224140c302a962b28f`,
-embeds Eden `8071f06ed6`, and incorporates Vulkan-PS5 checkpoint-retirement
+The current unlaunched paced null-sink Eden ELF is SHA-256
+`72196063c6bf2a6c53854ca8c7eeb375ef01c70833740d1d7f6906c838897eec`,
+embeds Eden `b9e05b3793`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
 usage fix `2d84b89`.
 
@@ -807,6 +807,12 @@ first two append and release records remain at info level as bounded evidence;
 later audio cycles are no longer logged. This retains fail-soft audio timing
 without a PS5 hardware sink and prevents diagnostic logging from becoming the
 workload.
+
+Revision `b9e05b3` implements the paced null sink and bounded tag telemetry.
+Host `audio_core` and `core` targets and the strict integrated Prospero build
+pass. The rebuilt ELF embeds `b9e05b3793`, has SHA-256
+`72196063c6bf2a6c53854ca8c7eeb375ef01c70833740d1d7f6906c838897eec`, and
+is pinned for the cleanup-first replay.
 
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
