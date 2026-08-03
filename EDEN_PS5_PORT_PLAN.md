@@ -1435,6 +1435,50 @@ font-rasterization bottleneck without changing the NRO or 30-second gate;
 another micro-change or an Invaders binary that exits before presentation is
 not a justified hardware run.
 
+Revision `ff67cb0ed779e7ae55f31742b48209cdd0473d3b` replaces normal
+Prospero scalar-memory callbacks with a generated two-level sparse-page-table
+walk. The stable 65,536-entry root selects lazily allocated 2,048-entry leaves;
+normal memory entries resolve directly in generated x64 code, while absent
+roots, null or tagged special entries, and cross-page accesses retain the
+checked callback and MemoryAbort fallback. The same slice fixes macOS
+single-architecture source wrapping so the x64 backend is actually compiled,
+and disambiguates Xbyak displacement operands exposed by that build. An x64
+standalone runtime smoke test under Rosetta proves mapped load/store callback
+bypass plus null-root, special-entry, and boundary fallback. The native
+Dynarmic suite passes 201,927 assertions in 130 cases, the four focused Eden
+tests pass, and the strict Prospero `yuzu-cmd` build passes.
+
+The post-commit ELF is SHA-256
+`d508d647614ea95a8783ea08afc0362a3d130018c87de0bd27cbbe95477e08e9`,
+embeds `ff67cb0ed7`, and is distinct from the banned fixed-address diagnostic.
+The bounded required-marker adjustment is committed at `e4b6658`; its wrapper
+is SHA-256
+`6c7042beb355d8617fdae597bf898ed7d62979b3ad4ac2cabf361241dff542d8`.
+The cleanup-first PID 233 run is preserved at
+`examples/qualification-logs/flappy-bird/20260803T205619Z-swapchain-run1.log`
+(SHA-256
+`8fe71b3bbe28ee645518cb5db7389052e98b05d39932839ba0a3ae0bc86c2410`).
+It moved the first BufferQueue commit to 3.169 seconds and first GPFIFO to
+3.330 seconds. The three `0x90000` allocations moved from PID 230's roughly
+22-second boundary to 10.492, 10.493, and 11.194 seconds; the following
+`0x3c0000` allocations moved from roughly 25.3 seconds to 12.591 and 12.593
+seconds. It reached a second GPFIFO at 22.481 seconds, compiled guest graphics
+pipelines, and recorded two native draws. This is a material CPU/JIT progress
+result, not a presentation pass.
+
+The next fail-closed owner is now concrete: after the two draws,
+`vkEndCommandBuffer` rejected `record_error=-8`
+(`VK_ERROR_FEATURE_NOT_PRESENT`) with a complete native stream, then Eden
+terminated through its Vulkan exception path. The last successful command
+marker was `vkCmdPipelineBarrier-complete`; cleanup proved PID-specific and
+global exact `eboot.bin` absence twice. Instrument and qualify the immediately
+following Vulkan command before another canary. Do not switch to the current
+InvadersNX binary: it still performs fatal combined
+`SDL_Init(VIDEO|TIMER|AUDIO)` and its pinned run exits before display/GPU work.
+Invaders becomes a useful secondary A/B only after rebuilding it with mandatory
+video/timer and optional fail-soft audio; Flappy remains primary because it now
+reaches the actionable Vulkan/OpenAGC command-recording boundary.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the
