@@ -807,7 +807,7 @@ struct Memory::Impl {
             u64 guest_page{};
             u8* host_page{};
         };
-        static constexpr std::size_t CacheSlots = 64;
+        static constexpr std::size_t CacheSlots = 256;
         static_assert((CacheSlots & (CacheSlots - 1)) == 0);
         static thread_local std::array<CacheEntry, CacheSlots> cache{};
 
