@@ -11,9 +11,9 @@ cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
 Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
-The current unlaunched fail-closed checked-memory Eden ELF is SHA-256
-`b6fc1ad3c5b05cfe0f73b1164293609ec9d077b2f2dfc483a713a6f101e1ede0`,
-embeds Eden `7330a527e0`, and incorporates Vulkan-PS5 checkpoint-retirement
+The current unlaunched audout-tag diagnostic Eden ELF is SHA-256
+`d1b7d250d677cefddc8a4319b04fdb9ff4ca9ee425cf38630f13172500cb3230`,
+embeds Eden `4fcb755f21`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
 usage fix `2d84b89`.
 
@@ -732,6 +732,12 @@ buffer release/event scheduling. If it returns a nonzero matching tag while
 SDL still holds null, ownership is CMIF output-array serialization or libnx
 guest memory delivery. A behavioral workaround is not permitted until this
 A/B identifies which side lost the pointer.
+
+Revision `4fcb755` implements that read-only instrumentation. The host `core`
+target and strict integrated Prospero build pass. The rebuilt ELF embeds
+`4fcb755f21`, has SHA-256
+`d1b7d250d677cefddc8a4319b04fdb9ff4ca9ee425cf38630f13172500cb3230`, and
+is pinned for one cleanup-first 30-second capture.
 
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
