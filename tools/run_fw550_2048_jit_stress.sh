@@ -5,7 +5,7 @@ set -eu
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 sequence_gate="$script_dir/run_fw550_2048_sequence0.sh"
-pinned_sequence_gate_sha256=6221297d0573c5b967caca43ed130fa17475e2067531ecad09c7c6a63158441b
+pinned_sequence_gate_sha256=23c10708f36532479e7253a919c7316891e11c025456838347e956526e58795b
 qualification_runs=20
 
 if [ ! -f "$sequence_gate" ]; then

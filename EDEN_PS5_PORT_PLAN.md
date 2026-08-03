@@ -206,6 +206,23 @@ audit pass. The rebuilt diagnostic Eden ELF is SHA-256
 It remains ineligible for the 600-frame pair until one cleanup-first canary
 identifies and then clears native teardown.
 
+The diagnostic canary in
+`20260803T085547Z-swapchain-run1.log` identified the raw failure as
+`sceVideoOutUnregisterBuffers(handle, 0) == 0x80290009`, VideoOut
+`RESOURCE_BUSY`, immediately after eight successful presents. PID 92 retired,
+the exact-name check found no `eboot.bin`, and the console remained responsive.
+The same native busy result appears in three earlier FW 5.50 OpenAGC compute
+logs, each followed by successful `sceVideoOutClose`.
+
+OpenAGC commit `e6348e2` implements only that evidenced fallback. A successful
+unregister clears ownership normally. `RESOURCE_BUSY` leaves ownership marked
+live and proceeds to checked handle close; only successful close clears the
+registration before image release. Every other unregister result and every
+close failure remain quarantined. Host 20,085/20,085 assertions, the Prospero
+static build, and the source-order/busy-fallback audit pass. The rebuilt,
+never-launched Eden ELF is SHA-256
+`c42a553ac9336ea58c31ccf377d36b609b672d33e6bce8df69b27fb44b41fa46`.
+
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
 process-lifetime guard: cache eligibility allocation and initial demotion,
