@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -23,6 +24,12 @@ public:
     void AppendBuffer(SinkBuffer&, std::span<s16>) override {}
     std::vector<s16> ReleaseBuffer(u64) override {
         return {};
+    }
+    u64 GetExpectedPlayedSampleCount() override {
+        // A null sink intentionally discards output. Report it consumed so AudioOut releases
+        // the guest's client tag on the next manager tick instead of waiting forever for a
+        // hardware callback that this sink does not have.
+        return (std::numeric_limits<u64>::max)();
     }
 };
 

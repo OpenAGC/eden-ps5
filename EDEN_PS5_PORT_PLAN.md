@@ -766,6 +766,25 @@ pass. The rebuilt ELF embeds `eff93045eb`, has SHA-256
 `f3e642af9d8fd04d88f5be37c6a5e739e6594e6f8e1210d2282665be3b32d28c`, and
 is pinned for the cleanup-first hardware A/B.
 
+PID 155 crossed the old fault boundary in
+`examples/qualification-logs/flappy-bird/20260803T174051Z-swapchain-run1.log`.
+Both tags were appended at 19.12 seconds, no zero-count release occurred, and
+the former `Read64 @ 0x8` was absent for the remainder of the 30-second
+window. This proves the stale-event correction. It also exposed the second
+half of the null-audio contract: `NullSinkStreamImpl::AppendBuffer` discards
+samples, but the inherited played-sample estimator is capped by a maximum
+sample count which the null sink never advances. The two registered buffers
+therefore never become releasable, so SDL waits indefinitely. Cleanup still
+proved PID-specific and global exact-process absence twice.
+
+The null sink now overrides the played-sample query to report discarded
+output consumed. DeviceSession's existing 5 ms manager tick then moves the
+real client tags into the released queue and signals AudioOut; there is no
+native PS5 audio dependency and no synthetic zero tag. The base query becomes
+virtual so hardware sinks retain their timed estimator. The next canary must
+show a nonzero returned tag, repeated append/release progress, continued
+graphics presentation, and bounded teardown.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the
