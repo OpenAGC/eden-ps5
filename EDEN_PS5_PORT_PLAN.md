@@ -249,6 +249,19 @@ harness timeout rather than a completed qualification. The dedicated 600-frame
 wrapper now allows 90 seconds, within its enforced 120-second maximum, while
 the short canary retains its 60-second bound.
 
+The bounded retry (`20260803T090925Z-swapchain-run1.log`) disproved timeout as
+the limiting factor: the frontend input injector advanced monotonically to 864
+presses at 88 seconds, but native presentation never reached the first sparse
+100-success marker after the eight detailed checkpoints. No GPU, JIT,
+allocation, protection, process, panic, reset, or teardown failure was logged,
+and the pinned cleanup again left no exact `eboot.bin`. The input injector runs
+on the host event loop and is not a presentation oracle. Accordingly, 2048
+remains the exact-magenta eight-frame smoke workload; the existing InvadersNX
+wrapper is the two-run 600-present gate because that guest calls
+`SDL_RenderPresent` every applet iteration. The ineffective 90-second 2048
+override is removed, and the InvadersNX gate now forces continuous klog for
+both cleanup-first launches.
+
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
 process-lifetime guard: cache eligibility allocation and initial demotion,

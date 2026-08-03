@@ -104,6 +104,7 @@ while [ "$run" -le 2 ]; do
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4="$required_pattern_4" \
     VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
     VULKAN_PS5_WEBSRV_TIMEOUT="$websrv_timeout" \
+    VULKAN_PS5_CONTINUOUS_KLOG=1 \
     VULKAN_PS5_SWAPCHAIN_EXPECTED_SHA256="$pinned_eden_sha256" \
     VULKAN_PS5_CLEANUP_EXPECTED_SHA256="$pinned_cleanup_sha256" \
     VULKAN_PS5_QUALIFICATION_SIDECAR="$sidecar" \
