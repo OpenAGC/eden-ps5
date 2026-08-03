@@ -447,6 +447,28 @@ reentrancy identifies guest thread setup; an invalid TLS range identifies
 mapping or page-table state. No audio contract or native sink behavior is
 changed by this diagnostic.
 
+The bounded FW 5.50 PID 107 capture
+`examples/qualification-logs/flappy-bird/20260803T160643Z-swapchain-run1.log`
+proved the guest audio worker has a coherent thread context at the fault:
+TPIDRRO_EL0 and the scheduler TLS are both `0x81a04400`, the libnx magic is
+`0x21545624`, and both the thread pointer and newlib reentrancy pointer are
+nonzero. The invalid read remains `0x8` after one native present. This rules
+out a missing TLS mapping, an unloaded TPIDRRO context, and a null `_reent`
+pointer. The run did not satisfy the 120-frame gate; cleanup nevertheless
+proved PID-specific absence twice and global exact `eboot.bin` absence twice.
+
+The capture also exposed why the reported PC was only the translated block
+entry: the A64 callback requested `PrefetchAbort` for an invalid data access,
+while Dynarmic's per-access generated exit checks recognize `MemoryAbort`.
+Eden revision `cda5bb57ecb422efe5d043e3287248213649106c` now requests the correct
+data-abort reason, enables immediate post-access halt checks for Prospero's
+callback-only page-table path, and records context only after Dynarmic has
+written the exact faulting PC. Host `core` and strict integrated Prospero
+builds pass. The resulting ELF has SHA-256
+`a4f911c2d50441719b3c0150975b95939bcc8a33d6e3a966b72fd443e1b79e8e` and is
+pinned for one cleanup-first exact-instruction capture. This is a fail-closed
+diagnostic correction, not an audio workaround.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
