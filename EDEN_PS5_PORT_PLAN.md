@@ -312,10 +312,10 @@ that `sceKernelJitMapSharedMemory` does not create distinct OS-chosen aliases
 when both destination inputs are null: both handles returned `0x9000d8000`.
 The probe rejected equality before writing or executing, then cleanly unmapped
 and closed every established resource; exact process absence passed. The next
-revision maps both handles with `mmap(nullptr, ...)`, matching the established
+revision mapped both handles with `mmap(nullptr, ...)`, matching the established
 PS4 alias pattern while retaining OS-chosen placement. Commit `5e7ba59` and
 SHA-256 `c9932445c3229881baab327cbd51031546e1effe62e7209d3d590e5124784592`
-pin that revision. Its cleanup-first 20-process FW 5.50 gate is next. Only
+pinned that revision. Its cleanup-first 20-process FW 5.50 gate passed. Only
 after that primitive is proven may Xbyak keep executable `getCode`/`getCurr`
 pointers while routing all
 emission and patch writes through the paired RW alias. Constant-pool storage
@@ -337,6 +337,17 @@ matches the target's observed bare hexadecimal pointer spelling directly. A
 third successful execution in `20260803T101906Z-swapchain-run1.log` exposed
 the last host-only mismatch: target null pointers print as `0`, not `(nil)`.
 The wrapper now uses the target's exact null spelling as well.
+
+The generic `mmap(PROT_EXEC)` probe still passes through the payload SDK's raw
+VM-tree `kernel_mprotect` helper. Its 20-run pass therefore proves shared
+backing and alias teardown, but does not by itself remove the full-Eden
+`EFAULT` mechanism. The qualifying revision maps the writable handle with
+ordinary non-executable `mmap` and maps the executable handle once with
+`sceKernelJitMapSharedMemory`, under the payload SDK VM-operation lock. This
+hybrid also avoids the helper's observed same-address behavior when it is
+called for both handles. The rebuilt hybrid probe is pinned as SHA-256
+`5f8510d1b0612dc46910b1c381cb98d4757ffe15b90b5386c8cb9f8b22c7b5c6`;
+its cleanup-first hardware canary is the next gate.
 
 The prior sequence-zero canary's operator-visible result is also confirmed:
 magenta appeared first, followed by the 2048 game with a faint but otherwise

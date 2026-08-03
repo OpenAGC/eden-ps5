@@ -12,7 +12,7 @@ pyps4debug_dir=/Users/bizkut/Downloads/PS5/homebrew/PyPS4debug
 pyps4debug_lock="$pyps4debug_dir/uv.lock"
 elf=${EDEN_PS5_JIT_DUAL_ALIAS_PROBE_ELF:-$repo_dir/build-prospero-full-audit2/bin/eden-ps5-dynarmic-jit-dual-alias-probe.elf}
 cleanup_elf=${EDEN_PS5_CLEANUP_ELF:-$vulkan_repo/build-prospero-msaa/vulkan_ps5_process_cleanup.elf}
-pinned_probe_sha256=c9932445c3229881baab327cbd51031546e1effe62e7209d3d590e5124784592
+pinned_probe_sha256=5f8510d1b0612dc46910b1c381cb98d4757ffe15b90b5386c8cb9f8b22c7b5c6
 pinned_cleanup_sha256=9fd6b41cf2ea87989c4217234c6f34c96a1ca5dc482355af1258539db77d4d76
 pinned_runner_sha256=2d8a6d4a0eb20c6fe218c489d0303faef721c79168c8c80cb8ec1f037df63ed8
 pinned_process_helper_sha256=8dff282cdbc7ac1f4a037ad9e2a0e800fa82838cd1342b804b1eaff65ffd1ef6
@@ -75,7 +75,7 @@ while [ "$run" -le "$qualification_runs" ]; do
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN='op=create-shared-RWX-maximum address=0 size=0x4000 result=0 errno=0' \
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2='op=create-alias-RW address=0 size=0x4000 result=0 errno=0' \
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_3='op=mmap-writer-RW address=[0-9a-f]+ size=0x4000 result=0 errno=0' \
-    VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4='op=mmap-executor-RX address=[0-9a-f]+ size=0x4000 result=0 errno=0' \
+    VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4='op=jit-map-executor-RX address=[0-9a-f]+ size=0x4000 result=0 errno=0' \
     VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
     VULKAN_PS5_SWAPCHAIN_EXPECTED_SHA256="$pinned_probe_sha256" \
     VULKAN_PS5_CLEANUP_EXPECTED_SHA256="$pinned_cleanup_sha256" \
