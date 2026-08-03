@@ -1108,6 +1108,30 @@ address_space_bits=39` before accepting any runtime result. Hardware timing
 and presentation evidence remain pending; this static optimization alone does
 not advance the visible-frame or 120-frame gates.
 
+The first cleanup-first hardware replay of those exact bytes ran as PID 194
+and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T190905Z-swapchain-run1.log`.
+All four cores emitted the required sparse/single-lookup marker. Relative to
+PID 191, the first BufferQueue commit moved from 7.678 to 4.924 seconds, the
+first GPFIFO submit from 17.544 to 8.934 seconds, and the first AudioOut append
+from 19.107 to 9.785 seconds. This is a 36% improvement to the initial queue
+and about a 49% improvement through submit/audio startup, confirming that the
+double sparse translation was a real bottleneck. Guest thread 77 subsequently
+completed more shared-font allocation/mapping work at 13.894, 18.560, 24.546,
+24.723, 27.962, and 28.020 seconds. It remained active and every recorded SVC
+returned successfully; audio retained its approximately 85 ms release cadence,
+and no invalid memory access, fatal diagnostic, second BufferQueue commit, or
+120-frame verdict occurred before the 30-second bound. Cleanup proved PID 194
+and global exact `eboot.bin` absence twice each.
+
+The result narrows rather than removes the startup bound. A one-time
+cleanup-first 45-second replay is justified for these identical bytes: it is
+only 15 seconds beyond the observed final active font mapping and remains far
+below the rejected 150/300-second diagnostics. It must retain every existing
+identity, failure, teardown, and exact-process gate. If it still does not enter
+the render loop, return to offline profiling instead of extending the timeout
+again.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the
