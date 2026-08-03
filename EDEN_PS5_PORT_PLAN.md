@@ -283,6 +283,10 @@ to native Undefined while continuing to validate the destination usage, with
 an exact broad-source regression. Host command recording and the Prospero
 static library pass. The visible magenta blocker remains open pending a rebuilt
 cleanup-first replay.
+The rebuilt ELF embeds revision
+`82bb851d0bcd59278519e021f226e78ba399ef65`, has SHA-256
+`9455859598f338c386ea0eae50b1d55a664b8d2e4c962a5b3aef9d222a1363d5`,
+and is pinned by the Flappy wrapper.
 
 The diagnostic replay, PID 142, again cleaned up with two PID-scoped and two
 global absence checks. Its request fingerprint rules out alpha-to-coverage,
