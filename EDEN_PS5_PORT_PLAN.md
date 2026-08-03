@@ -893,6 +893,29 @@ strict Prospero build also passes. Revision `a166af2` contains the fix and PID
 `a5cc0b995caa8e930657af080f4c75e293b4ef7bdfac305513bc43470d8e91e4`, and
 is pinned for one cleanup-first 30-second replay.
 
+That replay ran as PID 170 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T181023Z-swapchain-run1.log`.
+It again completed request and native-present sequence zero with no fences,
+then produced no sequence-one request. Audio tags remained ordered and paced,
+no fatal diagnostic appeared, and cleanup proved PID-specific and global
+exact-process absence twice. Signaling the producer wait event therefore did
+not by itself restore progress. The acquired-to-free wakeup remains a valid
+BufferQueue contract repair, but it is not sufficient evidence that Flappy
+was sleeping on that handle; the earlier root-cause wording is narrowed
+accordingly.
+
+The next diagnostic observes the full upstream lifecycle. A shared constexpr
+trace policy preserves the existing first-16-then-power-of-two bound. VI now
+reports sparse vsync/composition progress through the 30-second window.
+BufferQueue reports producer dequeue entry/return, queue commit and depth,
+successful consumer acquire, and release with the producer-event signal
+result. This distinguishes a stopped VI conductor, a released slot followed
+by no second dequeue, a producer blocked inside dequeue, and a dequeued frame
+that never reaches queue commit. Host `core` and the strict Prospero build
+pass. The monolithic host test target still cannot link because its configured
+`_deps/ffmpeg-build/libavcodec/libavcodec.a` is absent; no focused
+Nvnflinger test target is registered.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the

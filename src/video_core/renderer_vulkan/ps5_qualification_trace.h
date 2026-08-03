@@ -3,16 +3,12 @@
 
 #pragma once
 
-#include "common/common_types.h"
+#include "common/ps5_qualification_trace.h"
 
 namespace Vulkan {
 
 constexpr bool ShouldTracePS5QualificationFrame(u32 sequence) {
-    if (sequence < 16u) {
-        return true;
-    }
-    const u32 completed_frames = sequence + 1u;
-    return (completed_frames & (completed_frames - 1u)) == 0u;
+    return Common::ShouldTracePS5QualificationSequence(sequence);
 }
 
 constexpr bool ShouldCapturePS5QualificationReadback(u32 sequence, u32 width, u32 height,

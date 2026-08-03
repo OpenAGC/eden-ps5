@@ -4,6 +4,12 @@
 // SPDX-FileCopyrightText: Copyright 2024 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
+
+#include "common/logging.h"
+#ifdef __PROSPERO__
+#include "common/ps5_qualification_trace.h"
+#endif
 #include "common/settings.h"
 #include "core/core.h"
 #include "core/core_timing.h"
@@ -68,8 +74,22 @@ void Conductor::UnlinkVsyncEvent(u64 display_id, Event* event) {
 }
 
 void Conductor::ProcessVsync() {
+#ifdef __PROSPERO__
+    static std::atomic<u32> vsync_sequence{0};
+    const u32 sequence = vsync_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = Common::ShouldTracePS5QualificationSequence(sequence);
+#endif
     for (auto& [display_id, manager] : m_vsync_managers) {
-        m_container.ComposeOnDisplay(&m_swap_interval, &m_compose_speed_scale, display_id);
+        [[maybe_unused]] const bool composed =
+            m_container.ComposeOnDisplay(&m_swap_interval, &m_compose_speed_scale, display_id);
+#ifdef __PROSPERO__
+        if (trace_qualification) {
+            LOG_INFO(Service_VI,
+                     "PS5 VI vsync: sequence={} display={} composed={} swap_interval={} "
+                     "speed_scale={}",
+                     sequence, display_id, composed, m_swap_interval, m_compose_speed_scale);
+        }
+#endif
         manager.SignalVsync(m_system.Kernel());
     }
 }

@@ -7,8 +7,13 @@
 // Parts of this implementation were based on:
 // https://cs.android.com/android/platform/superproject/+/android-5.1.1_r38:frameworks/native/libs/gui/BufferQueueProducer.cpp
 
+#include <atomic>
+
 #include "common/assert.h"
 #include "common/logging.h"
+#ifdef __PROSPERO__
+#include "common/ps5_qualification_trace.h"
+#endif
 #include "common/settings.h"
 #include "common/cpu_features.h"
 #include "core/hle/kernel/k_event.h"
@@ -229,6 +234,17 @@ Status BufferQueueProducer::WaitForFreeSlotThenRelock(bool async, s32* found, St
 
 Status BufferQueueProducer::DequeueBuffer(s32* out_slot, Fence* out_fence, bool async, u32 width,
                                           u32 height, PixelFormat format, u32 usage) {
+#ifdef __PROSPERO__
+    static std::atomic<u32> dequeue_sequence{0};
+    const u32 sequence = dequeue_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = Common::ShouldTracePS5QualificationSequence(sequence);
+    if (trace_qualification) {
+        LOG_INFO(Service_Nvnflinger,
+                 "PS5 BufferQueue dequeue: sequence={} stage=entry async={} width={} height={} "
+                 "format={} usage={:#x}",
+                 sequence, async, width, height, format, usage);
+    }
+#endif
     LOG_DEBUG(Service_Nvnflinger, "async={} w={} h={} format={}, usage={}",
               async ? "true" : "false", width, height, format, usage);
 
@@ -253,6 +269,13 @@ Status BufferQueueProducer::DequeueBuffer(s32* out_slot, Fence* out_fence, bool 
         s32 found{};
         Status status = WaitForFreeSlotThenRelock(async, &found, &return_flags, lock);
         if (status != Status::NoError) {
+#ifdef __PROSPERO__
+            if (trace_qualification) {
+                LOG_INFO(Service_Nvnflinger,
+                         "PS5 BufferQueue dequeue: sequence={} stage=wait-failed status={}",
+                         sequence, status);
+            }
+#endif
             return status;
         }
 
@@ -317,6 +340,13 @@ Status BufferQueueProducer::DequeueBuffer(s32* out_slot, Fence* out_fence, bool 
 
     LOG_DEBUG(Service_Nvnflinger, "returning slot={} frame={}, flags={}", *out_slot,
               slots[*out_slot].frame_number, return_flags);
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        LOG_INFO(Service_Nvnflinger,
+                 "PS5 BufferQueue dequeue: sequence={} stage=return slot={} frame={} flags={}",
+                 sequence, *out_slot, slots[*out_slot].frame_number, return_flags);
+    }
+#endif
 
     return return_flags;
 }
@@ -433,6 +463,15 @@ Status BufferQueueProducer::AttachBuffer(s32* out_slot,
 }
 
 Status BufferQueueProducer::QueueBuffer(s32 slot, const QueueBufferInput& input, QueueBufferOutput* output) {
+#ifdef __PROSPERO__
+    static std::atomic<u32> queue_sequence{0};
+    const u32 sequence = queue_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = Common::ShouldTracePS5QualificationSequence(sequence);
+    if (trace_qualification) {
+        LOG_INFO(Service_Nvnflinger, "PS5 BufferQueue queue: sequence={} stage=entry slot={}",
+                 sequence, slot);
+    }
+#endif
     s64 timestamp{};
     bool is_auto_timestamp{};
     Common::Rectangle<s32> crop;
@@ -537,6 +576,15 @@ Status BufferQueueProducer::QueueBuffer(s32 slot, const QueueBufferInput& input,
         core->SignalDequeueCondition();
 
         output->Inflate(core->default_width, core->default_height, core->transform_hint, static_cast<u32>(core->queue.size()));
+#ifdef __PROSPERO__
+        if (trace_qualification) {
+            LOG_INFO(Service_Nvnflinger,
+                     "PS5 BufferQueue queue: sequence={} stage=committed slot={} frame={} "
+                     "depth={} swap_interval={} fences={}",
+                     sequence, slot, core->frame_counter, core->queue.size(), swap_interval,
+                     fence.num_fences);
+        }
+#endif
     }
 
     item.graphic_buffer.reset();

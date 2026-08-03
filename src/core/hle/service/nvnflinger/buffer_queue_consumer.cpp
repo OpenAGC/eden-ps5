@@ -7,8 +7,13 @@
 // Parts of this implementation were based on:
 // https://cs.android.com/android/platform/superproject/+/android-5.1.1_r38:frameworks/native/libs/gui/BufferQueueConsumer.cpp
 
+#include <atomic>
+
 #include "common/assert.h"
 #include "common/logging.h"
+#ifdef __PROSPERO__
+#include "common/ps5_qualification_trace.h"
+#endif
 #include "core/hle/service/nvnflinger/buffer_item.h"
 #include "core/hle/service/nvnflinger/buffer_queue_consumer.h"
 #include "core/hle/service/nvnflinger/buffer_queue_core.h"
@@ -114,6 +119,17 @@ Status BufferQueueConsumer::AcquireBuffer(BufferItem* out_buffer,
     // We might have freed a slot while dropping old buffers, or the producer  may be blocked
     // waiting for the number of buffers in the queue to decrease.
     core->SignalDequeueCondition();
+#ifdef __PROSPERO__
+    static std::atomic<u32> acquire_sequence{0};
+    const u32 sequence = acquire_sequence.fetch_add(1, std::memory_order_relaxed);
+    if (Common::ShouldTracePS5QualificationSequence(sequence)) {
+        LOG_INFO(Service_Nvnflinger,
+                 "PS5 BufferQueue acquire: sequence={} slot={} frame={} swap_interval={} "
+                 "fences={}",
+                 sequence, out_buffer->slot, out_buffer->frame_number, out_buffer->swap_interval,
+                 out_buffer->fence.num_fences);
+    }
+#endif
 
     return Status::NoError;
 }
@@ -174,9 +190,20 @@ Status BufferQueueConsumer::ReleaseBuffer(s32 slot, u64 frame_number, const Fenc
     // The producer's native binder handle is the guest-visible dequeue wait event. Releasing a
     // slot changes a blocked dequeue into a runnable one, so wake both the host condition above
     // and the guest event before notifying the optional producer listener.
+    [[maybe_unused]] bool signaled_wait_event = false;
     if (const auto producer_ptr = producer.lock()) {
         producer_ptr->SignalWaitEvent();
+        signaled_wait_event = true;
     }
+#ifdef __PROSPERO__
+    static std::atomic<u32> release_sequence{0};
+    const u32 sequence = release_sequence.fetch_add(1, std::memory_order_relaxed);
+    if (Common::ShouldTracePS5QualificationSequence(sequence)) {
+        LOG_INFO(Service_Nvnflinger,
+                 "PS5 BufferQueue release: sequence={} slot={} frame={} wait_event_signaled={}",
+                 sequence, slot, frame_number, signaled_wait_event);
+    }
+#endif
 
     // Call back without lock held
     if (listener != nullptr) {
