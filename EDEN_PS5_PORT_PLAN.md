@@ -390,6 +390,15 @@ The exact-origin diagnostic ELF embeds Eden revision
 `69a61f08c4c515cb21746073494bea1d533229f4eb0ded7a1b3568209854ddf6`.
 The wrapper pins these bytes for the next cleanup-first 110-second replay.
 
+PID 179 again reached two draws and failed with `record_error=-8` at the
+barrier entry, while none of the new query-copy, fill, reset, begin, or end
+labels appeared. This proves those commands were not reached and returns the
+active blocker to the barrier itself. The remaining unlabelled barrier paths
+are OpenAGC buffer-range and image-subresource state queries. Vulkan-PS5 now
+prints the exact native result and resource range for both. The accepted log is
+`examples/qualification-logs/flappy-bird/20260803T151849Z-swapchain-run1.log`;
+all four exact-process absence checks passed after PID 179 exited.
+
 The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
 reached the next draw-preparation boundary at about 98 seconds. The guest draw
 reported `descriptors=0 vertex_buffers=0`; descriptor preparation had returned
