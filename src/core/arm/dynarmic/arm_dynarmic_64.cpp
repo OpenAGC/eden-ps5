@@ -88,6 +88,11 @@ u64 DynarmicCallbacks64::MemoryRead64(u64 vaddr) {
     CheckMemoryAccess(vaddr, 8, Kernel::DebugWatchpointType::Read);
     return m_memory.Read64(vaddr);
 }
+
+u64 DynarmicCallbacks64::MemoryRead64WithPC(u64 pc, u64 vaddr) {
+    m_read64_pc = pc;
+    return MemoryRead64(vaddr);
+}
 Dynarmic::A64::Vector DynarmicCallbacks64::MemoryRead128(u64 vaddr) {
     CheckMemoryAccess(vaddr, 16, Kernel::DebugWatchpointType::Read);
     return {m_memory.Read64(vaddr), m_memory.Read64(vaddr + 8)};
@@ -442,8 +447,10 @@ HaltReason ArmDynarmic64::RunThread(Kernel::KThread* thread) {
     const auto halt_reason = m_jit->Run();
     if (m_cb->m_invalid_read64_address) {
         const auto address = *m_cb->m_invalid_read64_address;
-        const auto fault_pc = m_cb->m_invalid_read64_pc.value_or(m_jit->GetPC());
+        const auto fault_pc = m_cb->m_read64_pc.value_or(
+            m_cb->m_invalid_read64_pc.value_or(m_jit->GetPC()));
         m_cb->m_invalid_read64_address.reset();
+        m_cb->m_read64_pc.reset();
         m_cb->m_invalid_read64_pc.reset();
         const auto registers = m_jit->GetRegisters();
         LOG_CRITICAL(Core_ARM,

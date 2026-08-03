@@ -298,6 +298,20 @@ void A64EmitX64::EmitA64ReadMemory32(A64EmitContext& ctx, IR::Inst* inst) {
 }
 
 void A64EmitX64::EmitA64ReadMemory64(A64EmitContext& ctx, IR::Inst* inst) {
+    if (conf.check_halt_on_memory_access && !conf.page_table && !conf.fastmem_pointer) {
+        auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+        const bool ordered = IsOrdered(args[2].GetImmediateAccType());
+        const A64::LocationDescriptor location{
+            IR::LocationDescriptor{inst->GetArg(0).GetU64()}};
+        ctx.reg_alloc.HostCall(code, inst, {}, {}, args[1]);
+        if (ordered) {
+            code.mfence();
+        }
+        Devirtualize<&A64::UserCallbacks::MemoryRead64WithPC>(conf.callbacks)
+            .EmitCall(code, [&](RegList param) { code.mov(param[0], location.PC()); });
+        EmitCheckMemoryAbort(ctx, inst);
+        return;
+    }
     EmitMemoryRead<64, &A64::UserCallbacks::MemoryRead64>(ctx, inst);
 }
 
