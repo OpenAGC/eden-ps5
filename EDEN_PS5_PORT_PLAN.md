@@ -867,6 +867,29 @@ SHA-256
 `cbb3ddae0aadfb2f0c5aad97e8720e7a429665034b9561b2644dd85c2c5299fb`, and
 is pinned for exactly one cleanup-first 30-second replay.
 
+That replay ran as PID 167 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T180355Z-swapchain-run1.log`.
+The new boundary trace closed the acquire-fence branch: display request
+sequence zero contained one layer and zero fences, synchronously entered the
+renderer, completed the native present, and returned to the producer. No
+sequence-one request entered `GPU::Impl::RequestComposite` during the
+remainder of the bound. Correct 48 kHz AudioOut tag release continued, and no
+CPU, JIT/W^X, Vulkan, OpenAGC, or GPU-thread failure appeared. Cleanup proved
+PID 167 and the global exact process name absent twice each.
+
+The stall is upstream in the Nvnflinger producer wakeup contract. Consumer
+release changed an acquired slot to free and notified only Eden's host
+condition variable. It did not signal the producer binder's guest-visible
+`BufferQueue:WaitEvent`; a GLES/EGL producer that clears and waits on that
+native handle can therefore sleep after its first swap even though the slot
+is free. The producer is now held weakly by its paired consumer, and a
+successful release signals that wait event after dropping the queue mutex and
+before the optional producer-listener callback. The weak ownership makes a
+late release safe if the producer binder has already been destroyed. This
+does not manufacture frames or bypass buffer state: it wakes the guest only
+after a valid acquired-to-free transition. The host `core` target passes; the
+strict Prospero build and cleanup-first replay remain required.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the

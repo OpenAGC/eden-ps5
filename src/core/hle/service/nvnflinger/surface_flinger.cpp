@@ -135,7 +135,7 @@ void SurfaceFlinger::CreateBufferQueue(s32* out_consumer_binder_id, s32* out_pro
     auto& nvmap = nvdrv->GetContainer().GetNvMapFile();
     auto core = std::make_shared<android::BufferQueueCore>();
     auto producer = std::make_shared<android::BufferQueueProducer>(m_context, core, nvmap);
-    auto consumer = std::make_shared<android::BufferQueueConsumer>(core);
+    auto consumer = std::make_shared<android::BufferQueueConsumer>(core, producer);
 
     *out_consumer_binder_id = m_server.RegisterBinder(std::move(consumer));
     *out_producer_binder_id = m_server.RegisterBinder(std::move(producer));

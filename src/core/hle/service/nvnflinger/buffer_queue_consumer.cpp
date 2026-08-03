@@ -12,13 +12,15 @@
 #include "core/hle/service/nvnflinger/buffer_item.h"
 #include "core/hle/service/nvnflinger/buffer_queue_consumer.h"
 #include "core/hle/service/nvnflinger/buffer_queue_core.h"
+#include "core/hle/service/nvnflinger/buffer_queue_producer.h"
 #include "core/hle/service/nvnflinger/parcel.h"
 #include "core/hle/service/nvnflinger/producer_listener.h"
 
 namespace Service::android {
 
-BufferQueueConsumer::BufferQueueConsumer(std::shared_ptr<BufferQueueCore> core_)
-    : core{std::move(core_)}, slots{core->slots} {}
+BufferQueueConsumer::BufferQueueConsumer(std::shared_ptr<BufferQueueCore> core_,
+                                         std::weak_ptr<BufferQueueProducer> producer_)
+    : core{std::move(core_)}, producer{std::move(producer_)}, slots{core->slots} {}
 
 BufferQueueConsumer::~BufferQueueConsumer() = default;
 
@@ -167,6 +169,13 @@ Status BufferQueueConsumer::ReleaseBuffer(s32 slot, u64 frame_number, const Fenc
         }
 
         core->SignalDequeueCondition();
+    }
+
+    // The producer's native binder handle is the guest-visible dequeue wait event. Releasing a
+    // slot changes a blocked dequeue into a runnable one, so wake both the host condition above
+    // and the guest event before notifying the optional producer listener.
+    if (const auto producer_ptr = producer.lock()) {
+        producer_ptr->SignalWaitEvent();
     }
 
     // Call back without lock held

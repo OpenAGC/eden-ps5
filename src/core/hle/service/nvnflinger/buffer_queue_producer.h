@@ -56,6 +56,8 @@ public:
 
     Kernel::KReadableEvent* GetNativeHandle(u32 type_id) override;
 
+    void SignalWaitEvent();
+
 public:
     Status RequestBuffer(s32 slot, std::shared_ptr<GraphicBuffer>* buf);
     Status SetBufferCount(s32 buffer_count);

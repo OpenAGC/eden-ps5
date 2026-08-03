@@ -773,6 +773,10 @@ Kernel::KReadableEvent* BufferQueueProducer::GetNativeHandle(u32 type_id) {
     return &buffer_wait_event->GetReadableEvent();
 }
 
+void BufferQueueProducer::SignalWaitEvent() {
+    buffer_wait_event->Signal(service_context.kernel);
+}
+
 void BufferQueueProducer::Transact(u32 code, std::span<const u8> parcel_data,
                                    std::span<u8> parcel_reply, u32 flags) {
     // Values used by BnGraphicBufferProducer onTransact

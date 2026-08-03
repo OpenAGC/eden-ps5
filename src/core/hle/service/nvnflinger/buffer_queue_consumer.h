@@ -18,11 +18,13 @@ namespace Service::android {
 
 class BufferItem;
 class BufferQueueCore;
+class BufferQueueProducer;
 class IConsumerListener;
 
 class BufferQueueConsumer final : public IBinder {
 public:
-    explicit BufferQueueConsumer(std::shared_ptr<BufferQueueCore> core_);
+    explicit BufferQueueConsumer(std::shared_ptr<BufferQueueCore> core_,
+                                 std::weak_ptr<BufferQueueProducer> producer_);
     ~BufferQueueConsumer() override;
 
     Status AcquireBuffer(BufferItem* out_buffer, std::chrono::nanoseconds expected_present);
@@ -38,6 +40,7 @@ public:
 
 private:
     std::shared_ptr<BufferQueueCore> core;
+    std::weak_ptr<BufferQueueProducer> producer;
     BufferQueueDefs::SlotsType& slots;
 };
 
