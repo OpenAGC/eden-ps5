@@ -368,6 +368,22 @@ The sustained-input retry ELF embeds Eden revision
 `47906f4f9a1c377f237a296b4c1dadeb8097e47c1568938b7f4fcc56213a5b41`.
 The wrapper pins these bytes for the next cleanup-first 110-second diagnostic.
 
+That retry, PID 176, confirmed the sustained input reaches gameplay: it began
+guest pipeline work at about 98 seconds, compiled two pipelines, and recorded
+two draws. The operator still saw only magenta. Command-buffer finalization
+again returned `record_error=-8`, but the embedded query-copy validation
+diagnostic did not fire, so the prior attribution to
+`vkCmdCopyQueryPoolResults` validation was incomplete. The last labelled entry
+remained its following `vkCmdPipelineBarrier`, with zero dispatches. The
+accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T151330Z-swapchain-run1.log`;
+cleanup proved PID-specific and global absence twice.
+
+The next diagnostic labels `vkCmdFillBuffer` and occlusion reset/begin/end,
+prints their exact OpenAGC result codes, and logs successful query-copy
+recording. No feature is being accepted on inference. Rebuild, pin, and one
+cleanup-first replay are required to name the actual post-barrier failure.
+
 The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
 reached the next draw-preparation boundary at about 98 seconds. The guest draw
 reported `descriptors=0 vertex_buffers=0`; descriptor preparation had returned
