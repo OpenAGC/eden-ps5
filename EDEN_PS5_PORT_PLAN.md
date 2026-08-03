@@ -81,10 +81,10 @@ map/write/unmap cycles while the four Dynarmic-sized mappings execute their W^X
 cycles. It uses no GPU API, fixed address, retry, or execution after failure.
 The serialization slice required 20 cleanup-first concurrent probe processes
 on FW 5.50 with bounded teardown and exact process absence. Its active
-production completion gate is now two cleanup-first 600-present `2048.nro`
-runs using identical bytes, including immediate relaunch. The temporary
-eight-frame sequence-zero/stress artifacts remain diagnostic-only until that
-long gate passes and are then removed.
+production completion gate is two cleanup-first 600-present `2048.nro` runs
+using identical bytes, including immediate relaunch. The temporary eight-frame
+sequence-zero/stress artifacts remain diagnostic-only; they are not
+substitutes for the completed long gate.
 
 The pinned concurrent probe bytes passed all 20 cleanup-first FW 5.50
 processes. Logs `20260803T034417Z-swapchain-run1.log` through
@@ -95,8 +95,8 @@ RX-to-RW demotions, 128 successful concurrent one-page map/write/unmap cycles,
 four successful cache unmaps, and the PASS oracle with `errno=0`. This totals
 320 promotions, 320 executions, 320 demotions, 2,560 concurrent mutation
 cycles, and 80 cache unmaps. Every PID-scoped and global exact-process check
-passed. The serial-plus-concurrent GPU-free gate is qualified; the immediate
-remaining proof is the pinned two-run, 600-present production 2048 gate.
+passed. The serial-plus-concurrent GPU-free gate is qualified. The production
+2048 gate later completed with the exact evidence recorded below.
 
 The first three processes of the production gate passed completely in logs
 `20260803T034913Z-swapchain-run1.log`,
@@ -503,6 +503,44 @@ relaunched explicitly; websrv recovered, the exact-name check passed again,
 and the operator confirmed the game closed. After any interrupted runner, one
 absence query is no longer sufficient: relaunch cleanup, wait, repeat the
 query, and reconcile with operator-visible state before another ELF.
+
+After separating the lifecycle oracle from the inapplicable guest-pipeline
+cache oracle, the same source-committed ELF completed the canonical FW 5.50
+pair. Run one is
+`Vulkan-PS5/examples/qualification-logs/20260803T120353Z-swapchain-run1.log`
+(PID 109, log SHA-256
+`c130dcbe13ad345bd29d56b76793301ac1ca3adf260631f6a3542b8bba012511`,
+target-klog SHA-256
+`b327cd312553563f57319ca102967f35d28291c7ae68815c6d8fe4f5829dc59b`).
+Run two immediately relaunched as PID 111 in
+`20260803T121613Z-swapchain-run1.log` (log SHA-256
+`d914afe632efbac2f54b7216ce13361126f12da5147a31919eb149c7886a7dc8`,
+target-klog SHA-256
+`5ff35eb92c0f390f6631ab1436874ddfed548345a86fd74cb9c76ff6aff10027`).
+Both runs reached exactly 600 native presents and `GAME PASS 600 frames`, used
+identical ELF/sidecar/NRO identities, completed bounded teardown, and passed
+PID-scoped plus repeated global exact-`eboot.bin` absence checks. The
+operator-visible result for these exact bytes remains magenta followed by the
+faint-but-correct 2048 board. No crash, allocation failure, JIT protection
+failure, native command failure, or presentation failure appears in either
+log. This completes the active FW 5.50 2048 lifecycle/relaunch gate; it does
+not claim guest shader-cache persistence.
+
+Vulkan-PS5 commit `93c7325` then retires the temporary first-eight
+command-buffer-end, queue-submit, acquire, and present checkpoints. It retains
+the committed-success 100-frame progress and exact 600-frame marker, all
+existing submit failures, and adds fail-only native command-buffer-end and
+queue-present diagnostics. The affected host WSI, lifecycle, and command
+recording selection passes all 22 tests; the Prospero static library and
+swapchain example build. The repository-wide host build still stops at the
+already documented, unrelated stale four-argument meta-attachment calls in
+`tests/pipeline.c`. The integrated post-retirement Eden ELF builds as SHA-256
+`55083aa102b030c6ed205b72ef5f18e42dd4b8f77ef024f2fe9f46d33620b3bb`.
+String audit finds no retired checkpoint text and does find the retained
+100/600 progress plus new fail-only messages. These post-gate bytes have not
+been launched and therefore do not replace the qualified
+`ad5160147212771bb43b98aea8f4a835bcb735c315b4c84e362761d9cdf956cb`
+evidence.
 
 An additional candidate workload is `../Flappy_Bird_NX.nro`, SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`.
@@ -2129,8 +2167,9 @@ observation.
    on host, then run cleanup-first matrix case J in Eden's post-guest placement
    order. Do not advance the long gate until Eden sequence zero has exact
    magenta swapchain readback and user-confirmed visible presentation.
-2. After sequence-zero scanout is proven, repeat the cleanup-first `2048.nro`
-   600-frame workload twice on FW 5.50 through the renderer, WSI, and present
+2. **Complete on FW 5.50.** After sequence-zero scanout is proven, repeat the
+   cleanup-first `2048.nro` 600-frame workload twice on FW 5.50 through the
+   renderer, WSI, and present
    path. Require visible frames, bounded teardown, and immediate relaunch on
    both runs; do not claim guest shader-cache coverage from its SDL software
    renderer.
@@ -2139,9 +2178,9 @@ observation.
    gate only after telemetry proves a guest graphics/compute pipeline was
    created, run one writes a transferable record, and immediate run two loads
    a nonzero count under the identical real or derived cache identity.
-4. Use the bounded end/submit/acquire/present checkpoints to measure the
-   600-frame runtime, then remove them after the two-run gate is stable. Retain
-   JIT/flexible-memory failure diagnostics until renderer relaunch is proven.
+4. **Complete.** The bounded end/submit/acquire/present checkpoints measured
+   the 600-frame runtime and were removed after the stable pair. The 100/600
+   committed-success markers and fail-only diagnostics remain.
 5. Qualify a small `libSceUserService`/`libScePad` probe, implement the native
    controller/event/lifecycle bridge, and remove SDL3 from the production
    Prospero target.

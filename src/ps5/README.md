@@ -149,11 +149,18 @@ nonempty transferable cache before a nonzero relaunch count is accepted.
 
 The address32 build passed that 2048 sequence-zero gate and was repeatedly
 confirmed visible on the console: magenta appeared before the 2048 board,
-whose colors were correct but faint. The active completion gate remains the
-same `2048.nro` through `tools/run_fw550_2048.sh`; host input-cycle progress is
-diagnostic only and never substitutes for the native 600-present oracle.
-InvadersNX remains available for guest-specific investigation but is not
-accepted as evidence for the 2048 completion goal.
+whose colors were correct but faint. The same exact ELF then passed two
+cleanup-first 600-present runs with immediate relaunch, bounded teardown, and
+repeated exact-process absence. Host input-cycle progress remains diagnostic
+only and never substitutes for the native 600-present oracle. Vulkan-PS5
+commit `93c7325` subsequently removed the temporary first-eight
+end/submit/acquire/present checkpoints while preserving its committed-success
+100/600 markers and fail-only diagnostics. The post-retirement ELF is a new,
+unlaunched artifact and does not replace the qualified pair. The next
+shader-cache slice uses a workload that actually creates guest pipelines;
+Flappy Bird is the first bounded homebrew canary. InvadersNX remains available
+for guest-specific investigation but is not accepted as evidence for the 2048
+completion goal.
 
 Before rerunning the long gate after a Dynarmic or payload-SDK JIT change, run
 `tools/run_fw550_dynarmic_jit_dual_alias.sh`. It pins the GPU-free probe,
