@@ -263,6 +263,10 @@ Because the request dump occurs before several later validation branches,
 depth clamp is a correlation rather than a proven cause. Vulkan-PS5 commit
 `8265c13` now labels each remaining post-request feature rejection so the next
 replay can identify the precise validator without inference.
+The reason-labelled ELF embeds revision
+`3c4e16bf31de839579773fcafb70004ed3df4d82`, has SHA-256
+`0668814c2b46d33d72b06e76a1a476bf30ed52405ce4e0be1ea9305c206a7a8d`,
+and is pinned by the wrapper.
 
 ### Payload SDK identity
 
