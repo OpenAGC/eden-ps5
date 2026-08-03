@@ -142,7 +142,8 @@ public:
             FailProsperoJitOperation("JIT-eligible anonymous code-cache mmap", nullptr, size,
                                      errno);
         }
-        if (mprotect(mapping, size, PROT_READ | PROT_WRITE) != 0) {
+        if (kernel_mprotect_exact(-1, reinterpret_cast<intptr_t>(mapping), size,
+                                  PROT_READ | PROT_WRITE) != 0) {
             const int protect_errno = errno;
             munmap(mapping, size);
             FailProsperoJitOperation("initial code-cache RW demotion", mapping, size,
@@ -241,13 +242,15 @@ void ProtectMemory(const void* base, size_t size, bool is_executable) {
     const size_t protectAddr = roundAddr;
     const size_t protect_size = size + (iaddr - roundAddr);
 #        endif
-    const int result = is_executable
 #        if defined(__PROSPERO__)
-                           ? kernel_mprotect_exact(-1, protectAddr, protect_size, mode)
+    // Keep each owned cache as one exact VM entry. A normal RW mprotect may merge adjacent
+    // same-protection cache entries, after which the fail-closed exact RX promotion cannot
+    // prove that it is changing only this cache. Direct exact mutations preserve boundaries
+    // in both directions and avoid structural VM-map changes between promotions.
+    const int result = kernel_mprotect_exact(-1, protectAddr, protect_size, mode);
 #        else
-                           ? mprotect(reinterpret_cast<void*>(protectAddr), protect_size, mode)
+    const int result = mprotect(reinterpret_cast<void*>(protectAddr), protect_size, mode);
 #        endif
-                           : mprotect(reinterpret_cast<void*>(protectAddr), protect_size, mode);
     if (result != 0) {
 #        if defined(__PROSPERO__)
         FailProsperoJitOperation(is_executable ? "code-cache RW->RX mprotect"

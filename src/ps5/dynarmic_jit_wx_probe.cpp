@@ -97,7 +97,9 @@ public:
 
             mappings[cache] = mapping;
             errno = 0;
-            const int demote_result = mprotect(mapping, MappingSize, PROT_READ | PROT_WRITE);
+            const int demote_result = kernel_mprotect_exact(
+                -1, reinterpret_cast<intptr_t>(mapping), MappingSize,
+                PROT_READ | PROT_WRITE);
             const int demote_error = demote_result == 0 ? 0 : errno;
             LogOperation(info, cache, "setup", "initial-RW-demotion", mapping, demote_result,
                          demote_error);
@@ -185,7 +187,9 @@ private:
         }
 
         errno = 0;
-        const int rw_result = mprotect(mapping, MappingSize, PROT_READ | PROT_WRITE);
+        const int rw_result = kernel_mprotect_exact(
+            -1, reinterpret_cast<intptr_t>(mapping), MappingSize,
+            PROT_READ | PROT_WRITE);
         const int rw_error = rw_result == 0 ? 0 : errno;
         LogOperation(info, cache, iteration_text, "RX-to-RW", mapping, rw_result, rw_error);
         return rw_result == 0;
