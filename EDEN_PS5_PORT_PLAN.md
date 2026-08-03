@@ -246,6 +246,10 @@ by the host regression because OpenAGC deliberately keeps that state outside
 its qualified multisample subset; that unsafe change was reverted. The next
 cleanup-first retry must use the diagnostic build to identify the remaining
 exact `-8` branch before extending support.
+The diagnostic ELF embeds revision
+`63ba472eb23df8b1760421e2175a12ebf892c256`, has SHA-256
+`933be07ee5a9a044db74bd01c6dd476891012e377cfb6bebfb713688e62f4234`,
+and is pinned by the Flappy wrapper.
 
 ### Payload SDK identity
 
