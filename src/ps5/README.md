@@ -75,6 +75,14 @@ demand. This is separate from the sparse 39-bit process page table described
 below. The failed run was cleanup-safe and is not qualification evidence; use
 only the ELF SHA pinned by `tools/run_fw550_flappy_bird.sh` for its retry.
 
+The first sparse-table retry passed that assertion and identified the next
+blocker precisely: format 51, usage `0x1f`, flags `0x108` was a mutable,
+extended-usage A8B8G8R8 image whose storage capability came from its declared
+view formats. Vulkan-PS5 now evaluates usage against the union of that format
+list for both creation and the properties2 query, while the same request
+without extended usage remains rejected. The retry log ends with cleanup and
+two PID/global absence observations; it is diagnostic evidence, not a pass.
+
 The full Prospero build also provides `eden-ps5-host-memory-probe.elf`. It
 exercises Eden's PS5 guest-memory backend independently of Vulkan: fastmem is
 disabled because the host uses 16 KiB pages, a contiguous 4 GiB guest backing

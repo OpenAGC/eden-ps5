@@ -12,9 +12,10 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current unlaunched telemetry and sparse-GPU-page-table Eden ELF is SHA-256
-`5f8336611f88c27c07a5943eb4164e64f838989c604e70b9541b82d72942639b`,
-embeds Eden `1c581b6354`, and incorporates Vulkan-PS5 checkpoint-retirement
-commit `93c7325` plus repeated-absence runner commit `b41393a`.
+`2577d3f8264b02dfccfdd636a0fd278b53436483a864e1964e22f9b99576bba5`,
+embeds Eden `31ecfa8fdd`, and incorporates Vulkan-PS5 checkpoint-retirement
+commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
+usage fix `2d84b89`.
 
 Before launch, pin the ELF, NRO, sidecar, cleanup ELF, guarded runner,
 exact-process helper, and PyPS4debug revision/lockfile. Run only the direct
@@ -82,8 +83,34 @@ ownership, range arithmetic is overflow and bounds checked, and allocation
 failure is fatal before dereference. The dedicated host regression covers
 cross-level isolation, move ownership, and zero-sized reservation (3 cases,
 7 assertions), and both it and the full Prospero build pass. The next action
-is one cleanup-first retry of the newly pinned ELF; no cache or lifecycle
-claim carries over from PID 115.
+was one cleanup-first retry; no cache or lifecycle claim carried over from
+PID 115.
+
+That retry, PID 118, is preserved at
+`examples/qualification-logs/flappy-bird/20260803T130455Z-swapchain-run1.log`.
+The sparse GPU page table passed its former failure point. The run completed
+the magenta calibration present but its source buffer was still zero, then at
+98.7 seconds Flappy requested a 480x480 optimal
+`VK_FORMAT_A8B8G8R8_UNORM_PACK32` image with usage `0x1f` and flags `0x108`.
+Those flags mean mutable format plus extended usage; the declared compatible
+view-format list contained storage-capable formats, but Vulkan-PS5 validated
+storage against only the non-storage base format and returned
+`VK_ERROR_FORMAT_NOT_SUPPORTED`. The later uncaught Eden exception ended the
+process. The one `Unmapped Read64 @ 0x8` was a fail-soft guest CPU read and was
+not the terminal fault. Cleanup again proved PID-specific and global exact
+absence twice.
+
+Vulkan-PS5 commit `2d84b89` now validates every requested image usage bit
+against the union of a mutable extended image's declared view formats and
+uses the same rule for `vkGetPhysicalDeviceImageFormatProperties2`. It still
+rejects the exact request without extended usage and retains the base native
+AGC format. The command-recording regression covers the exact Flappy request,
+properties query, storage view, missing-storage-format list, and no-extended
+negative case. That regression and the full Prospero cross-build pass; the
+unrelated full host build remains blocked by pre-existing stale calls in
+`tests/pipeline.c` to the expanded meta-attachment helper. The newly rebuilt
+Eden ELF above is the only artifact eligible for the next cleanup-first
+retry.
 
 ### Payload SDK identity
 
