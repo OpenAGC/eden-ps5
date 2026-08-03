@@ -664,6 +664,27 @@ It is pinned for a cleanup-first bounded replay. This fallback prioritizes
 correctness; its performance remains to be measured before it can qualify as
 the final allocator solution.
 
+PID 143 crossed the same boundary with one memory-emitting guest instruction
+per block and still produced `Read64 @ 0x8` at 14.169 seconds. This rules out
+both cross-callback and cross-instruction IR lifetimes: the address becomes
+invalid while the checked `Read64` itself is prepared. The accepted failure
+log is
+`examples/qualification-logs/flappy-bird/20260803T171219Z-swapchain-run1.log`;
+the wrapper again proved both PID-specific and global exact-process absence
+twice.
+
+The remaining checked-read diagnostic had changed the normal devirtualized
+callback ABI by moving the address from `RSI` to a third argument in `RDX` so
+the compile-time PC could occupy `RSI`. Revision `c3ea295` removes that custom
+callback and restores the established one-address `MemoryRead64` path. Exact
+fault attribution remains available from `MemoryAccessAbort`, which records
+the instruction PC and writes it to JIT state before the forced return. The
+complete Dynarmic suite again passes 201,927 assertions in 130 test cases, and
+the strict integrated Prospero build passes. The rebuilt ELF embeds `c3ea295`
+and has SHA-256
+`109c0140e3c390420383436496ce34f7e6bbbba1ef76140afed5ecbbd13f8826`.
+It is pinned for a cleanup-first bounded A/B of the standard callback ABI.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the
