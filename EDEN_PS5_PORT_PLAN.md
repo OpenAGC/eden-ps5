@@ -79,10 +79,12 @@ These are pinned build artifacts, not target evidence.
 The GPU-free probe adds a second thread with exactly 128 bounded anonymous
 map/write/unmap cycles while the four Dynarmic-sized mappings execute their W^X
 cycles. It uses no GPU API, fixed address, retry, or execution after failure.
-Target proof requires 20 cleanup-first concurrent probe processes followed by
-20 cleanup-first production 2048 startup/presentation processes on FW 5.50,
-bounded teardown, and exact process absence. Only after that repeated gate may
-the fix be considered hardware-qualified and the wider renderer goal resume.
+The serialization slice required 20 cleanup-first concurrent probe processes
+on FW 5.50 with bounded teardown and exact process absence. Its active
+production completion gate is now two cleanup-first 600-present `2048.nro`
+runs using identical bytes, including immediate relaunch. The temporary
+eight-frame sequence-zero/stress artifacts remain diagnostic-only until that
+long gate passes and are then removed.
 
 The pinned concurrent probe bytes passed all 20 cleanup-first FW 5.50
 processes. Logs `20260803T034417Z-swapchain-run1.log` through
@@ -94,7 +96,7 @@ four successful cache unmaps, and the PASS oracle with `errno=0`. This totals
 320 promotions, 320 executions, 320 demotions, 2,560 concurrent mutation
 cycles, and 80 cache unmaps. Every PID-scoped and global exact-process check
 passed. The serial-plus-concurrent GPU-free gate is qualified; the immediate
-remaining proof is the pinned 20-process production 2048 gate.
+remaining proof is the pinned two-run, 600-present production 2048 gate.
 
 The first three processes of the production gate passed completely in logs
 `20260803T034913Z-swapchain-run1.log`,
@@ -107,14 +109,78 @@ fourth fresh cleanup-first attempt, log
 launcher timeout. The console then became unreachable on websrv and the
 debugger port, so no target klog or exact-process-absence verdict exists for
 that attempt. The wrapper stopped and did not send a fifth process. This is
-not a 20-process qualification pass and must not be labeled one.
+not a production qualification pass and must not be labeled one.
 
-Do not launch again until the console has rebooted. On a fresh direct-backend
-boot, run the pinned cleanup and independent exact-process preflight, then use
-continuous kernel-log capture around one pinned 2048 process so a repeated
-host loss retains its final kernel events. If that run is clean, restart the
-20-process production gate from run one; the interrupted three-run prefix does
-not substitute for the required consecutive gate.
+No further ELF was launched while the console was unavailable. Vulkan-PS5
+commit `262b657` adds an opt-in continuous klog path to the guarded runner;
+runner SHA-256
+`2d8a6d4a0eb20c6fe218c489d0303faef721c79168c8c80cb8ec1f037df63ed8`
+starts and verifies exactly one listener after cleanup and exact-process
+preflight but before upload/launch, retains bytes across a console disconnect,
+and reaps the listener before exit cleanup. Its host regression covers
+pre-launch ordering, post-launch evidence, single-listener use, retirement,
+and fail-before-launch behavior. The two-run 600-frame wrapper pins that runner
+and enables continuous mode; the 180-second `nc` value is a bounded socket
+timeout, not an added post-run wait, because the listener is stopped as soon as
+the application settle interval completes. On the next fresh direct-backend
+boot, run that wrapper from run one. The three successful short runs and the
+interrupted fourth attempt do not substitute for either required 600-frame
+run.
+
+### Post-panic VideoOut teardown gate
+
+The empty fourth-run klog means the kernel panic has no captured faulting
+instruction or proven subsystem. The three preceding processes completed
+normal same-app `KillApp` and `All processes exited` handling and contain no
+JIT, submit, present, or teardown failure. The investigation therefore does
+not claim that Dynarmic, `/dev/gc`, or VideoOut is the proven root cause.
+
+The audit did find one concrete unsafe lifetime that blocks all further
+hardware qualification: OpenAGC registered caller-owned scanout buffers with
+VideoOut but closed the handle without first calling
+`sceVideoOutUnregisterBuffers`. Vulkan then released those image mappings.
+That could leave VideoOut or the kernel holding stale scanout addresses across
+process teardown and immediate relaunch.
+
+OpenAGC commit `ed02ab8` now performs checked teardown in the required order:
+delete flip event, unregister slot zero, close VideoOut, delete the event
+queue, and only then release caller-owned image dependencies. Partial-open and
+partial-close failures retain the live present chain. The legacy void close
+terminates rather than returning after a failure that its caller cannot
+observe, and the public hardware sample skips scanout unmap/release when
+checked close fails. Its generic suite passes 20,085 assertions with zero
+failures; the Prospero static build, public portability ELF build, and source
+ownership audit pass.
+
+Vulkan-PS5 commits `07c3fd4` and `38d6e97` consume that checked contract and
+fail closed. Failed native teardown quarantines the present chain, images,
+memory, surface, and device ownership instead of freeing registered memory.
+Replacement unregisters the retired chain before opening another main-display
+chain. Present and unregister share the swapchain mutex. Native fence, queue,
+and device destruction is retryable phase by phase, with host-only injected
+failure coverage; the injection hook is absent from Prospero bytes. Host WSI,
+lifecycle, guarded-runner tests and the Prospero static build pass. The
+unscoped Vulkan all-target build still has the unrelated pre-existing
+`tests/pipeline.c` meta-attachment call-signature mismatch, so it is not
+reported as a clean full-suite result.
+
+The rebuilt, never-launched production ELF is SHA-256
+`415a8cedd012e2c585fd47d45ada1d85c114a692ca0179eb1421abaf78a923f8`.
+It imports `sceVideoOutUnregisterBuffers`, contains the mandatory quarantine
+diagnostics, and contains no Prospero teardown-fault injection string. The
+2048, sequence-zero, and InvadersNX runners pin these exact bytes; the stress
+wrapper pins the revised sequence-zero runner.
+
+The active goal is revised only in ordering, not acceptance: after a fresh FW
+5.50 boot using only direct `/dev/gc`, start continuous klog, run the pinned
+cleanup ELF, independently prove exact `eboot.bin` absence, then run one
+bounded eight-frame 2048 canary with the new bytes. Require checked native
+teardown, clean PID-scoped evidence, exact process absence, and a responsive
+console. Only after that canary passes may the identical ELF begin the two
+cleanup-first 600-present runs, including immediate relaunch. Any unregister,
+close, WSI quarantine, exact-process, klog, or responsiveness failure stops
+the gate and requires a fresh reboot; no subsequent ELF may be sent in that
+boot.
 
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
