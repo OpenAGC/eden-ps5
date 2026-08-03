@@ -12,8 +12,8 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current unlaunched guest command-completion diagnostic Eden ELF is SHA-256
-`73a69a5dd91237dbdd8cca6c4ed12a57c4cf5f49e9f27c58cc4ed2322ad4f64f`,
-embeds Eden `0f5ef44ea7`, and incorporates Vulkan-PS5 checkpoint-retirement
+`10e96740ff3dcafa8c819ecbe325e8ab3485ddde42d0697a181222621c2870e9`,
+embeds Eden `4b1b61673d`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
 usage fix `2d84b89`.
 
@@ -985,6 +985,28 @@ despite completed GPU work. Host `core` and the strict Prospero build pass.
 Revision `0f5ef44` contains the response telemetry and PID 179 evidence. Its
 rebuilt ELF embeds `0f5ef44ea7`, has SHA-256
 `73a69a5dd91237dbdd8cca6c4ed12a57c4cf5f49e9f27c58cc4ed2322ad4f64f`, and
+is pinned for exactly one cleanup-first 30-second replay.
+
+That replay ran as PID 182 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T183453Z-swapchain-run1.log`.
+It closes the guest-visible NVDRV response boundary: `SubmitGPFIFOBase2`
+returned success with fence `1:1` and cleared flags, the enclosing `Ioctl2`
+copied back its 24-byte output, and the IPC response was ready before the GPU
+thread completed the already-proven guest and host syncpoint increments. No
+second BufferQueue commit followed. The run emitted no fatal diagnostic,
+audio remained correctly paced, and cleanup proved PID 182 and global
+`eboot.bin` absence twice each.
+
+Flappy's source has no deliberate inter-frame delay: every
+`appletMainLoop()` iteration draws and calls `SDL_RenderPresent`. The next
+boundary is therefore a guest kernel wait or render-thread scheduling stall,
+not NVDRV submission. After the first successful GPFIFO response, Prospero now
+sparsely traces each `WaitSynchronization` entry and return with guest thread
+ID, timeout, handle count, first four handles, result, and selected index. Host
+`core` and the strict Prospero build pass. Revision `4b1b616` contains the
+wait telemetry and PID 182 evidence. Its rebuilt ELF embeds `4b1b61673d`, has
+SHA-256
+`10e96740ff3dcafa8c819ecbe325e8ab3485ddde42d0697a181222621c2870e9`, and
 is pinned for exactly one cleanup-first 30-second replay.
 
 PID 137 completed the 30-second observation without the low read, allocator
