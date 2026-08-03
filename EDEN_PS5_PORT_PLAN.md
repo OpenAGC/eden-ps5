@@ -265,6 +265,10 @@ access/layout/queue/subresource contract, or a request for a native stream
 after an earlier unimplemented command. The next retry must use that diagnostic
 to solve the barrier; magenta remains a separate visible-output failure until
 a non-calibration swapchain readback is proven.
+The barrier-diagnostic ELF embeds revision
+`1cb7d006e505e1fb1e4cff38610639e1061fd1a0`, has SHA-256
+`a4594d1b64c1ee419dc8bb873a69141ffac66965c93497bde5cd79b6b5cbf8fd`,
+and is pinned by the wrapper.
 
 The diagnostic replay, PID 142, again cleaned up with two PID-scoped and two
 global absence checks. Its request fingerprint rules out alpha-to-coverage,
