@@ -1399,10 +1399,34 @@ That guard prevents silent misaddressing but intentionally makes current Eden
 high-band recording fail until the compiler/runtime contract becomes
 device-selected. `openagc-psbc` commit `00520bb` adds the required per-request
 `address32_hi` compiler input (including a successful high-3 host compile), and
-Vulkan-PS5 commit `40a777a` carries a device field into every compiler request.
-Vulkan still initializes that field to the currently qualified high-2 constant;
-the remaining production work is the dedicated OpenAGC resource arena, public
-device query, reflection/cache identity, and shader/device mismatch validation.
+Vulkan-PS5 commit `40a777a` first added the device field and compiler plumbing.
+At that checkpoint Vulkan still initialized the field to the qualified high-2
+constant pending an OpenAGC device query.
+
+That first production part is now implemented: OpenAGC commit `89d2dd1`
+eagerly creates an isolated 16 MiB flexible command-resource arena, captures a
+stable device-selected address32 high dword, exposes it before pipeline
+compilation, and confines descriptor, indirect-set, push-constant, and vertex
+tables to the same 4 GiB window. The full host CTest suite passes 19/19, the
+runtime suite passes 20,003 assertions, and the Prospero static library builds.
+Vulkan-PS5 commit `de33853` queries that value at device creation and feeds it
+to every PSBC compile; host lifecycle and Prospero static builds pass. Shader
+reflection/cache identity validation and cleanup-first hardware evidence remain
+required before this defect is closed.
+
+The successful PS4 port uses Eden's native `renderer_gnm` over `opengnm`, not
+Vulkan. That is relevant evidence for a future direct `renderer_agc`: its
+rasterizer/cache/presentation structure can be forward-ported while replacing
+gfx8 GNM objects and the GCN compiler contract with public OpenAGC objects and
+PSBC gfx1013 shaders. It is not evidence for loading installed
+`libSceAgcDriver`. On both FW 5.50 and FW 11.60, isolated installed-driver
+submission returned success without executing the marker, and its module start
+mutates persistent GPU state. Direct `/dev/gc` and installed-driver use are
+therefore mutually exclusive for the whole boot, with no fallback between
+them. The active Vulkan gate gets one cleanup-first sequence-zero retest after
+the address32 fix; if that exact oracle still fails, start the direct OpenAGC
+renderer as a separate backend rather than replacing `/dev/gc` with the
+installed driver.
 
 The Prospero Dynarmic code cache remains fail-closed: every allocation,
 demotion, RW-to-RX, RX-to-RW, and unmap failure enters the noreturn PS5
