@@ -9,6 +9,7 @@
 #include <array>
 #include <atomic>
 #include <cstring>
+#include <limits>
 #include <mutex>
 #include <span>
 #include <thread>
@@ -820,21 +821,30 @@ struct Memory::Impl {
 #if defined(__PROSPERO__)
     [[nodiscard]] u8* GetCachedNormalScalarPointer(const u64 addr) const {
         struct CacheEntry {
-            u64 epoch{};
             u64 guest_page{};
             u8* host_page{};
         };
         static constexpr std::size_t CacheSlots = 256;
         static_assert((CacheSlots & (CacheSlots - 1)) == 0);
-        static thread_local std::array<CacheEntry, CacheSlots> cache{};
+        struct ScalarCache {
+            u64 epoch{};
+            std::array<CacheEntry, CacheSlots> entries{};
+        };
+        static thread_local ScalarCache cache{};
 
         const u64 epoch = scalar_translation_epoch.load(std::memory_order_acquire);
         if ((epoch & 1) != 0) {
             return nullptr;
         }
+        if (cache.epoch != epoch) {
+            for (CacheEntry& entry : cache.entries) {
+                entry.guest_page = std::numeric_limits<u64>::max();
+            }
+            cache.epoch = epoch;
+        }
         const u64 guest_page = addr >> YUZU_PAGEBITS;
-        CacheEntry& entry = cache[guest_page & (CacheSlots - 1)];
-        if (entry.epoch == epoch && entry.guest_page == guest_page) {
+        CacheEntry& entry = cache.entries[guest_page & (CacheSlots - 1)];
+        if (entry.guest_page == guest_page) {
             return entry.host_page + (addr & YUZU_PAGEMASK);
         }
 
@@ -851,7 +861,6 @@ struct Memory::Impl {
         u8* const host_page =
             reinterpret_cast<u8*>(pointer + (guest_page << YUZU_PAGEBITS));
         entry = CacheEntry{
-            .epoch = epoch,
             .guest_page = guest_page,
             .host_page = host_page,
         };
