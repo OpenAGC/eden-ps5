@@ -273,6 +273,12 @@ has appeared by 97-98 seconds. Longer windows are reserved for candidates that
 have already demonstrated guest-frame progress and need the full 120-frame
 pass oracle.
 
+The integrated clipped-scissor retry ELF embeds Eden revision
+`da88637d8f9f4a2e7673f3149075d6c97de57551`, has SHA-256
+`19004f8dfa8db66e3672aeaf6bd8e5c0d22614f78ca499cd5cd6612da2d9e018`,
+and is pinned by the Flappy wrapper for the next cleanup-first 110-second
+diagnostic.
+
 The zero-stride replay, PID 148, closes the pipeline-creation blocker: all
 guest pipelines compile/create, two opaque-black raw guest frames are observed,
 the first composite submits, and one native present returns successfully. The
