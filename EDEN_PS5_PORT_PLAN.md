@@ -112,6 +112,14 @@ unrelated full host build remains blocked by pre-existing stale calls in
 Eden ELF above is the only artifact eligible for the next cleanup-first
 retry.
 
+The Vulkan-PS5 cross-build relinked the standalone cleanup ELF even though
+`examples/process_cleanup/main.c` and its CMake linkage are unchanged between
+`b41393a` and `2d84b89`. The two independent configured Prospero build trees
+produce identical replacement bytes, SHA-256
+`ff88ac293a55ec4ba5636a6556b74ffbeaf5d1093e96f86208cc55ce262565c5`.
+The Flappy wrapper now pins those exact bytes; it rejected the stale hash
+before making network contact, so no unpinned cleanup or Eden payload was sent.
+
 ### Payload SDK identity
 
 The current `build-prospero-full-audit2` CMake cache resolves both
