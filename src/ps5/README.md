@@ -70,6 +70,13 @@ the same derived cache identity. Runtime creation/write counts remain separate
 from disk discovery/load/rejection counts so a warm-cache replay cannot be
 mistaken for a fresh compile.
 
+The cleanup-first FW 5.50 replay in
+`20260803T230453Z-swapchain-run1.log` discovered and successfully loaded five
+graphics records with zero rejections under the pinned identity. It reached
+native present sequence 63 and left no exact `eboot.bin` after cleanup. This
+qualifies immediate cache reload, but not the separate 300-present gate: the
+45-second bound expired while the title remained at its static intro.
+
 The first Flappy hardware attempt reached its accelerated GLES2 renderer and
 one native present, then exposed an eager allocation in the guest GPU
 `MultiLevelPageTable`: a 37-bit `nvhost-as-gpu` address space tried to commit a

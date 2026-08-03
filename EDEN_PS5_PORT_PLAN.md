@@ -4097,6 +4097,21 @@ creation/write evidence. The updated Prospero build completes and produces
 ELF SHA-256
 `01a0aa1da1469078243127777a725d5cf84b09d85403ff3d1ca16263b2490a83`.
 
+The cleanup-first replay is preserved at
+`Vulkan-PS5/examples/qualification-logs/flappy-bird/20260803T230453Z-swapchain-run1.log`.
+Under the identical NRO and derived identity it parsed five graphics records,
+successfully rebuilt all five, rejected none, and created or rewrote none at
+runtime: `graphics_discovered=5`, `graphics_loaded=5`,
+`records_rejected=0`. This closes the immediate transferable-cache reload
+oracle; compute remained zero because this workload did not submit a compute
+pipeline. The run again reached native present sequence 63 without a Vulkan,
+OpenAGC, JIT, or presentation error, then hit the intentional 45-second host
+bound before `GAME PASS 300 frames`. The wrapper therefore failed the
+independent long-frame gate as designed, launched pinned cleanup, and proved
+PID 116 plus the global exact `eboot.bin` name absent twice. Do not extend the
+deadline merely to wait on a static intro; progress the workload or improve
+guest throughput before retrying the 300-present gate.
+
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
    through Vulkan-PS5 into `openagc-psbc`, record it in versioned shader
