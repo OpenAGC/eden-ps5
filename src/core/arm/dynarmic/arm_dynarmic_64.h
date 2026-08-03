@@ -62,6 +62,7 @@ public:
     u64 GetTicksRemaining() override;
     u64 GetCNTPCT() override;
     bool CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWatchpointType type);
+    void MemoryAccessAbort(u64 pc) override;
     void ReturnException(u64 pc, Dynarmic::HaltReason hr);
 
     Dynarmic::CodePage cached_code_page;
@@ -71,6 +72,7 @@ public:
     u64 m_tpidrro_el0{};
     u64 m_tpidr_el0{};
     std::optional<u64> m_invalid_read64_address{};
+    std::optional<u64> m_invalid_read64_pc{};
     Kernel::KProcess* m_process{};
     const bool m_debugger_enabled{};
     const bool m_check_memory_access{};

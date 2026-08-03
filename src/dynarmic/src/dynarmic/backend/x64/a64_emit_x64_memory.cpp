@@ -426,6 +426,8 @@ void A64EmitX64::EmitCheckMemoryAbort(A64EmitContext&, IR::Inst* inst, Xbyak::La
     }
     code.mov(rax, current_location.PC());
     code.mov(qword[code.ABI_JIT_PTR + offsetof(A64JitState, pc)], rax);
+    Devirtualize<&A64::UserCallbacks::MemoryAccessAbort>(conf.callbacks).EmitCall(
+        code, [&](RegList param) { code.mov(param[0], current_location.PC()); });
     code.ForceReturnFromRunCode();
     code.L(skip);
 }

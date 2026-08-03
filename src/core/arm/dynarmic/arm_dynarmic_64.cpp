@@ -252,6 +252,12 @@ bool DynarmicCallbacks64::CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWat
     return true;
 }
 
+void DynarmicCallbacks64::MemoryAccessAbort(u64 pc) {
+    if (m_invalid_read64_address) {
+        m_invalid_read64_pc = pc;
+    }
+}
+
 void DynarmicCallbacks64::ReturnException(u64 pc, Dynarmic::HaltReason hr) {
     m_parent.GetContext(m_parent.m_breakpoint_context);
     m_parent.m_breakpoint_context.pc = pc;
@@ -432,12 +438,14 @@ HaltReason ArmDynarmic64::RunThread(Kernel::KThread* thread) {
     const auto halt_reason = m_jit->Run();
     if (m_cb->m_invalid_read64_address) {
         const auto address = *m_cb->m_invalid_read64_address;
+        const auto fault_pc = m_cb->m_invalid_read64_pc.value_or(m_jit->GetPC());
         m_cb->m_invalid_read64_address.reset();
+        m_cb->m_invalid_read64_pc.reset();
         const auto registers = m_jit->GetRegisters();
         LOG_CRITICAL(Core_ARM,
                      "A64 invalid Read64 halted: address={:#x} entry={:#x} pc={:#x} sp={:#x} "
                      "lr={:#x} x0={:#x} x1={:#x} x8={:#x} x19={:#x} x20={:#x} fp={:#x}",
-                     address, GetInteger(m_cb->m_process->GetEntryPoint()), m_jit->GetPC(),
+                     address, GetInteger(m_cb->m_process->GetEntryPoint()), fault_pc,
                      m_jit->GetSP(), registers[30], registers[0], registers[1], registers[8],
                      registers[19], registers[20], registers[29]);
         LogBacktrace(m_cb->m_process);

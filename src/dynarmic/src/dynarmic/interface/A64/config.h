@@ -118,6 +118,10 @@ struct UserCallbacks {
     // A conservative implementation that always returns false is safe.
     virtual bool IsReadOnlyMemory(VAddr /*vaddr*/) { return false; }
 
+    // Called only when check_halt_on_memory_access observes MemoryAbort after a data access.
+    // The supplied PC identifies the translated guest instruction which issued that access.
+    virtual void MemoryAccessAbort(VAddr /*pc*/) {}
+
     // This callback is called whenever a SVC instruction is executed.
     virtual void CallSVC(std::uint32_t swi) = 0;
 
