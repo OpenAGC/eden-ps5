@@ -345,6 +345,11 @@ the exact Vulkan `0x10000 -> 0x1800` regression, neighboring lifecycle and
 validation tests, and the Prospero Vulkan/OpenAGC static build pass. Rebuild,
 hash pinning, and a cleanup-first replay are next.
 
+The integrated global-barrier retry ELF embeds Eden revision
+`2b021dc1356696410a7e4986651dd208e430767c`, has SHA-256
+`dafec585e364ee79b025bedc06873d8ab15fd8ca4f12c438568aa774813fcdb2`,
+and is pinned by the Flappy wrapper.
+
 The diagnostic replay, PID 142, again cleaned up with two PID-scoped and two
 global absence checks. Its request fingerprint rules out alpha-to-coverage,
 MSAA, depth/stencil tests, and unknown dynamic enums. Each rejected guest
