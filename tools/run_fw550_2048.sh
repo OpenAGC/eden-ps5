@@ -14,7 +14,7 @@ elf=${EDEN_PS5_ELF:-$repo_dir/build-prospero-full-audit2/bin/eden-ps5.elf}
 cleanup_elf=${EDEN_PS5_CLEANUP_ELF:-$vulkan_repo/build-prospero-msaa/vulkan_ps5_process_cleanup.elf}
 homebrew=${EDEN_PS5_2048_NRO:-$repo_dir/../2048.nro}
 sidecar="$repo_dir/src/ps5/eden-2048.launch"
-pinned_eden_sha256=c49362194ccd31b9c110d845a2618875d3981aa231438348f44991cd9bbb6bcc
+pinned_eden_sha256=ad5160147212771bb43b98aea8f4a835bcb735c315b4c84e362761d9cdf956cb
 pinned_cleanup_sha256=9fd6b41cf2ea87989c4217234c6f34c96a1ca5dc482355af1258539db77d4d76
 pinned_runner_sha256=2d8a6d4a0eb20c6fe218c489d0303faef721c79168c8c80cb8ec1f037df63ed8
 pinned_process_helper_sha256=8dff282cdbc7ac1f4a037ad9e2a0e800fa82838cd1342b804b1eaff65ffd1ef6
@@ -85,6 +85,7 @@ native_present_600_pattern='^vulkan-ps5: native present 600-frame gate complete 
 firmware_pattern='^\[openagc\] system software raw=0x05500008 string= 5\.500\.008$'
 input_cycle_pattern='PS5 qualification input cycle: enabled=true interval_ms=50'
 reject_pattern='allocation failed|mapping failed|mmap failed|mprotect failed|^eden-ps5 dynarmic .* failed:|terminating without executing an invalid JIT mapping|Failed to present|GPU thread failure|^vulkan-ps5: .*failed'
+reject_pattern="$reject_pattern|Failed to derive the Prospero shader-cache identity"
 if [ -n "${EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN:-}" ]; then
     reject_pattern="$reject_pattern|$EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN"
 fi
@@ -92,9 +93,10 @@ while [ "$run" -le 2 ]; do
     required_pattern="$native_present_600_pattern"
     required_pattern_2="$firmware_pattern"
     required_pattern_3="$input_cycle_pattern"
-    required_pattern_4=
+    required_pattern_4='EdenMain: Prospero shader-cache identity: cd7e7f3438309201$'
+    required_pattern_5='LoadDiskResources: Total Pipeline Count: 0$'
     if [ "$run" -eq 2 ]; then
-        required_pattern_4='^Total Pipeline Count: [1-9][0-9]*$'
+        required_pattern_5='LoadDiskResources: Total Pipeline Count: [1-9][0-9]*$'
     fi
     VULKAN_PS5_QUALIFICATION_ELF="$elf" \
     VULKAN_PS5_CLEANUP_ELF="$cleanup_elf" \
@@ -106,6 +108,7 @@ while [ "$run" -le 2 ]; do
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2="$required_pattern_2" \
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_3="$required_pattern_3" \
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4="$required_pattern_4" \
+    VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_5="$required_pattern_5" \
     VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
     VULKAN_PS5_WEBSRV_TIMEOUT="$websrv_timeout" \
     VULKAN_PS5_LIVE_KLOG_TIMEOUT="$live_klog_timeout" \

@@ -135,6 +135,17 @@ The measured PS5 rate is about 0.75 presented 2048 frames per second, so the
 authoritative 600-frame wrapper defaults to 900 seconds and permits 1-1200;
 its continuous target-klog deadline is kept 120 seconds beyond the web request.
 
+Zero-ID NRO homebrew uses a Prospero-only shader-cache namespace derived from
+the full SHA-256 of the exact loader backing file. This does not alter the
+guest program ID, and real nonzero title IDs remain unchanged. Hash/read
+failure disables disk caching for that launch. Teardown drains queued
+transferable pipeline records before destroying cache state. For the pinned
+`2048.nro`, `tools/run_fw550_2048.sh` requires identity
+`cd7e7f3438309201`, a decorated pipeline count of zero on the first fresh run,
+and a nonzero count after immediate relaunch. The latter proves that run-one
+guest pipeline records were reopened; it does not claim native OpenAGC
+compiled-pipeline reuse.
+
 The address32 build passed that 2048 sequence-zero gate and was repeatedly
 confirmed visible on the console: magenta appeared before the 2048 board,
 whose colors were correct but faint. The active completion gate remains the

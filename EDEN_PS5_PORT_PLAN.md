@@ -430,6 +430,55 @@ magenta appeared first, followed by the 2048 game with a faint but otherwise
 correct palette. This is positive presentation evidence, not the outstanding
 two-run 600-frame qualification and not yet a color-transfer calibration pass.
 
+The identical pinned ELF then completed two immediate cleanup-first 600-frame
+workloads. Run one,
+`Vulkan-PS5/examples/qualification-logs/20260803T105733Z-swapchain-run1.log`,
+emitted the exact native 600-present and `GAME PASS 600 frames` oracles and the
+operator again saw magenta followed by the faint-but-correct 2048 board. Run
+two, `20260803T110931Z-swapchain-run1.log`, reached the same two 600-frame
+oracles and retired PID 96 with no remaining exact `eboot.bin`, JIT failure,
+allocation failure, GPU failure, or crash. The wrapper rejected run two only
+because its required `Total Pipeline Count` line was absent. This is two-run
+renderer/relaunch evidence, but it is not yet the promised persistent
+shader-cache evidence.
+
+Audit found that the rejection exposed a real homebrew cache gap rather than
+a renderer failure: `2048.nro` has program ID zero, and Vulkan
+`LoadDiskResources` returned before assigning either cache filename. The old
+bare anchored count regex also could not match Eden's decorated LOG_INFO line.
+Eden commit `aac3627` now leaves the guest program ID unchanged but derives a
+Prospero-only, path-independent cache namespace from the exact loader backing
+file's full SHA-256. The ID reserves bit 63 and fails closed to uncached
+execution on a hash or read error. For the pinned `2048.nro`, the exact cache
+identity is `cd7e7f3438309201`; real nonzero title IDs bypass hashing. Hashing
+completes before GPU workers start and uses a bounded heap buffer. The Vulkan
+pipeline cache destructor now drains queued transferable pipeline
+serialization before driver-cache serialization and member teardown. The
+dedicated host suite passes 9 assertions across real-ID pass-through, known
+SHA-256 vectors, path independence, content invalidation, short reads, stalled
+reads, and null content; the strict full Prospero frontend also builds.
+
+The rebuilt source-committed ELF is SHA-256
+`ad5160147212771bb43b98aea8f4a835bcb735c315b4c84e362761d9cdf956cb`.
+The 2048 wrapper pins those bytes and the exact derived cache identity. Run one
+must report a decorated `Total Pipeline Count: 0`, proving no stale
+transferable cache was loaded; cleanup preserves the resulting cache.
+Immediate run two must report the identical identity and a decorated nonzero
+pipeline count, proving that run one's `vulkan.bin` records were reopened and
+scheduled. This oracle does not claim reduced ACO compilation or compiled
+OpenAGC driver-cache reuse. The rebuilt bytes still require sequence-zero
+hardware canary and the complete two-run 600-frame replay before this revised
+persistence gate is closed.
+
+An additional candidate workload is `../Flappy_Bird_NX.nro`, SHA-256
+`6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`.
+Its header contains the expected `NRO0` magic, it embeds `romfs:/` graphics,
+WAV/MP3 audio, SDL2, SDL_ttf, and SDL2_mixer code, and its content-derived
+cache identity will therefore be independent of its launch path. Keep it as a
+separate candidate until a cleanup-first bounded canary proves continuous
+presentation and fail-soft audio behavior; it does not replace the active
+2048 persistence gate or its identical-byte evidence.
+
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
 process-lifetime guard: cache eligibility allocation and initial demotion,
@@ -786,7 +835,8 @@ the 600-frame oracle, retire their exact process, and find no remaining
 `eboot.bin`; they are progress evidence rather than teardown qualification.
 Vulkan-PS5 commit `af0ab3b` removes the obsolete per-push-constant hot-path
 diagnostic. The standard 600-frame runner now uses a bounded, configurable
-`EDEN_PS5_WEBSRV_TIMEOUT`, defaulting to 300 seconds for cold shader caches.
+`EDEN_PS5_WEBSRV_TIMEOUT`, currently defaulting to 900 seconds for the measured
+2048 workload.
 
 Vulkan-PS5 commit `0696b18` adds eight-sample Prospero checkpoints around
 command-buffer end, native submission/fence wait, swapchain acquisition, and
