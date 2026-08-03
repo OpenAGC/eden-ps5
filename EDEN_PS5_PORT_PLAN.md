@@ -204,6 +204,31 @@ stream, but it must not be counted as clean teardown. The accepted graphics log
 is `examples/qualification-logs/depth-array/20260803T134154Z-swapchain-run1.log`;
 the rejected teardown evidence is its `-target.klog` companion.
 
+The cleanup-first Flappy retry then advanced past both the format-130
+allocation and the one-layer D32/S8 array view. PID 136 remained on magenta
+because all three guest graphics pipelines failed creation with
+`VK_ERROR_FEATURE_NOT_PRESENT`; command-buffer closure then rejected the
+latched `-8` record error after `vkCmdPipelineBarrier`. The accepted failure
+log is
+`examples/qualification-logs/flappy-bird/20260803T134307Z-swapchain-run1.log`.
+This supersedes D32/S8 as the active blocker: Eden always declares core
+`DEPTH_BOUNDS`, `STENCIL_COMPARE_MASK`, and `STENCIL_WRITE_MASK` dynamic state,
+while Vulkan-PS5 previously rejected those enums and implemented their command
+entry points as no-ops.
+
+OpenAGC commit `32aef72` now exposes those three dynamic states through its
+public runtime and emits exact depth-bound and state-preserving front/back
+stencil register packets. Vulkan-PS5 commit `e048d47` accepts the Vulkan enums,
+propagates them into the native pipeline mask, records/replays their values,
+and enables the already-supported static depth-bounds state. Its lifecycle
+regression also pins format enum 130 (`VK_FORMAT_D32_SFLOAT_S8_UINT`) to
+attachment/transfer features for both reported tilings, rejects sampled use,
+and accepts the qualified optimal attachment/transfer usage. OpenAGC runtime
+and API-reference tests pass; all 20 focused Vulkan command-recording tests
+and the lifecycle test pass; both Prospero static libraries cross-build. A new
+Eden ELF must now be built and pinned before the next cleanup-first Flappy
+hardware retry.
+
 ### Payload SDK identity
 
 The current `build-prospero-full-audit2` CMake cache resolves both
