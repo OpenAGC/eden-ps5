@@ -12,12 +12,14 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current pinned guest startup diagnostic Eden ELF is SHA-256
-`58f2d9de72d3ceef2b373fe512d52b1298a98d9910c00faaaffabb5b4f0eab22`,
-embeds Eden `1115e8168b`, and incorporates OpenAGC byte-granular transfer commit
+`acb1980f2d0ed07d6107aadfa334ad39b64dadf8f4b11a2abd5e404ef82b9705`,
+embeds Eden `815b136243`, and incorporates OpenAGC byte-granular transfer commit
 `4719611` plus Vulkan-PS5 first-command diagnostics `237ba9f`, buffer-image
 failure telemetry `ed9eada`, and exact buffer-image range preparation
 `edba96d`. It also includes OpenAGC capacity diagnostics `7e87dd8` and the
-Vulkan-PS5 256-KiB native DCB plus old-budget regression at `d518591`.
+Vulkan-PS5 256-KiB native DCB plus old-budget regression at `d518591`, empty
+native scissors `993952e`, signed Vulkan scissor clipping `f9ae5ad`, and
+buffer-image validation telemetry `aa82230`.
 
 Before launch, pin the ELF, NRO, sidecar, cleanup ELF, guarded runner,
 exact-process helper, and PyPS4debug revision/lockfile. Run only the direct
@@ -107,6 +109,23 @@ open when Eden reaches `vkEndCommandBuffer`. The next slice is to log the exact
 signed rectangle, implement Vulkan-valid clipping into gfx1013's unsigned
 scissor domain, add negative/partially clipped regression cases, rebuild, and
 repeat the cleanup-first Flappy canary.
+
+That scissor slice passed on cleanup-first PID 248, log
+`examples/qualification-logs/flappy-bird/20260803T213104Z-swapchain-run1.log`.
+It advanced from three to eight native draws, closed the active render pass,
+and reached a later buffer-to-image operation. PID 251 with exact copy
+validation telemetry is preserved at
+`examples/qualification-logs/flappy-bird/20260803T213321Z-swapchain-run1.log`.
+It identifies the request as `VK_FORMAT_D32_SFLOAT_S8_UINT` (130), depth aspect
+`0x2`, mip/layer zero, and extent 1280x720x1. Vulkan-PS5 currently rejects all
+depth/stencil aspects in `native_image_copy_layers`, so OpenAGC is not reached.
+The next slice must implement a tiled D32 depth-plane upload through a graphics
+meta path that reads the staging buffer and writes `gl_FragDepth`; raw linear
+DMA rows are not valid for OpenAGC's gfx1013 `64KB_Z_X` depth layout. Keep the
+stencil plane fail-closed until an independently correct per-fragment stencil
+write path exists. Add exact D32/S8 aspect, row-pitch, offset, transition,
+descriptor, attachment, and teardown regressions before the next hardware
+retry.
 
 `InvadersNX.nro` remains the second workload and long-running presentation
 canary, not a substitute for the current diagnosis. Switch to it after Flappy
