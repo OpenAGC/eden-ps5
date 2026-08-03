@@ -121,7 +121,7 @@ Result System::Stop() {
         session->Stop();
         session->SetVolume(0.0f);
         session->ClearBuffers();
-        if (buffers.ReleaseBuffers(system.CoreTiming(), *session, true)) {
+        if (buffers.ReleaseBuffers(system.CoreTiming(), *session, true, true)) {
             buffer_event->Signal(system.Kernel());
         }
         state = State::Stopped;
@@ -160,7 +160,7 @@ void System::RegisterBuffers() {
 }
 
 void System::ReleaseBuffers() {
-    bool signal{buffers.ReleaseBuffers(system.CoreTiming(), *session, false)};
+    const bool signal{buffers.ReleaseBuffers(system.CoreTiming(), *session, false, true)};
 
     if (signal) {
         // Signal if any buffer was released, or if none are registered, we need more.

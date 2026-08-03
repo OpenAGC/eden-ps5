@@ -92,13 +92,15 @@ public:
     /**
      * Release all registered buffers.
      *
-     * @param core_timing - The CoreTiming instance
-     * @param session     - The device session
+     * @param core_timing      - The CoreTiming instance
+     * @param session          - The device session
+     * @param force            - Release buffers without waiting for backend consumption
+     * @param signal_when_empty - Report an empty registered queue even if nothing was released
      *
-     * @return If any buffer was released.
+     * @return If the owning service should signal its buffer event.
      */
     bool ReleaseBuffers(const Core::Timing::CoreTiming& core_timing, const DeviceSession& session,
-                        bool force) {
+                        bool force, bool signal_when_empty) {
         std::scoped_lock l{lock};
         bool buffer_released{false};
         while (registered_count > 0) {
@@ -119,7 +121,7 @@ public:
             buffer_released = true;
         }
 
-        return buffer_released || registered_count == 0;
+        return buffer_released || (signal_when_empty && registered_count == 0);
     }
 
     /**

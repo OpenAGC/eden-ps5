@@ -120,7 +120,7 @@ Result System::Stop() {
         session->Stop();
         session->SetVolume(0.0f);
         session->ClearBuffers();
-        if (buffers.ReleaseBuffers(system.CoreTiming(), *session, true)) {
+        if (buffers.ReleaseBuffers(system.CoreTiming(), *session, true, false)) {
             buffer_event->Signal(system.Kernel());
         }
         state = State::Stopped;
@@ -159,9 +159,10 @@ void System::RegisterBuffers() {
 }
 
 void System::ReleaseBuffers() {
-    bool signal{buffers.ReleaseBuffers(system.CoreTiming(), *session, false)};
+    const bool signal{buffers.ReleaseBuffers(system.CoreTiming(), *session, false, false)};
     if (signal) {
-        // Signal if any buffer was released, or if none are registered, we need more.
+        // AudioOut buffer events represent a released client tag. Signalling an initially empty
+        // queue wakes libnx with a zero count and leaves SDL's released-buffer pointer null.
         buffer_event->Signal(system.Kernel());
     }
 }

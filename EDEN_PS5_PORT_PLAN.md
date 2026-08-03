@@ -739,6 +739,27 @@ target and strict integrated Prospero build pass. The rebuilt ELF embeds
 `d1b7d250d677cefddc8a4319b04fdb9ff4ca9ee425cf38630f13172500cb3230`, and
 is pinned for one cleanup-first 30-second capture.
 
+The cleanup-first PID 152 capture is preserved at
+`examples/qualification-logs/flappy-bird/20260803T173552Z-swapchain-run1.log`.
+Eden accepted the two nonzero SDL client tags `0x2102344f80` and
+`0x2102344fa8`, then `GetReleasedAudioOutBuffers` returned `count=0`,
+`capacity=1`, and `first=0`. The simultaneous guest snapshot held
+`released=0` and `released_count=0`. This rules out CMIF output delivery and
+proves the buffer event woke libnx before any tag was released. One native
+present completed, and cleanup again proved PID-specific and global exact
+process absence twice.
+
+`AudioBuffers::ReleaseBuffers` historically reported success both after a
+real release and whenever the registered queue was already empty. That
+combined predicate is retained explicitly for AudioIn, which uses the empty
+notification to request more capture buffers. AudioOut now opts out of empty
+queue notifications: its event is signalled only when at least one client tag
+actually moves to the released queue. This prevents the startup manager tick
+from leaving a stale signalled event that makes `audoutWaitPlayFinish` return
+zero buffers. The next replay must return one of the appended tags, eliminate
+the null `SWITCHAUDIO_GetDeviceBuf` read, and continue toward the 120-frame
+oracle; merely surviving the old boundary is not the completion gate.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the
