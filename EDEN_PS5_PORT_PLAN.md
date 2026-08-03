@@ -414,6 +414,12 @@ barrier completion separately. The accepted failure log is
 `examples/qualification-logs/flappy-bird/20260803T152855Z-swapchain-run1.log`;
 cleanup passed both PID and global absence checks twice.
 
+The regular-indirect diagnostic ELF embeds Eden revision
+`d42c1250255c9750b92796c8bc0e1d89e04cdc2d`, includes Vulkan-PS5
+`77adbce`, and has SHA-256
+`bd1d24044d5c393a0c2ce6aebf910bbc873948456d46f538c5f964cecdada90b`.
+The wrapper pins these bytes for one cleanup-first 110-second replay.
+
 PID 182 produced no buffer-range or image-subresource state-query failure, so
 the barrier completed and a later unlabelled command latched `-8`. Eden has no
 timestamp call in this path but does have a Maxwell indirect-count draw path.
