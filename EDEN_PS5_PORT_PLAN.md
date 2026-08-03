@@ -68,13 +68,26 @@ Xbyak ownership remains unchanged. The GPU-free
 `eden-ps5-dynarmic-jit-wx-probe.elf` uses OS-chosen anonymous addresses only and
 exercises four exact `0x2004000` mappings through four bounded W^X cycles each,
 executing a known-return stub only after a successful RX transition and
-unmapping every established mapping. The rebuilt probe is SHA-256
-`4c08c78a084211a38749ca2d165e36f01c2d1fd71edf3d282b45b0a4391287b8`;
-the rebuilt full Eden ELF is SHA-256
-`629ccf4adc7b1521818af9934b9de9b42fc2b4f3c7359970ddac060129855811`.
+unmapping every established mapping. The source-committed rebuilt probe is
+SHA-256
+`7905e56f44fd419900258b247372c0885f305ec562b9111df47c070483bdcbc8`;
+the source-committed rebuilt full Eden ELF is SHA-256
+`b15cdff162630eb9d9dfd01195407b8a904020aee58068726e44bd909ecc164e`.
 Both are build artifacts, not target evidence. The pinned probe wrapper must
 complete all 20 fresh cleanup-first launches before the full ELF is eligible
 for the InvadersNX gate.
+
+The earlier pre-commit probe bytes
+`4c08c78a084211a38749ca2d165e36f01c2d1fd71edf3d282b45b0a4391287b8`
+passed 20 cleanup-first processes on FW 5.50 in logs
+`20260803T024554Z-swapchain-run1.log` through
+`20260803T024933Z-swapchain-run1.log`: 320 successful RW-to-RX transitions,
+320 known-return executions, 320 RX-to-RW transitions, and 80 unmaps, all with
+`errno=0`. PIDs were the even sequence 102 through 140; the wrapper and an
+independent final exact-name query found no `eboot.bin`. Because committing and
+rebuilding changed the embedded SCM bytes, this is strong diagnostic evidence
+but is not substituted for byte-identical qualification of the pinned
+`7905e56f...` probe.
 
 ## Active construction diagnostic (2026-08-02)
 
