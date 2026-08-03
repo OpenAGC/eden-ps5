@@ -332,17 +332,8 @@ void RegAlloc::HostCall(
     constexpr std::array<HostLoc, args_count> args_hostloc = {ABI_PARAM1, ABI_PARAM2, ABI_PARAM3, ABI_PARAM4};
     const std::array<std::optional<Argument::copyable_reference>, args_count> args = {arg0, arg1, arg2, arg3};
 
-    static const std::bitset<32> other_callback_clobbered = [args_hostloc]() noexcept {
-#if defined(__PROSPERO__)
-        // The Prospero callback chain has not preserved live values held in nominally
-        // callee-saved registers reliably. Spill every allocatable host register across a host
-        // call until the payload ABI boundary is qualified.
-        std::bitset<32> ret = ABI_ALL_CALLER_SAVE | ABI_ALL_CALLEE_SAVE;
-        ret.reset(size_t(HostLoc::RSP));
-        ret.reset(size_t(ABI_JIT_PTR));
-#else
+    static const std::bitset<32> other_caller_save = [args_hostloc]() noexcept {
         std::bitset<32> ret = ABI_ALL_CALLER_SAVE;
-#endif
         ret.reset(size_t(ABI_RETURN));
         for (auto const hostloc : args_hostloc)
             ret.reset(size_t(hostloc));
@@ -361,8 +352,8 @@ void RegAlloc::HostCall(
         }
     }
     // Must match with with ScratchImpl
-    for (size_t i = 0; i < other_callback_clobbered.size(); ++i) {
-        if (other_callback_clobbered[i]) {
+    for (size_t i = 0; i < other_caller_save.size(); ++i) {
+        if (other_caller_save[i]) {
             MoveOutOfTheWay(code, HostLoc(i));
             LocInfo(HostLoc(i)).WriteLock();
         }

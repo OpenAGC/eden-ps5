@@ -87,13 +87,27 @@ public:
     template<typename F>
     requires std::is_pointer_v<F> && std::is_function_v<std::remove_pointer_t<F>>
     void CallFunction(F fn) {
+#if defined(__PROSPERO__)
+        // Payload callbacks have not reliably preserved the SysV callee-save GPRs. Preserve
+        // them at the generated-code boundary without changing register-allocation pressure.
+        ABI_PushCalleeSaveRegistersAndAdjustStack(*this);
+#endif
         ::Common::X64::CallFarFunction(*this, fn);
+#if defined(__PROSPERO__)
+        ABI_PopCalleeSaveRegistersAndAdjustStack(*this);
+#endif
     }
 
     /// @brief Code emitter: Calls the lambda. Lambda must not have any captures.
     template<typename Lambda>
     void CallLambda(Lambda l) {
+#if defined(__PROSPERO__)
+        ABI_PushCalleeSaveRegistersAndAdjustStack(*this);
+#endif
         ::Common::X64::CallFarFunction(*this, Common::FptrCast(l));
+#if defined(__PROSPERO__)
+        ABI_PopCalleeSaveRegistersAndAdjustStack(*this);
+#endif
     }
 
     void ZeroExtendFrom(size_t bitsize, Xbyak::Reg64 reg) {
