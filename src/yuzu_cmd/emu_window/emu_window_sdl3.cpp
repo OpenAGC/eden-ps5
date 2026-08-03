@@ -129,18 +129,21 @@ void EmuWindow_SDL3::SetQualificationInputCycle(bool enabled) {
     qualification_input_direction = 0;
     qualification_input_press_count = 0;
     qualification_input_last_step_ms = SDL_GetTicks();
-    LOG_INFO(Frontend, "PS5 qualification input cycle: enabled={} interval_ms=50", enabled);
+    LOG_INFO(Frontend, "PS5 qualification input cycle: enabled={} interval_ms=250", enabled);
 }
 
 void EmuWindow_SDL3::AdvanceQualificationInputCycle() {
     if (!qualification_input_cycle_enabled) {
         return;
     }
-    constexpr u64 StepIntervalMs = 50;
-    // A advances common title/tutorial screens, B starts a new 2048 game after
-    // a completed board, and the remaining keys exercise the default
-    // left-stick mapping without a separate input thread.
-    constexpr std::array<int, 6> QualificationKeys{
+    constexpr u64 StepIntervalMs = 250;
+    // Slow guest frames can miss short key pulses entirely. Give title and
+    // tutorial screens sustained, repeated A windows while retaining B and
+    // every default left-stick direction in the bounded qualification cycle.
+    constexpr std::array<int, 9> QualificationKeys{
+        SDL_SCANCODE_A,
+        SDL_SCANCODE_A,
+        SDL_SCANCODE_A,
         SDL_SCANCODE_A,
         SDL_SCANCODE_S,
         SDL_SCANCODE_LEFT,

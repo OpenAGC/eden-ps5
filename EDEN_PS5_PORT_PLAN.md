@@ -348,6 +348,21 @@ The integrated query-copy retry ELF embeds Eden revision
 The Flappy wrapper pins those exact bytes for the next cleanup-first,
 direct-`/dev/gc`, 110-second hardware diagnostic.
 
+That diagnostic, PID 173, did not exercise the query-copy fix. It remained
+alive until the 110-second host deadline with no Vulkan rejection, but it also
+never entered Flappy's guest-render sequence: the input counter reached 1,056,
+both raw guest samples remained opaque black, and only the magenta calibration
+present completed. The accepted timeout log is
+`examples/qualification-logs/flappy-bird/20260803T150800Z-swapchain-run1.log`.
+Cleanup proved PID-specific and global exact-process absence twice.
+
+Flappy's source advances its title on `KEY_A`. The old qualification injector
+held each keyboard key for only 50 ms and offered A once per 600 ms cycle; a
+slow guest input poll can miss every such pulse. The next input slice uses
+250 ms holds and four consecutive A slots before B and directions, preserving
+the 110-second deadline while making title/tutorial progression overlap slow
+guest polls. Rebuild and identity pinning are required before another launch.
+
 The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
 reached the next draw-preparation boundary at about 98 seconds. The guest draw
 reported `descriptors=0 vertex_buffers=0`; descriptor preparation had returned
