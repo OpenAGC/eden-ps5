@@ -12,8 +12,8 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current unlaunched guest command-completion diagnostic Eden ELF is SHA-256
-`4de8c78f5335069a39c5438f82f694539d2c912f670ab11fc8690966350edbe6`,
-embeds Eden `20c63eb8e2`, and incorporates Vulkan-PS5 checkpoint-retirement
+`3719f5906c46b5f6a833e1813475230947572297ef3081c8a0ec51e5bc9b2af7`,
+embeds Eden `7a3042e989`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
 usage fix `2d84b89`.
 
@@ -1030,6 +1030,29 @@ included. Host `core` and the strict Prospero build pass. Revision `20c63eb`
 contains the SVC telemetry and PID 185 evidence. Its rebuilt ELF embeds
 `20c63eb8e2`, has SHA-256
 `4de8c78f5335069a39c5438f82f694539d2c912f670ab11fc8690966350edbe6`, and
+is pinned for exactly one cleanup-first 30-second replay.
+
+That replay ran as PID 188 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T184748Z-swapchain-run1.log`.
+The first GPFIFO response returned through `SendSyncRequest` on guest thread
+77. That same thread then continued through system-tick reads, IPC requests,
+memory mappings, thread creation/start, core-mask setup, and a process-wide
+condition-variable handshake that completed when the new thread signalled it.
+It subsequently initialized AudioOut and continued issuing successful IPC
+requests. This is active `SDL_HelperInit` work, not a render-thread deadlock.
+The global 128-SVC budget was exhausted around 20 seconds after the audio
+worker joined the trace, before initialization ended. No second BufferQueue
+commit followed. The run emitted no fatal diagnostic, audio remained correctly
+paced, and cleanup proved PID 188 and global `eboot.bin` absence twice each.
+
+The next diagnostic binds its SVC budget to the submit-owning guest thread 77
+and excludes the audio worker. It records up to 256 subsequent entries/returns,
+which should preserve the render/initialization path through the full bounded
+window and identify the last guest service boundary before timeout. The
+checked-in dispatcher and generator template remain identical. Host `core` and
+the strict Prospero build pass. Revision `7a3042e` contains the focused trace
+and PID 188 evidence. Its rebuilt ELF embeds `7a3042e989`, has SHA-256
+`3719f5906c46b5f6a833e1813475230947572297ef3081c8a0ec51e5bc9b2af7`, and
 is pinned for exactly one cleanup-first 30-second replay.
 
 PID 137 completed the 30-second observation without the low read, allocator
