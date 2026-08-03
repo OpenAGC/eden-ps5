@@ -34,6 +34,15 @@ u32 DynarmicCallbacks64::MemoryRead32(u64 vaddr) {
     return m_memory.Read32(vaddr);
 }
 u64 DynarmicCallbacks64::MemoryRead64(u64 vaddr) {
+    if (!m_memory.IsValidVirtualAddressRange(vaddr, sizeof(u64))) {
+        const auto registers = m_parent.m_jit->GetRegisters();
+        LOG_CRITICAL(Core_ARM,
+                     "A64 invalid Read64: address={:#x} pc={:#x} sp={:#x} lr={:#x} "
+                     "x0={:#x} x1={:#x} x8={:#x} x19={:#x} x20={:#x} fp={:#x}",
+                     vaddr, m_parent.m_jit->GetPC(), m_parent.m_jit->GetSP(), registers[30],
+                     registers[0], registers[1], registers[8], registers[19], registers[20],
+                     registers[29]);
+    }
     CheckMemoryAccess(vaddr, 8, Kernel::DebugWatchpointType::Read);
     return m_memory.Read64(vaddr);
 }

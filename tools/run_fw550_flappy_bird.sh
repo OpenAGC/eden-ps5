@@ -83,7 +83,7 @@ if [ "${EDEN_PS5_QUALIFICATION_REJECT_PATTERN+x}" = x ]; then
 fi
 
 firmware_pattern='^\[openagc\] system software raw=0x05500008 string= 5\.500\.008$'
-input_cycle_pattern='PS5 qualification input cycle: enabled=true interval_ms=50'
+input_cycle_pattern='PS5 qualification input cycle: enabled=true interval_ms=250'
 telemetry_pattern='Prospero guest pipeline cache telemetry: graphics_created=[0-9]+ compute_created=[0-9]+ records_written=[0-9]+ records_skipped=[0-9]+'
 reject_pattern='(allocation|mapping|mmap|mprotect) failed|^eden-ps5 dynarmic .* failed:'
 reject_pattern="$reject_pattern|invalid JIT mapping|Failed to (present|derive|obtain|load)"
