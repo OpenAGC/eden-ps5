@@ -84,6 +84,12 @@ uses 48 so the initial flow advances before the next restart can enter another
 guest-time loading delay. Its wrapper requires the exact stop marker before a
 300-present result can pass.
 
+The 48-press hardware replay confirmed that injection stopped before the final
+loading interval, yet Flappy still ended at native present sequence 63. Its
+pipeline-cache qualification is complete, but it is not the continuous-frame
+workload. Use the input-independent InvadersNX gate for long presentation and
+teardown qualification.
+
 The first Flappy hardware attempt reached its accelerated GLES2 renderer and
 one native present, then exposed an eager allocation in the guest GPU
 `MultiLevelPageTable`: a 37-bit `nvhost-as-gpu` address space tried to commit a

@@ -4131,6 +4131,19 @@ delay. The next sidecar stops earlier at 48 presses, keeps the identical ELF,
 and has SHA-256
 `55f2678db0d2c92dcaf887ba3ba7555ba39d00016156555267110f8e602df81c`.
 
+The 48-press replay is preserved at
+`20260803T231355Z-swapchain-run1.log`. It stopped input at 25.43 seconds,
+retained the 5/5 graphics-cache reload with zero rejection, completed another
+loading interval, and still produced no frame beyond native present sequence
+63 before the 45-second bound. Cleanup proved PID 122 and the global exact
+name absent twice. This rules out perpetual restart input as the owner of the
+64-frame ceiling. Flappy has now supplied its intended visible guest graphics,
+record-write, and immediate record-reload evidence; do not spend more hardware
+cycles adjusting its timeout or input cap for the independent long-frame gate.
+Use the pinned InvadersNX workload for continuous presentation because its
+source calls `SDL_RenderPresent` unconditionally on every applet-loop
+iteration and does not require input to keep submitting frames.
+
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
    through Vulkan-PS5 into `openagc-psbc`, record it in versioned shader
