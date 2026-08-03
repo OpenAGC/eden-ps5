@@ -12,10 +12,11 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current pinned guest startup diagnostic Eden ELF is SHA-256
-`3719f5906c46b5f6a833e1813475230947572297ef3081c8a0ec51e5bc9b2af7`,
-embeds Eden `7a3042e989`, and incorporates Vulkan-PS5 checkpoint-retirement
-commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
-usage fix `2d84b89`.
+`08f6ae3c66c4abcc6b63f77d2f14e63efd72e3c8ef986d151e3582ebdefa6a4f`,
+embeds Eden `0b78058e26`, and incorporates OpenAGC byte-granular transfer commit
+`4719611` plus Vulkan-PS5 first-command diagnostics `237ba9f`, buffer-image
+failure telemetry `ed9eada`, and exact buffer-image range preparation
+`edba96d`.
 
 Before launch, pin the ELF, NRO, sidecar, cleanup ELF, guarded runner,
 exact-process helper, and PyPS4debug revision/lockfile. Run only the direct
@@ -63,6 +64,39 @@ input-cycle, PSBC, telemetry-summary, frame, teardown, and process oracles. A
 successful canary prints the observed counters but does not claim cache
 persistence; only positive guest creation and record-write counts make an
 identical immediate relaunch eligible.
+
+The cleanup-first PID 239 run is preserved at Vulkan-PS5 log
+`examples/qualification-logs/flappy-bird/20260803T211403Z-swapchain-run1.log`.
+It proved that removing the false four-byte DMA restriction advances through
+the earlier native copy rejection, but precise telemetry then located the
+remaining `VK_ERROR_FEATURE_NOT_PRESENT` in the source buffer's whole-range
+state query. Eden uses disjoint ranges of its shared staging buffer, so asking
+OpenAGC for one uniform state across the entire allocation was invalid.
+Vulkan-PS5 `edba96d` computes the exact Vulkan copy footprint, including BC
+block geometry, and prepares only the referenced range. Its host regression
+deliberately gives an unused part of the source buffer a different state; the
+copy records successfully, and both the focused host command test and
+Prospero ICD build pass.
+
+The next cleanup-first PID 242 run is preserved at
+`examples/qualification-logs/flappy-bird/20260803T211906Z-swapchain-run1.log`.
+It passed exact-range preparation, reached the native 576x576 buffer-to-image
+copy at staging offset 4,223,488, and increased the recorded draw count from
+two to three. The new first failure is `AGC_ERROR_COMMAND_SPACE_EXHAUSTED`
+(`0x8089000c`), translated to `VK_ERROR_OUT_OF_HOST_MEMORY`, because encoding
+one DMA packet per image row no longer fits the remaining 64-KiB Vulkan native
+DCB after the preceding guest work. The apparent image-view destruction text
+is stale debug state and is not the result associated with this return path.
+The next implementation slice must give this workload a bounded larger native
+command capacity (or a safely chunked submission path), add a regression that
+exhausts the old 64-KiB budget, and retain fail-closed capacity errors. Do not
+paper over the result by translating it to a feature error.
+
+`InvadersNX.nro` remains the second workload and long-running presentation
+canary, not a substitute for the current diagnosis. Switch to it after Flappy
+records this upload and reaches command-buffer end/presentation; changing the
+guest earlier could merely avoid the 576-row transfer and leave the shared
+driver defect latent.
 
 The first hardware canary, PID 115, is preserved at Vulkan-PS5 log
 `examples/qualification-logs/flappy-bird/20260803T125249Z-swapchain-run1.log`.
