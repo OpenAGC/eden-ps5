@@ -405,6 +405,14 @@ The barrier-state diagnostic ELF embeds Eden revision
 `af0101f437f31172240cf65cff66ef70424c2a9620ca6b96b884ec096d8edc19`.
 The wrapper pins these bytes for one cleanup-first 110-second replay.
 
+PID 182 produced no buffer-range or image-subresource state-query failure, so
+the barrier completed and a later unlabelled command latched `-8`. Eden has no
+timestamp call in this path but does have a Maxwell indirect-count draw path.
+Vulkan-PS5 now labels timestamp, indexed draw, and both indirect-count commands
+and prints unsupported-call arguments. The accepted log is
+`examples/qualification-logs/flappy-bird/20260803T152248Z-swapchain-run1.log`;
+PID 182 and global exact-process absence each passed twice after cleanup.
+
 The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
 reached the next draw-preparation boundary at about 98 seconds. The guest draw
 reported `descriptors=0 vertex_buffers=0`; descriptor preparation had returned
