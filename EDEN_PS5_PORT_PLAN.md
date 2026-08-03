@@ -288,6 +288,36 @@ The rebuilt ELF embeds revision
 `9455859598f338c386ea0eae50b1d55a664b8d2e4c962a5b3aef9d222a1363d5`,
 and is pinned by the Flappy wrapper.
 
+The undefined-source retry, PID 154, passed that first barrier, submitted one
+native present, and still displayed only the magenta calibration image. At
+about 98 seconds it reached the next exact boundary: format 51
+(`VK_FORMAT_A8B8G8R8_UNORM_PACK32`) transitions from
+`VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL` to `VK_IMAGE_LAYOUT_GENERAL`, with
+`VK_ACCESS_TRANSFER_WRITE_BIT` as the source and conservative destination
+access `0x7e0` spanning shader, color-attachment, and depth/stencil roles.
+Core Vulkan permits a multi-role access scope; Vulkan-PS5 incorrectly required
+one role before considering the image's color aspect and declared usage. The
+accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T141911Z-swapchain-run1.log`.
+The wrapper retired PID 154 and passed both PID-scoped and global exact-absence
+checks twice.
+
+Vulkan-PS5 commit `5f56e1d` resolves a multi-role GENERAL scope against the
+concrete image aspect and usage. For this color attachment it emits a real
+native `CopyDestination` to `ColorTarget` transition, preserving the transfer
+write dependency rather than treating the scope as undefined. The exact Eden
+barrier regression, command-recording, lifecycle, and validation host tests,
+and the Prospero static-library build pass. A rebuilt cleanup-first Flappy
+retry is next; visible output remains unproven.
+
+Format value 122 is `VK_FORMAT_B10G11R11_UFLOAT_PACK32`. The same run shows
+Eden's broad optimal-tiling feature probe (`0xc083`) rejecting it and both
+configured alternatives because Vulkan-PS5 currently advertises sampled,
+color-attachment, transfer, and blit support but not storage-image support for
+those formats. This is a separate format-capability qualification item, not
+the format-51 barrier failure above; storage must be hardware-qualified before
+it is advertised.
+
 The diagnostic replay, PID 142, again cleaned up with two PID-scoped and two
 global absence checks. Its request fingerprint rules out alpha-to-coverage,
 MSAA, depth/stencil tests, and unknown dynamic enums. Each rejected guest
