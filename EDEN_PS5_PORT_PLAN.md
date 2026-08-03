@@ -1374,6 +1374,24 @@ immediately reverted and must not be relaunched. Future address probes must
 use a bounded reservation-discovery or low display-allocation strategy rather
 than an unproven fixed 4 GiB mapping.
 
+The Mesa/OpenAGC address audit now isolates the high-placement defect more
+precisely. Sampled-image descriptors and color-target registers encode all
+three observed `0x2...`/`0x3...` image addresses correctly; their upper base
+extensions remain zero below 1 TiB. The failing contract is instead RADV's
+address32 shader-resource ABI. `openagc-psbc` compiles descriptor, indirect-set,
+push-constant, and vertex-table pointers with a fixed upper dword of `2`, while
+the OpenAGC command runtime previously truncated its unconstrained Eden
+resource-arena addresses around `0x3...` to one low SGPR without validation.
+The shader consequently reconstructs a different `0x2...` address. This
+explains why Eden's source clear and transfer readback are exact magenta while
+the sampled-image blit writes zero, and why the standalone matrix passes when
+its resource arena naturally occupies the `0x2...` band. OpenAGC commit
+`6ac4442` adds the immediate fail-closed guard before indirect table writes or
+user-data emission; its host suite passes 19,995 assertions with zero failures.
+That guard prevents silent misaddressing but intentionally makes current Eden
+high-band recording fail until the compiler/runtime contract becomes
+device-selected.
+
 The Prospero Dynarmic code cache remains fail-closed: every allocation,
 demotion, RW-to-RX, RX-to-RW, and unmap failure enters the noreturn PS5
 termination path before invalid code can execute. Hardware logs have shown an
@@ -1392,13 +1410,14 @@ process name were absent after cleanup. This persistent relaunch failure is
 now an active owner of the eventual two-run gate, not merely a historical
 observation.
 
-1. Qualify virtual-address sensitivity without another broad fixed mapping:
-   first add a bounded OpenAGC/display probe that discovers a free target range
-   or reproduces Eden's post-guest allocation order, then compare low and high
-   Garlic scanout writes with exact readback. Audit the gfx1013 sampled-image
-   and color-target base encoding against Mesa before changing production
-   placement. Do not advance the long gate until Eden's sequence-zero
-   swapchain readback is exact magenta.
+1. Complete the device-selected address32 contract: give OpenAGC a dedicated
+   same-4-GiB resource arena, expose its selected high dword, pass that value
+   through Vulkan-PS5 into `openagc-psbc`, record it in versioned shader
+   reflection/cache identity, and reject every cross-window allocation or
+   shader/device mismatch. Cover high-2, high-3, and boundary-crossing cases
+   on host, then run cleanup-first matrix case J in Eden's post-guest placement
+   order. Do not advance the long gate until Eden sequence zero has exact
+   magenta swapchain readback and user-confirmed visible presentation.
 2. After sequence-zero scanout is proven, repeat the cleanup-first `2048.nro`
    600-frame workload twice on FW 5.50
    through the
