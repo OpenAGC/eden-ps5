@@ -11,9 +11,9 @@ cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
 Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
-The current unlaunched telemetry-enabled Eden ELF is SHA-256
-`c125bf6e00d2f70734a87723f23b39e7430096e0baa69f6dd075f6ab0b3eeba8`,
-embeds Eden `b5dcdddc5b`, and incorporates Vulkan-PS5 checkpoint-retirement
+The current unlaunched telemetry and sparse-GPU-page-table Eden ELF is SHA-256
+`5f8336611f88c27c07a5943eb4164e64f838989c604e70b9541b82d72942639b`,
+embeds Eden `1c581b6354`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325` plus repeated-absence runner commit `b41393a`.
 
 Before launch, pin the ELF, NRO, sidecar, cleanup ELF, guarded runner,
@@ -62,6 +62,28 @@ input-cycle, PSBC, telemetry-summary, frame, teardown, and process oracles. A
 successful canary prints the observed counters but does not claim cache
 persistence; only positive guest creation and record-write counts make an
 identical immediate relaunch eligible.
+
+The first hardware canary, PID 115, is preserved at Vulkan-PS5 log
+`examples/qualification-logs/flappy-bird/20260803T125249Z-swapchain-run1.log`.
+It reached Flappy's accelerated SDL2/GLES2 path, compiled native PSBC
+pipelines, and completed the first native present before failing at
+`common/multi_level_page_table.inc:36` because its dynamically created
+`nvhost-as-gpu` address space attempted to allocate the entire logical GPU
+page table. On Prospero, anonymous `mmap` commits flexible memory, so the
+37-bit table requested 128 MiB eagerly; 2048's software-rendered path never
+created this guest GPU address space. The guarded runner rejected the run,
+executed cleanup, and proved PID-specific and global exact-process absence
+twice. It is failure evidence, not a qualification pass.
+
+Eden commit `1c581b6` fixes this by preserving the logical flat GPU page-table
+interface while allocating zeroed 64 KiB first-level chunks only on mutable
+access. Missing const reads return zero, move assignment releases prior
+ownership, range arithmetic is overflow and bounds checked, and allocation
+failure is fatal before dereference. The dedicated host regression covers
+cross-level isolation, move ownership, and zero-sized reservation (3 cases,
+7 assertions), and both it and the full Prospero build pass. The next action
+is one cleanup-first retry of the newly pinned ELF; no cache or lifecycle
+claim carries over from PID 115.
 
 ### Payload SDK identity
 

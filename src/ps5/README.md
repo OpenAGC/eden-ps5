@@ -66,6 +66,15 @@ checks. Its final cache observation distinguishes runtime guest graphics and
 compute creation from actually written transferable records. Zero counts may
 still document a lifecycle canary, but they do not qualify cache reuse.
 
+The first Flappy hardware attempt reached its accelerated GLES2 renderer and
+one native present, then exposed an eager allocation in the guest GPU
+`MultiLevelPageTable`: a 37-bit `nvhost-as-gpu` address space tried to commit a
+128 MiB logical table through Prospero flexible memory. Current builds retain
+the flat logical interface but allocate zeroed 64 KiB first-level chunks on
+demand. This is separate from the sparse 39-bit process page table described
+below. The failed run was cleanup-safe and is not qualification evidence; use
+only the ELF SHA pinned by `tools/run_fw550_flappy_bird.sh` for its retry.
+
 The full Prospero build also provides `eden-ps5-host-memory-probe.elf`. It
 exercises Eden's PS5 guest-memory backend independently of Vulkan: fastmem is
 disabled because the host uses 16 KiB pages, a contiguous 4 GiB guest backing
