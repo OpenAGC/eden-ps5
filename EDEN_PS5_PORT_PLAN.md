@@ -142,6 +142,27 @@ D24 fail-closed policy: qualify a supported D32/S8 substitute through a direct
 probe or reject Flappy as unsuitable; do not advertise D24 or retry Eden until
 that evidence exists.
 
+The combined D32/S8 sampled-image probe did not qualify. PID 126 returned
+native queue-wait status `0x80890007`, queue-submit result `-4`, and left its
+command buffer pending with status `0x80890003`. It exited without leaving an
+exact `eboot.bin` process, and cleanup passed two PID and two global absence
+checks. The accepted failure log is
+`examples/qualification-logs/d32s8-sampling/20260803T132723Z-swapchain-run1.log`.
+Vulkan-PS5 commit `63d48a1`, which temporarily advertised sampled combined
+D32/S8, was therefore reverted by `ec32e66`. Combined D32/S8 sampling remains
+fail-closed.
+
+Existing direct depth probes qualify combined D32/S8 for depth/stencil
+attachment and transfer. Eden commit `b4c6734` now uses that narrower evidence:
+on Prospero only, a requested D24/S8 optimal image omits sampled-image support
+from format selection and image usage, allowing the existing D24-to-D32/S8
+alternative to be selected strictly as an attachment/transfer fallback. Other
+platforms are unchanged, and an attempted sampled use is not advertised. The
+Prospero `video_core` target and full `yuzu-cmd` ELF build pass. The rebuilt ELF
+embeds exact revision `b4c67341777ae9104a4eb62d27c5aea8701a763c` and has
+SHA-256 `92b4066369d31ecb6b6bd540cddba6273d72eac66388776d3b7192eadb442c74`.
+The Flappy wrapper pins these bytes for the next cleanup-first canary.
+
 ### Payload SDK identity
 
 The current `build-prospero-full-audit2` CMake cache resolves both
