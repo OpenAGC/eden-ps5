@@ -469,6 +469,26 @@ builds pass. The resulting ELF has SHA-256
 pinned for one cleanup-first exact-instruction capture. This is a fail-closed
 diagnostic correction, not an audio workaround.
 
+PID 110 repeated the null `Read64` after one native present in
+`examples/qualification-logs/flappy-bird/20260803T161221Z-swapchain-run1.log`.
+The post-abort PC became module offset `+0x654b18`, the `svcGetInfo`
+instruction, which cannot itself perform a guest data read; it is therefore a
+halt boundary rather than the faulting load. The fault address `0x8` and audio
+worker ancestry match libnx `rmutexUnlock`'s `ldr w1, [x0,#8]` when passed a
+null mutex. SDL2 stores and verifies a non-null mixer mutex before starting
+this worker, so a later audio-device/heap corruption is now more likely than
+normal SDL allocation failure. Cleanup again proved PID 110 absence twice and
+global exact-process absence twice.
+
+Revision `ecd77c1d3c0bbe27c6b05984a9ad4c831ba4b376` adds a guarded read-only
+snapshot of the candidate SDL audio device's buffer, mixer mutex, audio
+thread, lock owner, and hidden-driver fields, plus mutex contents when mapped.
+The strict integrated Prospero build passes. Its ELF has SHA-256
+`172c7c2a088164c01f7fbad7dc50ebaa8362af21b3b469b5659547e10ad54050` and is
+pinned for a bounded cleanup-first capture. A null device mutex proves object
+corruption after successful open; a valid mutex rules that out and redirects
+the fault to another null-base load in the worker.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
