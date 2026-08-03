@@ -233,8 +233,7 @@ This exact terminal `EBADF` result is recorded across numerous earlier stable
 FW 5.50 1,800-flip qualifications. OpenAGC commit `e2427a9` accepts only that
 exact already-retired descriptor status after VideoOut ownership has been
 released; all other queue-delete results still fail closed. The host suite,
-Prospero build, and source audit pass. The next never-launched Eden ELF is
-SHA-256
+Prospero build, and source audit pass. The resulting Eden ELF was SHA-256
 `3b22a7cea17af3fd300dc8d5e8d8160b5bba592fbeeef18cb1b4aa2b83716c2e`.
 
 The cleanup-first sequence-zero canary for that ELF passed all automated gates
@@ -244,10 +243,8 @@ exact PID/global `eboot.bin` absence. The first 600-frame attempt
 (`20260803T090629Z-swapchain-run1.log`) remained visibly healthy through the
 2048 game but reached the qualification runner's exact 60-second HTTP ceiling
 at 544 input-cycle presses before the 600-frame oracle. Cleanup and exact
-process-absence checks passed and the loader remained responsive; this is a
-harness timeout rather than a completed qualification. The dedicated 600-frame
-wrapper now allows 90 seconds, within its enforced 120-second maximum, while
-the short canary retains its 60-second bound.
+process-absence checks passed and the loader remained responsive; this is not
+a completed qualification.
 
 The bounded retry (`20260803T090925Z-swapchain-run1.log`) disproved timeout as
 the limiting factor: the frontend input injector advanced monotonically to 864
@@ -255,12 +252,27 @@ presses at 88 seconds, but native presentation never reached the first sparse
 100-success marker after the eight detailed checkpoints. No GPU, JIT,
 allocation, protection, process, panic, reset, or teardown failure was logged,
 and the pinned cleanup again left no exact `eboot.bin`. The input injector runs
-on the host event loop and is not a presentation oracle. Accordingly, 2048
-remains the exact-magenta eight-frame smoke workload; the existing InvadersNX
-wrapper is the two-run 600-present gate because that guest calls
-`SDL_RenderPresent` every applet iteration. The ineffective 90-second 2048
-override is removed, and the InvadersNX gate now forces continuous klog for
-both cleanup-first launches.
+on the host event loop and is not a presentation oracle. The active completion
+goal continues to require two cleanup-first 600-present `2048.nro` runs with
+the identical ELF. InvadersNX is retained only as a separate diagnostic and
+cannot replace this gate.
+
+The post-eight audit found no deterministic Eden-side frame-recycle,
+semaphore, or readback defect. It did identify an untested native boundary:
+captured frames use CopyDestination -> CopySource -> VideoOutScanout, while
+normal frames beginning at sequence eight use CopyDestination ->
+VideoOutScanout directly. Vulkan-PS5 commit `a52b400` adds direct/captured/direct
+command-recording coverage, 16 additional acquire/present recycle iterations,
+and bounded WSI checkpoints for ordinals 0-15 plus power-of-two milestones.
+Its focused WSI test and full 62-test host suite pass. Eden commit `62899ba`
+adds matching Composite, frame-acquire/fence, worker, command-end, queue-submit,
+and native-present stage checkpoints, together with a constexpr policy test
+that proves readback ends after sequence seven without gating the remaining
+592 frames. The rebuilt integrated Prospero ELF is SHA-256
+`b65b173188b432ba82528a01ed967aa5d8b1bf0ea86045635042d5b3d2a4ed23`.
+All FW 5.50 wrappers pin these bytes; the next hardware action is the mandatory
+cleanup-first sequence-zero canary, followed by the 600-frame 2048 diagnostic
+and, after it proves continuous progress, the identical two-run gate.
 
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
@@ -302,7 +314,7 @@ oracle, all with `errno=0`. Every per-PID and global exact-process check passed,
 and an independent final query also found no `eboot.bin`. Across the pinned
 bytes this is 320 promotions, 320 executions, 320 demotions, and 80 unmaps with
 clean bounded teardown. The GPU-free JIT W^X preflight is therefore qualified;
-the remaining active proof is the repinned full Eden ELF's two-run InvadersNX
+the remaining active proof is the repinned full Eden ELF's two-run 2048
 renderer/WSI gate under normal multithreaded load.
 
 The first full `b15cdff1...` replay,
