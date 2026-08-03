@@ -185,6 +185,48 @@ transferable-record gates. The Prospero OpenAGC target and full Eden
 `yuzu-cmd` build pass. Hardware evidence is still pending a fresh boot,
 cleanup, and exact-process absence proof.
 
+The fresh-boot FW 5.50 sequence on 2026-08-04 cleared three additional
+driver gates under the pinned cleanup-first runner. PID 89, preserved at
+`examples/qualification-logs/flappy-bird/20260803T222224Z-swapchain-run1.log`,
+reached the first guest render pass and failed because Vulkan-PS5 rejected
+Flappy's legal negative-height viewport. OpenAGC `c1773c6` now emits the
+negative gfx1013 Y scale, Vulkan-PS5 `30d683b` accepts the Vulkan 1.1 form and
+checks both Y endpoints, and the packet, runtime, and command-recording
+regressions pass. PID 92, log
+`examples/qualification-logs/flappy-bird/20260803T222751Z-swapchain-run1.log`,
+passed that point and exposed exact depth-state equality. Vulkan's
+write-capable attachment state was rejected for a read-only pipeline;
+OpenAGC `9e3f0e4` now documents and tests depth/stencil-write as a valid
+superset for read access while still requiring write state for a writer.
+
+PID 95, log
+`examples/qualification-logs/flappy-bird/20260803T223034Z-swapchain-run1.log`,
+passed viewport and depth binding, completed three native presentations, and
+then found a fragmented shared vertex allocation. Vulkan-PS5 `41b83db`
+corrects the first range error by preparing from the bound vertex offset
+rather than byte zero and adds a deliberately fragmented-prefix regression.
+PID 98, log
+`examples/qualification-logs/flappy-bird/20260803T223329Z-swapchain-run1.log`,
+proved that the represented tail itself is fragmented: binding 0 uses offset
+20,928 and a 44,608-byte tail, and OpenAGC correctly returns
+`AGC_ERROR_NOT_SUPPORTED` when asked to describe that mixed range as one
+uniform state. Every run used only direct `/dev/gc`, began with two exact
+global absence proofs, and ended with repeated PID/global absence proofs; no
+`eboot.bin` remains.
+
+The current pinned Eden ELF is SHA-256
+`6e04da04e3caea7ce35ceebde45128b729027b98f0dd90377add2c8275986102`.
+The bounded visual canary is extended from 120 to 300 presented frames so a
+successful run captures several seconds of gameplay while retaining the
+30-second host deadline. The next implementation slice is a public OpenAGC
+command-local buffer-span query that returns the first uniform state and byte
+length inside a requested range. Vulkan-PS5 must use it to issue exact ordered
+transitions for each span of the bound vertex tail, aborting on any query,
+capacity, ownership, or transition failure. Add mixed-prefix and mixed-tail
+host regressions, rebuild both Prospero libraries and Eden, then repeat the
+same cleanup-first Flappy canary. Do not weaken OpenAGC's uniform range query
+or make vertex binding perform an implicit resource transition.
+
 `InvadersNX.nro` remains the second workload and long-running presentation
 canary, not a substitute for the current diagnosis. Switch to it after Flappy
 records this upload and reaches command-buffer end/presentation; changing the
