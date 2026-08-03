@@ -435,10 +435,11 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
         break;
     }
 #if defined(__PROSPERO__)
-    // PS5 callback-mode qualification observed x0 becoming null across a linked BL boundary
-    // even though the caller had just loaded a valid guest pointer. Force dispatcher handoff so
-    // architectural registers are committed between blocks until linked execution is qualified.
-    config.optimizations &= ~Dynarmic::OptimizationFlag::BlockLinking;
+    // PS5 callback-mode qualification observed a live guest callee-saved register becoming null
+    // while its architectural JIT-state copy remained valid. Disable both unsafe transforms and
+    // all optional IR optimizations until callback register preservation is qualified.
+    config.unsafe_optimizations = false;
+    config.optimizations = Dynarmic::no_optimizations;
 #endif
     if (!Settings::IsFastmemEnabled()) {
         config.fastmem_pointer = std::nullopt;
