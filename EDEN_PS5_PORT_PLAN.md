@@ -1,6 +1,6 @@
 # Eden PS5 Port Plan
 
-## Current active slice (2026-08-03)
+## Current active slice (2026-08-04)
 
 ### Active goal: Flappy Bird guest-pipeline canary
 
@@ -11,9 +11,9 @@ cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
 Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
-The current unlaunched guest GPU-fence diagnostic Eden ELF is SHA-256
-`cc7c8e861d7f0c7c8962327091fa1ca097eda6140da4a3f413712c7ce73a797b`,
-embeds Eden `7ccde6073f`, and incorporates Vulkan-PS5 checkpoint-retirement
+The current unlaunched guest command-completion diagnostic Eden ELF is SHA-256
+`d6e8da3e9627e881d4d5f9505a286fbc1f6f83526bac080efd59aec031067126`,
+embeds Eden `5b60c5b251`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
 usage fix `2d84b89`.
 
@@ -944,6 +944,28 @@ NVDRV at all. Host `core` passes; strict Prospero build and one cleanup-first
 and PID 173 evidence. Its rebuilt ELF embeds `7ccde6073f`, has SHA-256
 `cc7c8e861d7f0c7c8962327091fa1ca097eda6140da4a3f413712c7ce73a797b`, and
 is pinned for exactly one cleanup-first replay.
+
+That replay ran as PID 176 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T182116Z-swapchain-run1.log`.
+The guest dequeued its second buffer at about 7.55 seconds but did not submit
+the associated GPU work until 17.205 seconds. Its only GPFIFO submission had
+two entries and flags `0x104`: it reserved output fence `1:1`, with increment
+one, while both live host and guest values remained zero. No NVHOST control
+wait, second GPFIFO submission, or second BufferQueue commit followed. Audio
+remained correctly paced and cleanup proved PID-specific and global exact
+`eboot.bin` absence twice each.
+
+The sibling baseline Eden checkout uses the same `increment_value` handling:
+flag `0x100` contributes the input fence value to the reserved maximum but
+does not synthesize a fence-action command. Changing that contract without
+observing the submitted methods would be speculative. The next diagnostic
+therefore traces the bounded queue-to-completion path: GPU-thread dispatch,
+DMA dispatch and individual headers, puller fence actions, the immediate guest
+syncpoint increment, and the deferred host increment callback. Host `core` and
+the strict Prospero build pass. Revision `5b60c5b` contains this telemetry and
+the PID 176 evidence. Its rebuilt ELF embeds `5b60c5b251`, has SHA-256
+`d6e8da3e9627e881d4d5f9505a286fbc1f6f83526bac080efd59aec031067126`, and
+is pinned for exactly one cleanup-first 30-second replay.
 
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
