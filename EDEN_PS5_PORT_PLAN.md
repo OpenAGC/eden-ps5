@@ -378,6 +378,13 @@ Dynarmic execution and teardown remain pending after the reboot. The committed
 production ELF is SHA-256
 `c49362194ccd31b9c110d845a2618875d3981aa231438348f44991cd9bbb6bcc`;
 the sequence-zero and 600-frame wrappers pin these exact bytes.
+Artifact inspection of those exact bytes confirms unresolved imports for
+`sceKernelJitCreateSharedMemory`, `sceKernelJitCreateAliasOfSharedMemory`,
+`sceKernelJitMapSharedMemory`, and `sceKernelMunmap`, with no unresolved
+`mprotect`. Its strings contain the dual-alias allocation/registry diagnostics
+and none of the former `JIT-eligible W^X`, initial RW-demotion, cache-RX, or
+cache-RW transition diagnostics. This proves the pinned ELF—not merely the
+current source tree—contains the intended non-transition allocator.
 
 The first production dual-alias sequence-zero run,
 `20260803T104700Z-swapchain-run1.log`, created four distinct 32 MiB caches,
