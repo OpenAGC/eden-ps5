@@ -53,6 +53,10 @@ private:
     Kernel::KEvent* event;
     Kernel::KProcess* process;
     std::shared_ptr<AudioCore::AudioOut::Out> impl;
+#if defined(__PROSPERO__)
+    u32 prospero_append_log_count{};
+    u32 prospero_release_log_count{};
+#endif
 };
 
 } // namespace Service::Audio

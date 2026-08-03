@@ -791,6 +791,23 @@ embeds `8071f06ed6`, has SHA-256
 `de844f685bd0bf5e9769e871eb9537a4b1a2c3f514fb21224140c302a962b28f`, and
 is pinned for the cleanup-first hardware replay.
 
+PID 158 proved end-to-end tag delivery in
+`examples/qualification-logs/flappy-bird/20260803T174533Z-swapchain-run1.log`:
+the first two releases returned the exact alternating nonzero tags, and the
+old null read did not recur. Returning the maximum played-sample count made
+the null sink recycle 4,096-frame buffers every 5 ms manager tick, however,
+rather than at their 48 kHz duration. That produced thousands of guest IPC
+calls and diagnostic lines, starving useful graphics progress until the
+30-second bound. All four cleanup absence checks still passed.
+
+The null sink consumption clock is therefore paced by `steady_clock` at the
+Switch target rate. `Start` and `Stop` preserve the accumulated frame count,
+and the virtual played-sample query reports only elapsed 48 kHz frames. The
+first two append and release records remain at info level as bounded evidence;
+later audio cycles are no longer logged. This retains fail-soft audio timing
+without a PS5 hardware sink and prevents diagnostic logging from becoming the
+workload.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the

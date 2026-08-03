@@ -82,11 +82,14 @@ Result IAudioOut::AppendAudioOutBufferAuto(
     LOG_TRACE(Service_Audio, "called. Session {} Appending buffer {:08X}",
               impl->GetSystem().GetSessionId(), buffer_client_ptr);
 #if defined(__PROSPERO__)
-    LOG_INFO(Service_Audio,
-             "Prospero AudioOut append: session={} tag={:#x} samples={:#x} capacity={} size={} "
-             "offset={}",
-             impl->GetSystem().GetSessionId(), buffer_client_ptr, audio_out_buffer[0].samples,
-             audio_out_buffer[0].capacity, audio_out_buffer[0].size, audio_out_buffer[0].offset);
+    if (prospero_append_log_count++ < 2) {
+        LOG_INFO(Service_Audio,
+                 "Prospero AudioOut append: session={} tag={:#x} samples={:#x} capacity={} "
+                 "size={} offset={}",
+                 impl->GetSystem().GetSessionId(), buffer_client_ptr, audio_out_buffer[0].samples,
+                 audio_out_buffer[0].capacity, audio_out_buffer[0].size,
+                 audio_out_buffer[0].offset);
+    }
 #endif
     R_RETURN(impl->AppendBuffer(audio_out_buffer[0], buffer_client_ptr));
 }
@@ -113,10 +116,12 @@ Result IAudioOut::GetReleasedAudioOutBuffersAuto(
     LOG_TRACE(Service_Audio, "called. Session {} released {} buffers",
               impl->GetSystem().GetSessionId(), *out_count);
 #if defined(__PROSPERO__)
-    LOG_INFO(Service_Audio,
-             "Prospero AudioOut release: session={} count={} capacity={} first={:#x}",
-             impl->GetSystem().GetSessionId(), *out_count, out_audio_buffer.size(),
-             out_audio_buffer.empty() ? 0 : out_audio_buffer[0]);
+    if (prospero_release_log_count++ < 2) {
+        LOG_INFO(Service_Audio,
+                 "Prospero AudioOut release: session={} count={} capacity={} first={:#x}",
+                 impl->GetSystem().GetSessionId(), *out_count, out_audio_buffer.size(),
+                 out_audio_buffer.empty() ? 0 : out_audio_buffer[0]);
+    }
 #endif
     R_SUCCEED();
 }

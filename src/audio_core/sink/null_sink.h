@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -25,12 +24,37 @@ public:
     std::vector<s16> ReleaseBuffer(u64) override {
         return {};
     }
-    u64 GetExpectedPlayedSampleCount() override {
-        // A null sink intentionally discards output. Report it consumed so AudioOut releases
-        // the guest's client tag on the next manager tick instead of waiting forever for a
-        // hardware callback that this sink does not have.
-        return (std::numeric_limits<u64>::max)();
+    void Start(bool = false) override {
+        std::scoped_lock l{timing_lock};
+        if (!paused) {
+            return;
+        }
+        resume_time = std::chrono::steady_clock::now();
+        paused = false;
     }
+    void Stop() override {
+        std::scoped_lock l{timing_lock};
+        if (paused) {
+            return;
+        }
+        played_frames += FramesSinceResume();
+        paused = true;
+    }
+    u64 GetExpectedPlayedSampleCount() override {
+        std::scoped_lock l{timing_lock};
+        return played_frames + (paused ? 0 : FramesSinceResume());
+    }
+
+private:
+    u64 FramesSinceResume() const {
+        const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - resume_time);
+        return static_cast<u64>(elapsed.count()) * TargetSampleRate / 1'000'000'000;
+    }
+
+    std::mutex timing_lock;
+    std::chrono::steady_clock::time_point resume_time{};
+    u64 played_frames{};
 };
 
 /**
