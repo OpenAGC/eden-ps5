@@ -384,6 +384,12 @@ prints their exact OpenAGC result codes, and logs successful query-copy
 recording. No feature is being accepted on inference. Rebuild, pin, and one
 cleanup-first replay are required to name the actual post-barrier failure.
 
+The exact-origin diagnostic ELF embeds Eden revision
+`b1f21b8b05e2f995d4dfb92151735035f6a42f58`, includes Vulkan-PS5
+`58f7e0e`, and has SHA-256
+`69a61f08c4c515cb21746073494bea1d533229f4eb0ded7a1b3568209854ddf6`.
+The wrapper pins these bytes for the next cleanup-first 110-second replay.
+
 The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
 reached the next draw-preparation boundary at about 98 seconds. The guest draw
 reported `descriptors=0 vertex_buffers=0`; descriptor preparation had returned
