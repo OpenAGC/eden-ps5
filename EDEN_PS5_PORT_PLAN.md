@@ -11,9 +11,9 @@ cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
 Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
-The current unlaunched BufferQueue lifecycle diagnostic Eden ELF is SHA-256
-`9e323f6be18db7ddbcc5be5b52b36943b5534118db6daaa0d01c80686e1cd49b`,
-embeds Eden `60db38bdca`, and incorporates Vulkan-PS5 checkpoint-retirement
+The current unlaunched guest GPU-fence diagnostic Eden ELF is SHA-256
+`cc7c8e861d7f0c7c8962327091fa1ca097eda6140da4a3f413712c7ce73a797b`,
+embeds Eden `7ccde6073f`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
 usage fix `2d84b89`.
 
@@ -940,7 +940,10 @@ live host/guest counters, immediate-completion path, registered event slot,
 and callback. This can prove whether frame two is waiting on a target that was
 never incremented, waiting correctly for queued GPU work, or never reaching
 NVDRV at all. Host `core` passes; strict Prospero build and one cleanup-first
-30-second replay remain required.
+30-second replay remain required. Revision `7ccde60` contains the diagnostic
+and PID 173 evidence. Its rebuilt ELF embeds `7ccde6073f`, has SHA-256
+`cc7c8e861d7f0c7c8962327091fa1ca097eda6140da4a3f413712c7ce73a797b`, and
+is pinned for exactly one cleanup-first replay.
 
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
