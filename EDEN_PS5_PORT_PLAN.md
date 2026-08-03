@@ -1132,6 +1132,69 @@ identity, failure, teardown, and exact-process gate. If it still does not enter
 the render loop, return to offline profiling instead of extending the timeout
 again.
 
+That single 45-second replay ran as PID 197 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T191158Z-swapchain-run1.log`.
+It reproduced the same startup boundary rather than reaching frame two: the
+first BufferQueue commit occurred at 4.899 seconds, GPFIFO submission at 8.869
+seconds, and AudioOut append at 9.722 seconds. Guest thread 77 remained active
+through successful shared-font allocation/mapping work at 13.811, 13.857,
+18.499, 24.437, 24.614, 27.855, 27.914, 34.604, 36.932, 36.958, and 39.903
+seconds. Every recorded SVC returned, audio remained paced, and there was no
+invalid access, fatal diagnostic, second BufferQueue commit, or 120-frame
+verdict. The wrapper cleanup proved PID 197 and global exact `eboot.bin`
+absence twice each. This exhausts the one-time extension: do not lengthen the
+canary again; improve startup offline and retain the 30-second contract.
+
+Revision `8055761` replaces the general `WalkBlock` scalar path with
+width-specific checked memory operations. Same-page 8/16/32/64/128-bit
+accesses now validate the complete range, perform one sparse entry lookup,
+preserve rasterizer download/write coherency, and copy with explicit guest
+little-endian conversion. Cross-page reads retain the safe block walker;
+cross-page writes validate the complete range before changing memory, so an
+invalid second page cannot leave a partial scalar. Debug/watchpoint accesses
+retain their original path, while all non-debug Prospero failures still halt
+Dynarmic with `MemoryAbort`. The public range validator now also rejects
+overflow and out-of-address-space ranges before indexing the sparse table.
+
+Host `core`, strict Prospero `yuzu-cmd`, and the five focused host tests
+(`dynarmic_tests`, `eden.multi_level_page_table`, `eden.ps5_thread_budget`,
+`eden_ps5.launch_config`, and `eden_ps5.shader_cache_identity`) pass. The
+rebuilt ELF embeds exact revision
+`805576154b8a530be9d927d8f5addf139fe932ef`, has SHA-256
+`ed101d98e076a3b0fe2ec6e08943a2baf7bddaef33fbeb14af40c9c3366a78d8`,
+and is distinct from the banned fixed-address diagnostic. The pinned Flappy
+NRO remains SHA-256
+`6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`,
+the launch sidecar remains
+`27fe1881da2e24df050ce7a896676835d95f1d6be1e9f9b67bffc6d0f881757c`,
+and the cleanup ELF, Vulkan-PS5 runner, process helper, PyPS4debug revision,
+and lockfile remain pinned by the wrapper. Wrapper SHA-256 is
+`09f2c9b9b74b35544c2a0738e6f8bc3e18ec04c4415cbb1685fbf47c7cbe0eb4`;
+it requires the exact core-zero `checked_width_scalars=true` marker.
+
+The cleanup-first 30-second replay of those bytes ran as PID 200 and is
+preserved at
+`examples/qualification-logs/flappy-bird/20260803T192714Z-swapchain-run1.log`.
+All four cores emitted the sparse/single-lookup/checked-width marker. The first
+BufferQueue commit occurred at 5.423 seconds, GPFIFO submission at 10.478
+seconds, and AudioOut append at 11.476 seconds. Audio releases continued at
+the expected roughly 85 ms cadence, and guest thread 77 completed further
+font-region mappings at 16.499, 16.553, 22.240, and 22.472 seconds; every
+recorded focused SVC returned. There was no checked-memory abort, fatal
+diagnostic, second BufferQueue commit, or 120-frame verdict. Cleanup proved
+PID 200 and global exact `eboot.bin` absence twice each.
+
+The raw OpenAGC graphics-pipeline requests in this log are calibration and
+native compositor activity and therefore do not prove a guest Maxwell
+pipeline. Eden's current guest graphics/compute and transferable-record
+counters are emitted only from `PipelineCache` destruction. Bounded cleanup
+terminated PID 200 before that destructor ran, so this replay contains no
+authoritative final guest-cache snapshot. Guest pipeline creation and
+transferable record creation remain unproven, rather than zero. The next
+offline instrumentation slice must emit a baseline and every live guest
+pipeline/record counter transition so a bounded run can prove the result even
+when startup has not reached orderly teardown.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the

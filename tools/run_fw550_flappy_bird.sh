@@ -15,7 +15,7 @@ cleanup_elf=${EDEN_PS5_CLEANUP_ELF:-$vulkan_repo/build-prospero-msaa/vulkan_ps5_
 homebrew=${EDEN_PS5_FLAPPY_BIRD_NRO:-$repo_dir/../Flappy_Bird_NX.nro}
 sidecar="$repo_dir/src/ps5/eden-flappy-bird.launch"
 log_dir="$vulkan_repo/examples/qualification-logs/flappy-bird"
-pinned_eden_sha256=d7899430bb4d64b2d73029ad8ee558b45dd126b9739f2ad175c5bfeca93f42ef
+pinned_eden_sha256=ed101d98e076a3b0fe2ec6e08943a2baf7bddaef33fbeb14af40c9c3366a78d8
 pinned_cleanup_sha256=ff88ac293a55ec4ba5636a6556b74ffbeaf5d1093e96f86208cc55ce262565c5
 pinned_runner_sha256=1c2da402df3ca3eb30e7121e91abeb83c7da06aa4ff9c4e48e18fac5ec778552
 pinned_process_helper_sha256=8dff282cdbc7ac1f4a037ad9e2a0e800fa82838cd1342b804b1eaff65ffd1ef6
@@ -104,7 +104,7 @@ VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2="$input_cycle_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_3="EdenMain: Prospero shader-cache identity: $cache_identity" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4='^\[psbc\] Parameter exports: stage=0 count=1$' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_5="$telemetry_pattern" \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_6='Prospero Dynarmic memory path: core=0 sparse_callbacks=true single_lookup_scalars=true fastmem=false address_space_bits=39' \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_6='Prospero Dynarmic memory path: core=0 sparse_callbacks=true single_lookup_scalars=true checked_width_scalars=true fastmem=false address_space_bits=39' \
 VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
 VULKAN_PS5_FW550_LOG_DIR="$log_dir" \
 VULKAN_PS5_WEBSRV_TIMEOUT="$websrv_timeout" \
