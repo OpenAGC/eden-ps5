@@ -120,6 +120,21 @@ eight presented frames, rejects every JIT/allocation/presentation failure, and
 requires bounded teardown plus exact process absence. This supplements, rather
 than replaces, the already-passed GPU-free 20-process W^X probe.
 
+The first production stress run,
+`20260803T030325Z-swapchain-run1.log`, fails at the former first-cache promotion
+after full Eden initialization reaches `CreateManagedDisplayLayer`. The SDK
+hardening preserves the underlying error as `EFAULT` instead of the old
+flattened `EPERM`:
+`base=0x303200000 size=0x2004000 errno=14`. Cleanup and both exact-process
+checks pass. Because the same bytes complete 320 serial probe promotions and
+the owned range is exact, this identifies a live VM-entry lookup race during
+concurrent process-map mutation, not missing JIT permission or invalid cache
+geometry. The stress wrapper correctly stops at run one; the production EPERM
+goal remains open. Do not retry the failed in-process transition. The next
+implementation must eliminate racy repeated tree lookup while validating that
+any cached entry still exactly owns the expected mapping before each
+fail-closed protection update.
+
 ## Active construction diagnostic (2026-08-02)
 
 The unnormalized-sampler fix, OpenAGC runtime API 55 compute-scratch path, and
