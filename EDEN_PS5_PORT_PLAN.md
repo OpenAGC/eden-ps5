@@ -460,17 +460,11 @@ reads, and null content; the strict full Prospero frontend also builds.
 
 The rebuilt source-committed ELF is SHA-256
 `ad5160147212771bb43b98aea8f4a835bcb735c315b4c84e362761d9cdf956cb`.
-The 2048 wrapper pins those bytes and the exact derived cache identity. Before
-run one it asserts exact `eboot.bin` absence, deletes only that identity's
-`vulkan.bin` and `vulkan_pipelines.bin`, and verifies both exact files absent.
-Run one must then report a decorated `Total Pipeline Count: 0`, proving no
-stale transferable cache was loaded; cleanup preserves the resulting cache.
-Immediate run two must report the identical identity and a decorated nonzero
-pipeline count, proving that run one's `vulkan.bin` records were reopened and
-scheduled. This oracle does not claim reduced ACO compilation or compiled
-OpenAGC driver-cache reuse. The rebuilt bytes still require sequence-zero
-hardware canary and the complete two-run 600-frame replay before this revised
-persistence gate is closed.
+The 2048 wrapper pins those bytes and the exact derived cache identity. It
+requires the native 600-present marker, `GAME PASS`, a real PSBC host-pipeline
+marker, visible output, bounded teardown, and immediate relaunch. It does not
+claim transferable guest-pipeline caching: 2048 uses an SDL software renderer
+and does not submit a guest Maxwell graphics or compute pipeline.
 
 The rebuilt sequence-zero hardware canary
 `Vulkan-PS5/examples/qualification-logs/20260803T114052Z-swapchain-run1.log`
@@ -482,7 +476,33 @@ reported a false fifth-oracle failure because an ANSI reset follows decorated
 LOG_INFO text before the physical line end; removing the invalid end anchor
 matches the already-recorded exact identity without weakening its content.
 Cleanup then found PID 100 and global exact `eboot.bin` absent. This clears the
-new bytes for the cache-reset two-run 600-frame gate.
+new bytes for the two-run 600-frame lifecycle gate.
+
+Fresh-cache long run
+`Vulkan-PS5/examples/qualification-logs/20260803T114349Z-swapchain-run1.log`
+then completed 600 native presents and `GAME PASS 600 frames`, with exact
+identity `cd7e7f3438309201`, initial pipeline count zero, operator-visible
+magenta and faint-but-correct 2048 output, and bounded teardown. No
+`vulkan.bin` existed afterward; only a 44-byte `vulkan_pipelines.bin` existed.
+The immediately relaunched log `20260803T115607Z-swapchain-run1.log` therefore
+correctly reported zero loaded entries. Source and log audit found no
+`PipelineCache::CreateGraphicsPipeline` or compute-pipeline event at all.
+`SerializePipeline` creates its file header before testing environment
+eligibility, so total file absence proves that no transferable serialization
+task was queued. The 46 ACO/PSBC compilations are fixed Eden/Vulkan-PS5 host
+blit, filter, and presentation pipelines, not guest shader-cache entries. The
+44-byte driver file is only Eden's wrapper plus the standard 32-byte Vulkan
+cache header; Vulkan-PS5 does not currently add compiled PSBC pipelines to it.
+The nonzero pipeline-count requirement was therefore impossible for this
+workload and has been removed rather than replaced with a fake cache claim.
+
+The second long run was stopped once that startup result made the cache oracle
+unrecoverable. A single ps5debug query transiently reported exact process
+absence while the operator still saw the game. The pinned cleanup ELF was then
+relaunched explicitly; websrv recovered, the exact-name check passed again,
+and the operator confirmed the game closed. After any interrupted runner, one
+absence query is no longer sufficient: relaunch cleanup, wait, repeat the
+query, and reconcile with operator-visible state before another ELF.
 
 An additional candidate workload is `../Flappy_Bird_NX.nro`, SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`.
@@ -490,8 +510,25 @@ Its header contains the expected `NRO0` magic, it embeds `romfs:/` graphics,
 WAV/MP3 audio, SDL2, SDL_ttf, and SDL2_mixer code, and its content-derived
 cache identity will therefore be independent of its launch path. Keep it as a
 separate candidate until a cleanup-first bounded canary proves continuous
-presentation and fail-soft audio behavior; it does not replace the active
-2048 persistence gate or its identical-byte evidence.
+presentation and fail-soft audio behavior. Its expected cache identity is
+`ee7cd9a1a22a0102`, and its Mesa GLES2 path makes it the first homebrew
+candidate for real guest-pipeline serialization. It supplements rather than
+replaces the active 2048 lifecycle evidence.
+
+Two retail base-title candidates are available locally but must not be copied
+to the console until private key provisioning is explicitly authorized. Into
+the Breach NSP SHA-256
+`c00ede302d7ffbe1fd757679c88262bc63e849343efb4690b135d3ccac277b9f`
+is a structurally valid 283,775,312-byte PFS0 with four content-ID-consistent
+NCAs, ticket, certificate, and title ID `010057D00B612000`; its decrypted CNMT
+version/roles remain unverified. A Short Hike NSP SHA-256
+`4b5239ae15c55016f059920069cc652f75c57f4c583fe997d905bb901efba6b1`
+is a structurally valid 319,465,742-byte PFS0 whose unencrypted CNMT XML
+identifies application `01004890117B2000`, version 0, generation 11, and whose
+four declared NCA sizes and hashes match exactly. Use A Short Hike as the
+primary future commercial 3D/cache candidate, beginning with a loader-only
+preflight and cleanup-first eight-frame canary. Neither audit read, hashed,
+copied, or modified the private key files.
 
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
@@ -2093,29 +2130,34 @@ observation.
    order. Do not advance the long gate until Eden sequence zero has exact
    magenta swapchain readback and user-confirmed visible presentation.
 2. After sequence-zero scanout is proven, repeat the cleanup-first `2048.nro`
-   600-frame workload twice on FW 5.50
-   through the
-   real scheduler, shader cache, renderer, WSI, and present path. Require
-   visible frames, bounded teardown, and immediate relaunch on both runs.
-3. Use the bounded end/submit/acquire/present checkpoints to measure the
+   600-frame workload twice on FW 5.50 through the renderer, WSI, and present
+   path. Require visible frames, bounded teardown, and immediate relaunch on
+   both runs; do not claim guest shader-cache coverage from its SDL software
+   renderer.
+3. Run a cleanup-first Flappy Bird canary, then A Short Hike once private key
+   provisioning is explicitly authorized. Advance the persistent shader-cache
+   gate only after telemetry proves a guest graphics/compute pipeline was
+   created, run one writes a transferable record, and immediate run two loads
+   a nonzero count under the identical real or derived cache identity.
+4. Use the bounded end/submit/acquire/present checkpoints to measure the
    600-frame runtime, then remove them after the two-run gate is stable. Retain
    JIT/flexible-memory failure diagnostics until renderer relaunch is proven.
-4. Qualify a small `libSceUserService`/`libScePad` probe, implement the native
+5. Qualify a small `libSceUserService`/`libScePad` probe, implement the native
    controller/event/lifecycle bridge, and remove SDL3 from the production
    Prospero target.
-5. Qualify the `libSceAudioOut` ABI with a standalone bounded-buffer probe,
+6. Qualify the `libSceAudioOut` ABI with a standalone bounded-buffer probe,
    then implement Eden's native AudioOut sink using the mGBA transport pattern.
    Keep null audio as an explicit fail-closed fallback; do not use SDL2_mixer
    for emulated audio.
-6. Remove the temporary construction checkpoints after stable renderer start,
+7. Remove the temporary construction checkpoints after stable renderer start,
    update the exact evidence and hashes, and commit that verified slice without
    staging unrelated diagnostic work.
-7. Refresh the Eden compatibility audit at revision `612409c7ba`, run the FW
+8. Refresh the Eden compatibility audit at revision `612409c7ba`, run the FW
    5.50 regression matrix and targeted CTS/deqp subset, and close any remaining
    format or command gaps demonstrated by those results.
-8. Build and install the pacbrew RmlUi package, make its SDL2 dependency
+9. Build and install the pacbrew RmlUi package, make its SDL2 dependency
    optional or isolate it from the production runtime, and layer the
    controller-driven launcher over the proven emulator lifecycle. Keep Dear
    ImGui diagnostic-only.
-8. Freeze the final ELF/library hashes and replay the identical bytes and full
+10. Freeze the final ELF/library hashes and replay the identical bytes and full
    advertised-feature gate on FW 11.60.
