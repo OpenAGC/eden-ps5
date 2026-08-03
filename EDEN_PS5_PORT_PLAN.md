@@ -89,6 +89,19 @@ rebuilding changed the embedded SCM bytes, this is strong diagnostic evidence
 but is not substituted for byte-identical qualification of the pinned
 `7905e56f...` probe.
 
+The pinned, source-committed probe then passed the same 20-run gate on FW 5.50.
+Logs `20260803T025321Z-swapchain-run1.log` through
+`20260803T025701Z-swapchain-run1.log` cover PIDs 142 through 180. Every process
+reports four successful eligibility mappings and initial RW demotions, 16
+successful full-map RW-to-RX transitions, 16 known-return executions, 16
+successful RX-to-RW transitions, four successful unmaps, and the exact PASS
+oracle, all with `errno=0`. Every per-PID and global exact-process check passed,
+and an independent final query also found no `eboot.bin`. Across the pinned
+bytes this is 320 promotions, 320 executions, 320 demotions, and 80 unmaps with
+clean bounded teardown. The GPU-free JIT W^X preflight is therefore qualified;
+the remaining active proof is the repinned full Eden ELF's two-run InvadersNX
+renderer/WSI gate under normal multithreaded load.
+
 ## Active construction diagnostic (2026-08-02)
 
 The unnormalized-sampler fix, OpenAGC runtime API 55 compute-scratch path, and
