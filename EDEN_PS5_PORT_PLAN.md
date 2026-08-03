@@ -329,8 +329,11 @@ were distinct, the RW-emitted known-return stub executed successfully through
 RX, and both mappings and both descriptors retired with `errno=0`. PID 160 and
 the global exact `eboot.bin` query were absent afterward. The probe's own PASS
 oracle is valid; the host wrapper alone rejected this run because the target's
-`%p` formatting omitted the optional `0x` prefix. The corrected wrapper accepts
-both pointer spellings before the repeated relaunch gate.
+`%p` formatting omitted the `0x` prefix. A second probe execution in
+`20260803T101759Z-swapchain-run1.log` produced the same successful distinct
+aliases, execution, teardown, and exact absence, but also exposed that the
+runner does not accept an optional-group address regex. The corrected wrapper
+matches the target's observed bare hexadecimal pointer spelling directly.
 
 The prior sequence-zero canary's operator-visible result is also confirmed:
 magenta appeared first, followed by the 2048 game with a faint but otherwise
