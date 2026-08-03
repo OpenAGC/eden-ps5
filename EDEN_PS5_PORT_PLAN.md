@@ -414,6 +414,12 @@ layer, native-object, and layout failures. The accepted failure log is
 `examples/qualification-logs/flappy-bird/20260803T153315Z-swapchain-run1.log`;
 cleanup again passed two PID and two global exact-absence checks.
 
+The render-pass-begin diagnostic ELF embeds Eden revision
+`460bf5a25d2f45e8b8f534209b2f14dea84fc90f`, includes Vulkan-PS5
+`62d9108`, and has SHA-256
+`2defe2e06a4a314e24fce44353278543053a2c55f19e44c452f046c7703447ad`.
+The wrapper pins these bytes for the next cleanup-first 110-second replay.
+
 The replay after console recovery ran as PID 89. Neither timestamp nor
 indirect-count diagnostics fired; it again reached two draws and exited with
 `-8`. Regular direct/indexed indirect draws remain an unlabelled validation
