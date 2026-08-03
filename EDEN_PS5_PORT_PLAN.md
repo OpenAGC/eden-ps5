@@ -333,7 +333,10 @@ oracle is valid; the host wrapper alone rejected this run because the target's
 `20260803T101759Z-swapchain-run1.log` produced the same successful distinct
 aliases, execution, teardown, and exact absence, but also exposed that the
 runner does not accept an optional-group address regex. The corrected wrapper
-matches the target's observed bare hexadecimal pointer spelling directly.
+matches the target's observed bare hexadecimal pointer spelling directly. A
+third successful execution in `20260803T101906Z-swapchain-run1.log` exposed
+the last host-only mismatch: target null pointers print as `0`, not `(nil)`.
+The wrapper now uses the target's exact null spelling as well.
 
 The prior sequence-zero canary's operator-visible result is also confirmed:
 magenta appeared first, followed by the 2048 game with a faint but otherwise

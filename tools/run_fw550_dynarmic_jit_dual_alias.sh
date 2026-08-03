@@ -72,8 +72,8 @@ while [ "$run" -le "$qualification_runs" ]; do
     VULKAN_PS5_QUALIFICATION_LABEL="eden-jit-dual-alias-run${run}" \
     VULKAN_PS5_QUALIFICATION_PASS_PATTERN='^eden-ps5 dynarmic-jit-dual-alias probe: PASS size=0x4000 aliases=2$' \
     VULKAN_PS5_QUALIFICATION_PASS_DESCRIPTION='distinct RW and RX JIT shared-memory aliases, known-return execution, and teardown' \
-    VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN='op=create-shared-RWX-maximum address=\(nil\) size=0x4000 result=0 errno=0' \
-    VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2='op=create-alias-RW address=\(nil\) size=0x4000 result=0 errno=0' \
+    VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN='op=create-shared-RWX-maximum address=0 size=0x4000 result=0 errno=0' \
+    VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2='op=create-alias-RW address=0 size=0x4000 result=0 errno=0' \
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_3='op=mmap-writer-RW address=[0-9a-f]+ size=0x4000 result=0 errno=0' \
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4='op=mmap-executor-RX address=[0-9a-f]+ size=0x4000 result=0 errno=0' \
     VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
