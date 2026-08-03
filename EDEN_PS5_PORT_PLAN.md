@@ -426,6 +426,27 @@ and symbolication at this exact invalid read. The backtrace diagnostic embeds
 revision `e9a550e7327916a4d3090e3e2f8f95018bc47ace` and has SHA-256
 `4198a0080a1e3f271c333a471d32a661b50282ab3b0af7c90fd650cf43986c8e`.
 
+PID 104 resolved that backtrace against Flappy Bird's unstripped ELF and map:
+module offset `+0x1666d4` is `SWITCHAUDIO_OpenDevice`, caller `+0x13b054`
+is `SDL_RunAudio`, `+0x1535ac` is adjacent to `SDL_CreateThreadInternal`, and
+`+0x6494ac` is `threadCreate`. The Switch audout initialization and start calls
+had already succeeded; the subsequent null-adjacent read occurs while the SDL2
+audio worker allocates its aligned buffers with newlib `memalign`. This is not
+evidence of a generic Eden audout defect: the active hypothesis is a
+Prospero-specific guest-thread TPIDRRO/TLS/reentrancy, mapping, or Dynarmic
+context regression.
+
+Eden revision `f380df9` now reports Dynarmic's TPIDRRO_EL0, the scheduler's
+expected TLS address, and libnx's `ThreadVars` magic, thread pointer, newlib
+reentrancy pointer, and handle whenever this invalid read occurs. The strict
+integrated Prospero build passes. Its diagnostic ELF has SHA-256
+`48c198d924175419da055af0f5a066ca87a69f37611ee0c01f989cdf8ba85a2c` and is
+pinned for one bounded cleanup-first capture. A mismatch between TPIDRRO and
+the scheduler address identifies context loading; a valid magic with null
+reentrancy identifies guest thread setup; an invalid TLS range identifies
+mapping or page-table state. No audio contract or native sink behavior is
+changed by this diagnostic.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
