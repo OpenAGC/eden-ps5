@@ -578,6 +578,28 @@ proven. The strict integrated Prospero build passes. Its ELF has SHA-256
 pinned for one cleanup-first replay. If the low read persists, the remaining
 owner is the x64 callback ABI/register allocator rather than an IR pass.
 
+PID 128 confirmed that the unoptimized Prospero build still performs the same
+invalid callback-mode `Read64` from address `0x8` after about 14.58 seconds.
+The accepted capture is
+`examples/qualification-logs/flappy-bird/20260803T164432Z-swapchain-run1.log`;
+cleanup again proved both PID-specific and global exact `eboot.bin` absence
+twice. Disabling block linking, unsafe transforms, and optional IR passes has
+therefore ruled out those layers. The remaining evidence points at host
+register preservation across x64 callback calls: the live generated register
+for guest `x19` is lost although the architectural JIT-state copy and the SDL
+audio device, mutex, TLS, reentrancy state, and audout buffers remain valid.
+
+Revision `81b1e26` makes Prospero spill all Dynarmic caller-save and callee-save
+host registers around callbacks, excluding the stack and JIT-state pointers
+and the normal argument/return locations. Other targets retain the established
+SysV caller-save set. The strict integrated Prospero build passes. The A/B ELF
+has SHA-256
+`5647fee5b9c7485e757ac71364b97a45f7ceba71a660a67e7c4eb37a6c61d464`
+and is pinned for a cleanup-first 30-second replay. The immediate success
+criterion is that the `Read64 @ 0x8` disappears and execution advances beyond
+the SDL audio callback; that result alone will not satisfy the required
+120-presented-frame, cache-telemetry, or bounded-teardown qualification gates.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
