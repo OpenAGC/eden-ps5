@@ -301,6 +301,10 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
         // Callback validation requests MemoryAbort on an invalid data access. Require Dynarmic
         // to stop at that instruction so it cannot execute the remainder of the guest block.
         config.check_halt_on_memory_access = true;
+        // Callback-only memory accesses currently exercise an x64 allocator spill bug when a
+        // live guest-derived value spans several calls. End the block after each guest memory
+        // instruction so the next block reloads architectural state.
+        config.split_blocks_on_memory_access = true;
 #endif
 
         config.fastmem_pointer =

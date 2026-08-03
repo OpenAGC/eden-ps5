@@ -299,6 +299,11 @@ struct UserConfig {
     /// for exit after every data memory access by the emulated program.
     bool check_halt_on_memory_access = false;
 
+    /// Ends a translated block after an instruction which emits a data-memory access. This is
+    /// a correctness fallback for callback-only backends where live IR values must not span
+    /// multiple host callbacks.
+    bool split_blocks_on_memory_access = false;
+
     /// This option allows you to disable cycle counting. If this is set to false,
     /// AddTicks and GetTicksRemaining are never called, and no cycle counting is done.
     bool enable_cycle_counting = true;

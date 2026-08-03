@@ -38,6 +38,9 @@ struct TranslationOptions {
     /// If this is false, we treat the instruction as a NOP.
     /// If this is true, we emit an ExceptionRaised instruction.
     bool hook_hint_instructions = true;
+
+    /// End the block after an instruction which emits a data-memory access.
+    bool split_blocks_on_memory_access = false;
 };
 
 /**

@@ -6,17 +6,55 @@
  * SPDX-License-Identifier: 0BSD
  */
 
+#include <optional>
+#include <vector>
+
 #include <catch2/catch_test_macros.hpp>
 #include <oaknut/oaknut.hpp>
 
-#include "dynarmic/tests/A64/testenv.h"
-#include "dynarmic/tests/native/testenv.h"
 #include "dynarmic/common/fp/fpsr.h"
 #include "dynarmic/interface/exclusive_monitor.h"
 #include "dynarmic/interface/optimization_flags.h"
+#include "dynarmic/tests/A64/testenv.h"
+#include "dynarmic/tests/native/testenv.h"
 
 using namespace Dynarmic;
 using namespace oaknut::util;
+
+namespace {
+
+class CodeReadCountingEnv final : public A64TestEnv {
+public:
+    std::optional<std::uint32_t> MemoryReadCode(u64 vaddr) override {
+        code_reads.push_back(vaddr);
+        return A64TestEnv::MemoryReadCode(vaddr);
+    }
+
+    std::vector<u64> code_reads;
+};
+
+}  // namespace
+
+TEST_CASE("A64: split blocks after callback memory access", "[a64]") {
+    CodeReadCountingEnv env;
+    A64::UserConfig jit_user_config{};
+    jit_user_config.callbacks = &env;
+    jit_user_config.split_blocks_on_memory_access = true;
+    A64::Jit jit{jit_user_config};
+
+    env.code_mem.emplace_back(0xf9400020);  // LDR X0, [X1]
+    env.code_mem.emplace_back(0x91000442);  // ADD X2, X2, #1
+    env.code_mem.emplace_back(0x14000000);  // B .
+
+    jit.SetRegister(1, 0x100);
+    jit.SetPC(0);
+    env.ticks_left = 1;
+    CheckedRun([&]() { jit.Run(); });
+
+    REQUIRE(env.code_reads == std::vector<u64>{0});
+    REQUIRE(jit.GetPC() == 4);
+    REQUIRE(jit.GetRegister(0) == env.MemoryRead64(0x100));
+}
 
 TEST_CASE("A64: ADD", "[a64]") {
     A64TestEnv env;

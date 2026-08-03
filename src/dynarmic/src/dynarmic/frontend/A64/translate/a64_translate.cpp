@@ -8,10 +8,13 @@
 
 #include "dynarmic/frontend/A64/translate/a64_translate.h"
 
+#include <algorithm>
+
 #include "dynarmic/frontend/A64/a64_location_descriptor.h"
 #include "dynarmic/frontend/A64/decoder/a64.h"
 #include "dynarmic/frontend/A64/translate/impl/impl.h"
 #include "dynarmic/ir/basic_block.h"
+#include "dynarmic/ir/opcodes.h"
 #include "dynarmic/ir/terminal.h"
 
 namespace Dynarmic::A64 {
@@ -34,6 +37,16 @@ void Translate(IR::Block& block, LocationDescriptor descriptor, MemoryReadCodeFu
         }
         visitor.ir.current_location = visitor.ir.current_location->AdvancePC(4);
         block.CycleCount()++;
+
+        if (should_continue && options.split_blocks_on_memory_access) {
+            const bool emitted_memory_access = std::any_of(
+                block.Instructions().begin(), block.Instructions().end(),
+                [](const IR::Inst& inst) { return IR::IsMemoryReadOrWrite(inst.GetOpcode()); });
+            if (emitted_memory_access) {
+                visitor.ir.SetTerm(IR::Term::LinkBlock{*visitor.ir.current_location});
+                should_continue = false;
+            }
+        }
     } while (should_continue && !single_step);
 
     if (single_step && should_continue) {
