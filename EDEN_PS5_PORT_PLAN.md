@@ -1231,6 +1231,69 @@ therefore failed exactly as intended. Pinned cleanup then proved PID 203 and
 global exact `eboot.bin` absence twice each. The direct `/dev/gc` boot-cycle
 invariant was preserved throughout.
 
+Revisions `a8845f8`, `4f488a8`, and `4a399be` accelerate this measured CPU
+startup bottleneck without weakening checked guest-memory semantics. The
+Prospero scalar checked path now has a per-thread, direct-mapped cache for
+ordinary `PageType::Memory` translations. It never caches debug or
+rasterizer-coherent pages, and cross-page operations retain their checked slow
+path. Each `Memory::Impl` has a unique identity and an atomic odd/even
+translation generation; process page-table changes, mappings, debug marking,
+and rasterizer-cache marking invalidate entries around the mutation so stale
+host pointers cannot be used. The final 256-entry cache covers the observed
+font working set at 8 KiB per participating thread. The Dynarmic marker now
+requires `scalar_page_cache=true`. Host core, strict Prospero `yuzu-cmd`, and
+the five focused tests (`dynarmic_tests`, `eden.multi_level_page_table`,
+`eden.ps5_thread_budget`, `eden_ps5.launch_config`, and
+`eden_ps5.shader_cache_identity`) pass for this implementation.
+
+Three cleanup-first, direct-`/dev/gc`, 30-second FW 5.50 measurements isolate
+the cache-size effect. PID 206 with 8 entries reached the `0x144000` font
+mapping at 27.627 seconds. PID 209 with 64 entries reached it at 27.268 seconds
+and the first final `0x90000` mapping at 29.017 seconds. PID 212 with 256
+entries reached `0x144000` at 26.965 seconds and two `0x90000` mappings at
+28.710 and 28.729 seconds. Their accepted logs are respectively
+`examples/qualification-logs/flappy-bird/20260803T194302Z-swapchain-run1.log`,
+`20260803T194607Z-swapchain-run1.log`, and
+`20260803T194904Z-swapchain-run1.log`. The older PID 197 45-second reference
+did not reach the same `0x144000` and first two `0x90000` milestones until
+34.604, 36.932, and 36.958 seconds, so the checked scalar cache provides a
+material startup speedup rather than merely changing diagnostics.
+
+PID 212 is the current authoritative run. It committed the first BufferQueue
+buffer at 4.402 seconds, submitted the first GPFIFO at 7.315 seconds, and
+started fail-soft AudioOut at 8.029 seconds; releases continued without a
+fatal error. Every recorded guest SVC returned through the final observation
+at 28.729 seconds. It emitted exactly the authoritative zero guest-cache
+baseline at 1.403 seconds and no graphics-created, compute-created, or
+record-written transition. It therefore still produced no guest Maxwell
+pipeline or transferable shader record before the bound, no second
+BufferQueue commit, and no 120-frame verdict. There was no invalid checked
+access, memory/JIT failure, or fatal diagnostic. Pinned cleanup again proved
+PID 212 and global exact `eboot.bin` absence twice each before returning.
+
+The current ELF embeds exact revision
+`4a399be8b34996ed3d2d1cc83e3b053272607dee`, has SHA-256
+`89bbf0d6af026a40f1c73808c3013f0ad56e968cb6f3f51a69bba654a825d7e4`,
+and remains distinct from the banned fixed-address diagnostic. The wrapper
+pins that identity and has SHA-256
+`57762768a7a84efc7c4ef00a133a3d56e76b040da041d06816a22c8ac8625c45`;
+it also defines the live-telemetry selector used after a fully successful run,
+avoiding an unbound-variable failure under `set -u`. The NRO and sidecar remain
+SHA-256 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
+and `27fe1881da2e24df050ce7a896676835d95f1d6be1e9f9b67bffc6d0f881757c`;
+the cleanup ELF, guarded runner, exact-process helper, PyPS4debug revision, and
+lockfile remain pinned in the wrapper.
+
+The matching Flappy source explains the remaining deterministic work:
+`SDL_HelperInit` eagerly creates four SDL_FontCache instances at point sizes
+25, 30, 20, and 50, and `SDL_FontCache.c` rasterizes standard ASCII plus the
+Nintendo-symbol suffix one glyph at a time with `TTF_RenderUTF8_Blended`
+before gameplay begins. The pinned NRO and 30-second gate will not be changed.
+The next slice must reduce the emulator's checked-memory overhead enough to
+finish that guest workload, create a real guest pipeline/record, and present
+repeated frames inside the existing bound; further timeout or blind cache-size
+increases are not qualification evidence.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the

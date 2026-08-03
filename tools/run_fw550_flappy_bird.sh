@@ -15,7 +15,7 @@ cleanup_elf=${EDEN_PS5_CLEANUP_ELF:-$vulkan_repo/build-prospero-msaa/vulkan_ps5_
 homebrew=${EDEN_PS5_FLAPPY_BIRD_NRO:-$repo_dir/../Flappy_Bird_NX.nro}
 sidecar="$repo_dir/src/ps5/eden-flappy-bird.launch"
 log_dir="$vulkan_repo/examples/qualification-logs/flappy-bird"
-pinned_eden_sha256=f866212fd9554e6d819cffd63c6e4807255cfe8dfdacab1bd9d387b0cc72954b
+pinned_eden_sha256=89bbf0d6af026a40f1c73808c3013f0ad56e968cb6f3f51a69bba654a825d7e4
 pinned_cleanup_sha256=ff88ac293a55ec4ba5636a6556b74ffbeaf5d1093e96f86208cc55ce262565c5
 pinned_runner_sha256=1c2da402df3ca3eb30e7121e91abeb83c7da06aa4ff9c4e48e18fac5ec778552
 pinned_process_helper_sha256=8dff282cdbc7ac1f4a037ad9e2a0e800fa82838cd1342b804b1eaff65ffd1ef6
@@ -85,6 +85,7 @@ fi
 firmware_pattern='^\[openagc\] system software raw=0x05500008 string= 5\.500\.008$'
 input_cycle_pattern='PS5 qualification input cycle: enabled=true interval_ms=250'
 telemetry_baseline_pattern='Prospero guest pipeline cache live: reason=baseline graphics_created=0 compute_created=0 records_written=0 records_skipped=0'
+telemetry_pattern='Prospero guest pipeline cache live:'
 pipeline_created_pattern='Prospero guest pipeline cache live: reason=(graphics|compute)-created graphics_created=[0-9]+ compute_created=[0-9]+ records_written=[0-9]+ records_skipped=[0-9]+'
 record_written_pattern='Prospero guest pipeline cache live: reason=(graphics|compute)-record-written graphics_created=[0-9]+ compute_created=[0-9]+ records_written=[1-9][0-9]* records_skipped=[0-9]+'
 reject_pattern='(allocation|mapping|mmap|mprotect) failed|^eden-ps5 dynarmic .* failed:'
@@ -106,7 +107,7 @@ VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2="$input_cycle_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_3="EdenMain: Prospero shader-cache identity: $cache_identity" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4='^\[psbc\] Parameter exports: stage=0 count=1$' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_5="$telemetry_baseline_pattern" \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_6='Prospero Dynarmic memory path: core=0 sparse_callbacks=true single_lookup_scalars=true checked_width_scalars=true fastmem=false address_space_bits=39' \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_6='Prospero Dynarmic memory path: core=0 sparse_callbacks=true single_lookup_scalars=true checked_width_scalars=true scalar_page_cache=true fastmem=false address_space_bits=39' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_7="$pipeline_created_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_8="$record_written_pattern" \
 VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
