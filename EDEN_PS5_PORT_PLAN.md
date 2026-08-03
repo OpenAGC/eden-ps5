@@ -163,6 +163,27 @@ embeds exact revision `b4c67341777ae9104a4eb62d27c5aea8701a763c` and has
 SHA-256 `92b4066369d31ecb6b6bd540cddba6273d72eac66388776d3b7192eadb442c74`.
 The Flappy wrapper pins these bytes for the next cleanup-first canary.
 
+That canary, PID 130, proved the attachment-only format selection: the former
+format-129 image-allocation rejection did not recur, and Eden reached creation
+of the fallback format-130 view. Presentation remained on magenta because
+Vulkan-PS5 then rejected the legal one-layer `VK_IMAGE_VIEW_TYPE_2D_ARRAY`
+combined depth/stencil view (`aspect=0x6`). The bounded runner cleaned up and
+proved PID and global exact-process absence twice. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T133448Z-swapchain-run1.log`.
+
+Vulkan-PS5 commit `dbc4fc2` removes its blanket rejection of 2D-array depth
+views and defers native `AgcImageView` creation when an image has no sampled,
+storage, or input-attachment usage. This matches the OpenAGC contract:
+framebuffer depth binding consumes the underlying `AgcImage`, while shader
+descriptors still create and require a native image view. The exact regression
+uses a one-layer D32/S8 2D-array attachment view and verifies that it succeeds
+without a native shader view. The focused host command-recording test passes,
+and the Vulkan-PS5 Prospero static library plus full Eden ELF cross-build pass.
+The rebuilt ELF embeds Eden revision
+`002a34174482b6f0e7d0cead1fe6928fcc4abce6` and has SHA-256
+`23a025593bd3e244a7f2815d127f09ecb30fcf2397894732f92e4eaa2bb38755`.
+The wrapper pins these bytes for the next cleanup-first retry.
+
 ### Payload SDK identity
 
 The current `build-prospero-full-audit2` CMake cache resolves both
