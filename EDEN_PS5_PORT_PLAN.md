@@ -413,6 +413,12 @@ and prints unsupported-call arguments. The accepted log is
 `examples/qualification-logs/flappy-bird/20260803T152248Z-swapchain-run1.log`;
 PID 182 and global exact-process absence each passed twice after cleanup.
 
+The post-barrier entrypoint diagnostic ELF embeds Eden revision
+`784b993457cb12b83a5798c0cebd70b539c37cb2`, includes Vulkan-PS5
+`95a43c0`, and has SHA-256
+`1d10edced7e3eca95631b0ec291338333e289e65f43f502d33a8140c70a20b63`.
+The wrapper pins these bytes for one cleanup-first 110-second replay.
+
 The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
 reached the next draw-preparation boundary at about 98 seconds. The guest draw
 reported `descriptors=0 vertex_buffers=0`; descriptor preparation had returned
