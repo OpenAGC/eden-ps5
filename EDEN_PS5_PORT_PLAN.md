@@ -270,6 +270,20 @@ The barrier-diagnostic ELF embeds revision
 `a4594d1b64c1ee419dc8bb873a69141ffac66965c93497bde5cd79b6b5cbf8fd`,
 and is pinned by the wrapper.
 
+The barrier-diagnostic replay, PID 151, identified the exact failure: a
+format-51 color image transitions from `VK_IMAGE_LAYOUT_UNDEFINED` to
+`VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL` with broad source access `0x540` and
+destination `VK_ACCESS_TRANSFER_WRITE_BIT`. Vulkan discards prior contents for
+an UNDEFINED old layout, so its source access scope is irrelevant; Vulkan-PS5
+incorrectly rejected the mixed source roles before applying that rule. Cleanup
+and all four exact-absence checks passed. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T141446Z-swapchain-run1.log`.
+Vulkan-PS5 commit `5e7aa1d` now maps every UNDEFINED old-layout source directly
+to native Undefined while continuing to validate the destination usage, with
+an exact broad-source regression. Host command recording and the Prospero
+static library pass. The visible magenta blocker remains open pending a rebuilt
+cleanup-first replay.
+
 The diagnostic replay, PID 142, again cleaned up with two PID-scoped and two
 global absence checks. Its request fingerprint rules out alpha-to-coverage,
 MSAA, depth/stencil tests, and unknown dynamic enums. Each rejected guest
