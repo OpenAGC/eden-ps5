@@ -281,6 +281,10 @@ record bound. Vulkan-PS5 commit `6a93398` removes its non-Vulkan zero-stride
 pipeline rejection. Focused OpenAGC draw/binding and Vulkan pipeline tests pass,
 and both Prospero libraries cross-build. The next cleanup-first Flappy retry
 must use a rebuilt ELF containing these commits.
+That rebuilt ELF embeds revision
+`33b3ec35fc47935bb18407ef4ea77e534117a07f`, has SHA-256
+`0c34a6cbc8f981ae440d5fa27f579e7be57c39cd5354f69b9bbcfa7b1945c451`,
+and is pinned by the Flappy wrapper.
 
 ### Payload SDK identity
 
