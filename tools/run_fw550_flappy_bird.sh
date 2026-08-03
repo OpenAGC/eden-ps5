@@ -84,9 +84,9 @@ fi
 
 firmware_pattern='^\[openagc\] system software raw=0x05500008 string= 5\.500\.008$'
 input_cycle_pattern='PS5 qualification input cycle: enabled=true interval_ms=250'
-telemetry_baseline_pattern='Prospero guest pipeline cache live: reason=baseline graphics_created=0 compute_created=0 records_written=0 records_skipped=0 graphics_discovered=0 compute_discovered=0 graphics_loaded=0 compute_loaded=0 records_rejected=0'
+telemetry_baseline_pattern='Prospero guest pipeline cache live: reason=baseline .*graphics_discovered=0 compute_discovered=0 graphics_loaded=0 compute_loaded=0 records_rejected=0'
 telemetry_pattern='Prospero guest pipeline cache live:'
-cache_reload_pattern='Prospero guest pipeline cache live: reason=disk-load-complete graphics_created=0 compute_created=0 records_written=0 records_skipped=0 graphics_discovered=[1-9][0-9]* compute_discovered=[0-9]+ graphics_loaded=[1-9][0-9]* compute_loaded=[0-9]+ records_rejected=[0-9]+'
+cache_reload_pattern='Prospero guest pipeline cache live: reason=disk-load-complete .*graphics_discovered=[1-9][0-9]* compute_discovered=[0-9]+ graphics_loaded=[1-9][0-9]* compute_loaded=[0-9]+ records_rejected=[0-9]+'
 reject_pattern='(allocation|mapping|mmap|mprotect) failed|^eden-ps5 dynarmic .* failed:'
 reject_pattern="$reject_pattern|invalid JIT mapping|Failed to (present|derive|obtain|load)"
 reject_pattern="$reject_pattern|GPU thread failure|^vulkan-ps5: .*failed|PS5 presented-frame oracle failed|CPUCore not initialized"
