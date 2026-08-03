@@ -4,12 +4,15 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <limits>
+
 #include "common/settings.h"
 #include "core/arm/dynarmic/arm_dynarmic.h"
 #include "core/arm/dynarmic/arm_dynarmic_64.h"
 #include "core/arm/dynarmic/dynarmic_exclusive_monitor.h"
 #include "core/core_timing.h"
 #include "core/hle/kernel/k_process.h"
+#include "core/hle/kernel/k_thread.h"
 
 namespace Core {
 
@@ -42,6 +45,25 @@ u64 DynarmicCallbacks64::MemoryRead64(u64 vaddr) {
                      vaddr, GetInteger(m_process->GetEntryPoint()), m_parent.m_jit->GetPC(),
                      m_parent.m_jit->GetSP(), registers[30], registers[0], registers[1],
                      registers[8], registers[19], registers[20], registers[29]);
+        constexpr u64 ThreadVarsOffset = 0x1e0;
+        constexpr u64 ThreadVarsSize = 0x20;
+        const u64 tls = m_tpidrro_el0;
+        constexpr u64 ThreadVarsEnd = ThreadVarsOffset + ThreadVarsSize;
+        if (tls <= std::numeric_limits<u64>::max() - ThreadVarsEnd &&
+            m_memory.IsValidVirtualAddressRange(tls + ThreadVarsOffset, ThreadVarsSize)) {
+            LOG_CRITICAL(Core_ARM,
+                         "A64 guest TLS: tpidrro={:#x} scheduler_tls={:#x} magic={:#x} "
+                         "thread_ptr={:#x} reent={:#x} handle={:#x}",
+                         tls, m_parent.m_current_thread_tls,
+                         m_memory.Read32(tls + ThreadVarsOffset),
+                         m_memory.Read64(tls + ThreadVarsOffset + 0x8),
+                         m_memory.Read64(tls + ThreadVarsOffset + 0x10),
+                         m_memory.Read64(tls + ThreadVarsOffset + 0x18));
+        } else {
+            LOG_CRITICAL(Core_ARM,
+                         "A64 guest TLS unavailable: tpidrro={:#x} scheduler_tls={:#x}", tls,
+                         m_parent.m_current_thread_tls);
+        }
         m_parent.LogBacktrace(m_process);
     }
     CheckMemoryAccess(vaddr, 8, Kernel::DebugWatchpointType::Read);
@@ -387,11 +409,13 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
 }
 
 HaltReason ArmDynarmic64::RunThread(Kernel::KThread* thread) {
+    m_current_thread_tls = GetInteger(thread->GetTlsAddress());
     m_jit->ClearExclusiveState();
     return TranslateHaltReason(m_jit->Run());
 }
 
 HaltReason ArmDynarmic64::StepThread(Kernel::KThread* thread) {
+    m_current_thread_tls = GetInteger(thread->GetTlsAddress());
     m_jit->ClearExclusiveState();
     return TranslateHaltReason(m_jit->Step());
 }

@@ -118,6 +118,10 @@ private:
 
     std::optional<Dynarmic::A64::Jit> m_jit{};
 
+    // TLS address of the thread currently loaded into this physical core. Used to distinguish
+    // guest ThreadVars initialization faults from an incorrect Dynarmic TPIDRRO_EL0 context.
+    u64 m_current_thread_tls{};
+
     // SVC callback
     u32 m_svc{};
 
