@@ -12,11 +12,12 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current pinned guest startup diagnostic Eden ELF is SHA-256
-`08f6ae3c66c4abcc6b63f77d2f14e63efd72e3c8ef986d151e3582ebdefa6a4f`,
-embeds Eden `0b78058e26`, and incorporates OpenAGC byte-granular transfer commit
+`58f2d9de72d3ceef2b373fe512d52b1298a98d9910c00faaaffabb5b4f0eab22`,
+embeds Eden `1115e8168b`, and incorporates OpenAGC byte-granular transfer commit
 `4719611` plus Vulkan-PS5 first-command diagnostics `237ba9f`, buffer-image
 failure telemetry `ed9eada`, and exact buffer-image range preparation
-`edba96d`.
+`edba96d`. It also includes OpenAGC capacity diagnostics `7e87dd8` and the
+Vulkan-PS5 256-KiB native DCB plus old-budget regression at `d518591`.
 
 Before launch, pin the ELF, NRO, sidecar, cleanup ELF, guarded runner,
 exact-process helper, and PyPS4debug revision/lockfile. Run only the direct
@@ -91,6 +92,21 @@ The next implementation slice must give this workload a bounded larger native
 command capacity (or a safely chunked submission path), add a regression that
 exhausts the old 64-KiB budget, and retain fail-closed capacity errors. Do not
 paper over the result by translating it to a feature error.
+
+That capacity slice is now implemented. Vulkan-PS5 uses a bounded 256-KiB
+native DCB, and its focused host regression records 3,000 buffer copies in one
+command buffer so the test necessarily exceeds the former 64-KiB budget.
+OpenAGC reports buffer-image row-packet exhaustion through its debug channel;
+all 20,120 runtime assertions, the Vulkan focused command test, and the
+Prospero ICD build pass. Cleanup-first PID 245 is preserved at
+`examples/qualification-logs/flappy-bird/20260803T212357Z-swapchain-run1.log`.
+It passed the 576x576 upload and the capacity point, then advanced to three
+draws. The new first failure is dynamic `vkCmdSetScissor` during an active
+render pass (`VK_ERROR_FEATURE_NOT_PRESENT`); the render pass therefore stays
+open when Eden reaches `vkEndCommandBuffer`. The next slice is to log the exact
+signed rectangle, implement Vulkan-valid clipping into gfx1013's unsigned
+scissor domain, add negative/partially clipped regression cases, rebuild, and
+repeat the cleanup-first Flappy canary.
 
 `InvadersNX.nro` remains the second workload and long-running presentation
 canary, not a substitute for the current diagnosis. Switch to it after Flappy
