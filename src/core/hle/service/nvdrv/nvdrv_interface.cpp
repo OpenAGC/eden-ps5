@@ -132,6 +132,9 @@ void NVDRV::Ioctl2(HLERequestContext& ctx) {
     if (trace_qualification) {
         LOG_INFO(Service_NVDRV, "PS5 NVDRV ioctl2: sequence={} stage=response-ready", sequence);
     }
+    if (command.group == 'H' && command.cmd == 0x1b && nv_result == NvResult::Success) {
+        Common::MarkPS5QualificationGuestSubmitResponseReady();
+    }
 #endif
 }
 

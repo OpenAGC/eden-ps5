@@ -4,6 +4,11 @@
 // SPDX-FileCopyrightText: Copyright 2023 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
+
+#ifdef __PROSPERO__
+#include "common/ps5_qualification_trace.h"
+#endif
 #include "common/scope_exit.h"
 #include "common/scratch_buffer.h"
 #include "core/core.h"
@@ -75,6 +80,23 @@ Result WaitSynchronization(Core::System& system, int32_t* out_index, u64 user_ha
         R_UNLESS(handle_table.GetMultipleObjects<KSynchronizationObject>(system.Kernel(), objs.data(), handles.data(), num_handles), ResultInvalidHandle);
     }
 
+#ifdef __PROSPERO__
+    static std::atomic<u32> post_submit_wait_sequence{0};
+    const bool post_submit = Common::IsPS5QualificationGuestSubmitResponseReady();
+    const u32 sequence =
+        post_submit ? post_submit_wait_sequence.fetch_add(1, std::memory_order_relaxed) : 0;
+    const bool trace_qualification =
+        post_submit && Common::ShouldTracePS5QualificationSequence(sequence);
+    if (trace_qualification) {
+        LOG_INFO(Kernel_SVC,
+                 "PS5 guest wait: sequence={} stage=entry thread={} handles={} timeout_ns={} "
+                 "h0={:#x} h1={:#x} h2={:#x} h3={:#x}",
+                 sequence, GetCurrentThread(system.Kernel()).GetThreadId(), num_handles, timeout_ns,
+                 num_handles > 0 ? handles[0] : 0, num_handles > 1 ? handles[1] : 0,
+                 num_handles > 2 ? handles[2] : 0, num_handles > 3 ? handles[3] : 0);
+    }
+#endif
+
     // Ensure handles are closed when we're done.
     SCOPE_EXIT {
         for (auto i = 0; i < num_handles; ++i) {
@@ -96,6 +118,15 @@ Result WaitSynchronization(Core::System& system, int32_t* out_index, u64 user_ha
 
     // Wait on the objects.
     Result res = KSynchronizationObject::Wait(system.Kernel(), out_index, objs.data(), num_handles, timeout);
+
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        LOG_INFO(Kernel_SVC,
+                 "PS5 guest wait: sequence={} stage=return thread={} result={:#x} index={}",
+                 sequence, GetCurrentThread(system.Kernel()).GetThreadId(), res.raw,
+                 out_index != nullptr ? *out_index : -1);
+    }
+#endif
 
     R_SUCCEED_IF(res == ResultSessionClosed);
     R_RETURN(res);
