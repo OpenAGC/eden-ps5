@@ -489,6 +489,24 @@ pinned for a bounded cleanup-first capture. A null device mutex proves object
 corruption after successful open; a valid mutex rules that out and redirects
 the fault to another null-base load in the worker.
 
+PID 113 proved the SDL candidate is intact in
+`examples/qualification-logs/flappy-bird/20260803T162156Z-swapchain-run1.log`:
+device `0x2103144ea0` holds buffer `0x2103156010`, mixer mutex
+`0x2103144f50`, audio thread `0x210315fc90`, and hidden driver
+`0x2103144f70`; the mutex is mapped and contains its valid unlocked state.
+The null read therefore does not come from a destroyed or overwritten mixer
+mutex. Cleanup proved PID-specific and global exact-process absence twice.
+
+Dynarmic revision `40308332cbb3cc9c6cf3b646eab856c06a87da95` adds an
+abort-only A64 callback carrying the translated memory instruction's guest PC.
+It is invoked only after `check_halt_on_memory_access` observes `MemoryAbort`,
+so successful accesses retain the existing fast path. Eden associates that PC
+with its pending invalid `Read64`. Host `core` and strict integrated Prospero
+builds pass. The resulting diagnostic ELF has SHA-256
+`bfeec8c83655464d9680b122ac7b6595c24f682fe1d07dc4959cd9910478dd8b` and is
+pinned for one cleanup-first capture that must identify the actual null-base
+instruction before any behavioral fix is attempted.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
