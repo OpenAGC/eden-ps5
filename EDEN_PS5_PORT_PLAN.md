@@ -638,6 +638,27 @@ embeds `dc7b95b` and has SHA-256
 `bf79993144501f03169f61c87d3cea64d93139c99e4de6c04ac857a1dba639d7`.
 It is pinned for the next cleanup-first 30-second A/B.
 
+PID 137 completed the 30-second observation without the low read, allocator
+assertion, Xbyak exception, or another fatal error. It created multiple guest
+graphics pipelines, sampled two opaque-black raw guest frames, submitted the
+calibration composite, and completed one native present. The accepted bounded
+log is
+`examples/qualification-logs/flappy-bird/20260803T165853Z-swapchain-run1.log`.
+The broad six-register guard reduced guest progress to 7.79 seconds, however,
+so this run did not cross the old 14.58-second audio-fault boundary and cannot
+yet prove the register loss fixed. It also ended by bounded cleanup rather than
+the 120-frame oracle, so final cache telemetry and orderly teardown remain
+unproven. Both PID-specific and global exact-process absence passed twice.
+
+Revision `8b77584` narrows the translated-block guard to `RBX` and `R12`, the
+only SysV callee-save GPRs that this register allocator can assign to live IR
+values; `RBP` and `R13`-`R15` are excluded by allocation policy or reserved.
+Two pushes and two pops retain call-stack alignment while avoiding the larger
+generic ABI frame. Host `dynarmic` and `core` targets and the strict integrated
+Prospero build pass. The rebuilt ELF embeds `8b77584` and has SHA-256
+`1ada1f47aea2a2ca7421c0757585a63f9bd0a3330581cb336a10b9b42400c33b`.
+It is pinned for the next cleanup-first 30-second A/B.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
