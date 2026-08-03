@@ -554,8 +554,8 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
 #if defined(__PROSPERO__)
     LOG_INFO(Core_ARM,
              "Prospero Dynarmic memory path: core={} sparse_callbacks=true "
-             "single_lookup_scalars=true checked_width_scalars=true fastmem={} "
-             "address_space_bits={}",
+             "single_lookup_scalars=true checked_width_scalars=true scalar_page_cache=true "
+             "fastmem={} address_space_bits={}",
              m_core_index, config.fastmem_pointer.has_value(), address_space_bits);
 #endif
     m_jit.emplace(config);

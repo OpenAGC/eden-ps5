@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstring>
 #include <mutex>
 #include <span>
@@ -37,6 +38,10 @@
 
 namespace Core::Memory {
 
+#if defined(__PROSPERO__)
+static std::atomic<u64> next_memory_impl_cache_id{1};
+#endif
+
 static inline bool AddressSpaceContains(const Common::PageTable& table,
                                         const Common::ProcessAddress addr, const std::size_t size) {
     const Common::ProcessAddress max_addr = 1ULL << table.GetAddressSpaceBits();
@@ -47,9 +52,29 @@ static inline bool AddressSpaceContains(const Common::PageTable& table,
 // from outside classes. This also allows modification to the internals of the memory
 // subsystem without needing to rebuild all files that make use of the memory interface.
 struct Memory::Impl {
-    explicit Impl(Core::System& system_) : system{system_} {}
+    explicit Impl(Core::System& system_)
+        : system{system_}
+#if defined(__PROSPERO__)
+          , scalar_cache_id{next_memory_impl_cache_id.fetch_add(1, std::memory_order_relaxed)}
+#endif
+    {}
+
+#if defined(__PROSPERO__)
+    void BeginPageTableMutation() {
+        // Odd generations prevent a scalar lookup from populating the cache while entries change.
+        translation_generation.fetch_add(1, std::memory_order_acq_rel);
+    }
+
+    void EndPageTableMutation() {
+        translation_generation.fetch_add(1, std::memory_order_release);
+    }
+#endif
 
     void SetCurrentPageTable(Kernel::KProcess& process) {
+#if defined(__PROSPERO__)
+        BeginPageTableMutation();
+        SCOPE_EXIT { EndPageTableMutation(); };
+#endif
         current_page_table = &process.GetPageTable().GetImpl();
 
         if (process.IsApplication() && Settings::IsFastmemEnabled()) {
@@ -359,12 +384,19 @@ struct Memory::Impl {
             return true;
         }
 
-        const u8* const ptr = GetPointerImpl(
-            addr,
-            [addr]() {
-                LOG_ERROR(HW_Memory, "Unmapped checked Read{} @ {:#016x}", sizeof(T) * 8, addr);
-            },
-            [&]() { HandleRasterizerDownload(addr, sizeof(T)); });
+        const u8* ptr{};
+#if defined(__PROSPERO__)
+        ptr = GetCachedNormalScalarPointer(addr);
+#endif
+        if (!ptr) {
+            ptr = GetPointerImpl(
+                addr,
+                [addr]() {
+                    LOG_ERROR(HW_Memory, "Unmapped checked Read{} @ {:#016x}", sizeof(T) * 8,
+                              addr);
+                },
+                [&]() { HandleRasterizerDownload(addr, sizeof(T)); });
+        }
         if (!ptr) {
             return false;
         }
@@ -424,12 +456,19 @@ struct Memory::Impl {
             return WriteBlockImpl(vaddr, &value, sizeof(value), false);
         }
 
-        u8* const ptr = GetPointerImpl(
-            addr,
-            [addr]() {
-                LOG_ERROR(HW_Memory, "Unmapped checked Write{} @ {:#016x}", sizeof(T) * 8, addr);
-            },
-            [&]() { HandleRasterizerWrite(addr, sizeof(T)); });
+        u8* ptr{};
+#if defined(__PROSPERO__)
+        ptr = GetCachedNormalScalarPointer(addr);
+#endif
+        if (!ptr) {
+            ptr = GetPointerImpl(
+                addr,
+                [addr]() {
+                    LOG_ERROR(HW_Memory, "Unmapped checked Write{} @ {:#016x}", sizeof(T) * 8,
+                              addr);
+                },
+                [&]() { HandleRasterizerWrite(addr, sizeof(T)); });
+        }
         if (!ptr) {
             return false;
         }
@@ -527,6 +566,10 @@ struct Memory::Impl {
         if (vaddr == 0 || !AddressSpaceContains(*current_page_table, vaddr, size)) {
             return;
         }
+#if defined(__PROSPERO__)
+        BeginPageTableMutation();
+        SCOPE_EXIT { EndPageTableMutation(); };
+#endif
 
         if (current_page_table->fastmem_arena) {
             const auto perm{debug ? Common::MemoryPermission{}
@@ -585,6 +628,10 @@ struct Memory::Impl {
         if (vaddr == 0 || !AddressSpaceContains(*current_page_table, vaddr, size)) {
             return;
         }
+#if defined(__PROSPERO__)
+        BeginPageTableMutation();
+        SCOPE_EXIT { EndPageTableMutation(); };
+#endif
 
         if (current_page_table->fastmem_arena) {
             Common::MemoryPermission perm{};
@@ -671,6 +718,10 @@ struct Memory::Impl {
      */
     void MapPages(Common::PageTable& page_table, Common::ProcessAddress base_address, u64 size,
                   Common::PhysicalAddress target, Common::PageType type) {
+#if defined(__PROSPERO__)
+        BeginPageTableMutation();
+        SCOPE_EXIT { EndPageTableMutation(); };
+#endif
         auto base = GetInteger(base_address);
 
         LOG_DEBUG(HW_Memory, "Mapping {:016X} onto {:016X}-{:016X}", GetInteger(target),
@@ -747,6 +798,51 @@ struct Memory::Impl {
             return nullptr;
         }
     }
+
+#if defined(__PROSPERO__)
+    [[nodiscard]] u8* GetCachedNormalScalarPointer(const u64 addr) const {
+        struct CacheEntry {
+            u64 impl_id{};
+            u64 generation{};
+            u64 guest_page{};
+            u8* host_page{};
+        };
+        static constexpr std::size_t CacheSlots = 8;
+        static_assert((CacheSlots & (CacheSlots - 1)) == 0);
+        static thread_local std::array<CacheEntry, CacheSlots> cache{};
+
+        const u64 generation = translation_generation.load(std::memory_order_acquire);
+        if ((generation & 1) != 0) {
+            return nullptr;
+        }
+        const u64 guest_page = addr >> YUZU_PAGEBITS;
+        CacheEntry& entry = cache[guest_page & (CacheSlots - 1)];
+        if (entry.impl_id == scalar_cache_id && entry.generation == generation &&
+            entry.guest_page == guest_page) {
+            return entry.host_page + (addr & YUZU_PAGEMASK);
+        }
+
+        const uintptr_t raw_pointer = current_page_table->entries[guest_page].ptr.Raw();
+        if (Common::PageTable::PageInfo::ExtractType(raw_pointer) != Common::PageType::Memory) {
+            return nullptr;
+        }
+        const uintptr_t pointer = Common::PageTable::PageInfo::ExtractPointer(raw_pointer);
+        if (pointer == 0 ||
+            translation_generation.load(std::memory_order_acquire) != generation) {
+            return nullptr;
+        }
+
+        u8* const host_page =
+            reinterpret_cast<u8*>(pointer + (guest_page << YUZU_PAGEBITS));
+        entry = CacheEntry{
+            .impl_id = scalar_cache_id,
+            .generation = generation,
+            .guest_page = guest_page,
+            .host_page = host_page,
+        };
+        return host_page + (addr & YUZU_PAGEMASK);
+    }
+#endif
 
     [[nodiscard]] u8* GetPointer(const Common::ProcessAddress vaddr) const {
         return GetPointerImpl(
@@ -918,6 +1014,10 @@ struct Memory::Impl {
     Core::System& system;
     Tegra::MaxwellDeviceMemoryManager* gpu_device_memory{};
     Common::PageTable* current_page_table = nullptr;
+#if defined(__PROSPERO__)
+    const u64 scalar_cache_id;
+    std::atomic<u64> translation_generation{};
+#endif
 
     std::array<VideoCore::RasterizerDownloadArea, Core::Hardware::NUM_CPU_CORES>
         rasterizer_read_areas{};
