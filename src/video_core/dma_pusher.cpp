@@ -4,6 +4,12 @@
 // SPDX-FileCopyrightText: Copyright 2021 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
+
+#include "common/logging.h"
+#ifdef __PROSPERO__
+#include "common/ps5_qualification_trace.h"
+#endif
 #include "common/settings.h"
 #include "core/core.h"
 #include "video_core/dma_pusher.h"
@@ -18,17 +24,23 @@ namespace Tegra {
 constexpr u32 MacroRegistersStart = 0xE00;
 [[maybe_unused]] constexpr u32 ComputeInline = 0x6D;
 
-DmaPusher::DmaPusher(Core::System& system_, MemoryManager& memory_manager_, Control::ChannelState& channel_state_)
-    : system{system_}
-    , memory_manager{memory_manager_}
-    , channel_state{channel_state_}
-    , signal_sync{false}
-    , synced{false}
-{}
+DmaPusher::DmaPusher(Core::System& system_, MemoryManager& memory_manager_,
+                     Control::ChannelState& channel_state_)
+    : system{system_}, memory_manager{memory_manager_}, channel_state{channel_state_},
+      signal_sync{false}, synced{false} {}
 
 DmaPusher::~DmaPusher() = default;
 
 void DmaPusher::DispatchCalls() {
+#ifdef __PROSPERO__
+    static std::atomic<u32> dispatch_sequence{0};
+    const u32 sequence = dispatch_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = Common::ShouldTracePS5QualificationSequence(sequence);
+    if (trace_qualification) {
+        LOG_INFO(HW_GPU, "PS5 DMA dispatch: sequence={} stage=entry queued={}", sequence,
+                 dma_pushbuffer.size());
+    }
+#endif
     dma_pushbuffer_subindex = 0;
     dma_state.is_last_call = true;
     while (system.IsPoweredOn()) {
@@ -36,8 +48,23 @@ void DmaPusher::DispatchCalls() {
             break;
         }
     }
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        LOG_INFO(HW_GPU, "PS5 DMA dispatch: sequence={} stage=commands-complete", sequence);
+    }
+#endif
     system.GPU().FlushCommands();
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        LOG_INFO(HW_GPU, "PS5 DMA dispatch: sequence={} stage=flush-complete", sequence);
+    }
+#endif
     system.GPU().OnCommandListEnd();
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        LOG_INFO(HW_GPU, "PS5 DMA dispatch: sequence={} stage=complete", sequence);
+    }
+#endif
 }
 
 bool DmaPusher::Step() {
@@ -66,6 +93,18 @@ bool DmaPusher::Step() {
     const CommandListHeader& header = current_command;
     dma_state.dma_get = header.addr;
 
+#ifdef __PROSPERO__
+    static std::atomic<u32> header_sequence{0};
+    const u32 sequence = header_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = Common::ShouldTracePS5QualificationSequence(sequence);
+    if (trace_qualification) {
+        LOG_INFO(HW_GPU,
+                 "PS5 DMA header: sequence={} stage=entry index={} address={:#x} words={} "
+                 "sync={}",
+                 sequence, dma_pushbuffer_subindex, header.addr, header.size, header.sync);
+    }
+#endif
+
     if (signal_sync && !synced) {
         std::unique_lock lk(sync_mutex);
         sync_cv.wait(lk, [this]() { return synced; });
@@ -73,26 +112,40 @@ bool DmaPusher::Step() {
         synced = false;
     }
 
-    if (header.size > 0 && dma_state.method >= MacroRegistersStart && subchannels[dma_state.subchannel]) {
-        subchannels[dma_state.subchannel]->current_dirty = memory_manager.IsMemoryDirty(dma_state.dma_get, header.size * sizeof(u32));
+    if (header.size > 0 && dma_state.method >= MacroRegistersStart &&
+        subchannels[dma_state.subchannel]) {
+        subchannels[dma_state.subchannel]->current_dirty =
+            memory_manager.IsMemoryDirty(dma_state.dma_get, header.size * sizeof(u32));
     }
 
     if (header.size > 0) {
-        const bool use_safe = Settings::IsDMALevelDefault() ? Settings::IsGPULevelHigh() : Settings::IsDMALevelSafe();
+        const bool use_safe =
+            Settings::IsDMALevelDefault() ? Settings::IsGPULevelHigh() : Settings::IsDMALevelSafe();
         if (use_safe) {
-            Tegra::Memory::GpuGuestMemory<Tegra::CommandHeader, Tegra::Memory::GuestMemoryFlags::SafeRead>headers(memory_manager, dma_state.dma_get, header.size, &command_headers);
+            Tegra::Memory::GpuGuestMemory<Tegra::CommandHeader,
+                                          Tegra::Memory::GuestMemoryFlags::SafeRead>
+                headers(memory_manager, dma_state.dma_get, header.size, &command_headers);
             ProcessCommands(headers);
         } else {
-            Tegra::Memory::GpuGuestMemory<Tegra::CommandHeader, Tegra::Memory::GuestMemoryFlags::UnsafeRead>headers(memory_manager, dma_state.dma_get, header.size, &command_headers);
+            Tegra::Memory::GpuGuestMemory<Tegra::CommandHeader,
+                                          Tegra::Memory::GuestMemoryFlags::UnsafeRead>
+                headers(memory_manager, dma_state.dma_get, header.size, &command_headers);
             ProcessCommands(headers);
         }
     }
+
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        LOG_INFO(HW_GPU, "PS5 DMA header: sequence={} stage=commands-complete", sequence);
+    }
+#endif
 
     if (++dma_pushbuffer_subindex >= command_list_size) {
         dma_pushbuffer.pop();
         dma_pushbuffer_subindex = 0;
     } else {
-        signal_sync = command_list.command_lists[dma_pushbuffer_subindex].sync && Settings::values.sync_memory_operations.GetValue();
+        signal_sync = command_list.command_lists[dma_pushbuffer_subindex].sync &&
+                      Settings::values.sync_memory_operations.GetValue();
     }
 
     if (signal_sync) {
@@ -110,15 +163,16 @@ void DmaPusher::ProcessCommands(std::span<const CommandHeader> commands) {
     for (size_t index = 0; index < commands.size();) {
         // Data word of methods command
         if (dma_state.method_count && dma_state.non_incrementing) {
-            auto const& command_header = commands[index]; //must ref (MUltiMethod re)
+            auto const& command_header = commands[index]; // must ref (MUltiMethod re)
             dma_state.dma_word_offset = u32(index * sizeof(u32));
-            const u32 max_write = u32(std::min<std::size_t>(index + dma_state.method_count, commands.size()) - index);
+            const u32 max_write =
+                u32(std::min<std::size_t>(index + dma_state.method_count, commands.size()) - index);
             CallMultiMethod(&command_header.argument, max_write);
             dma_state.method_count -= max_write;
             dma_state.is_last_call = true;
             index += max_write;
         } else if (dma_state.method_count) {
-            auto const command_header = commands[index]; //can copy
+            auto const command_header = commands[index]; // can copy
             dma_state.dma_word_offset = u32(index * sizeof(u32));
             dma_state.is_last_call = dma_state.method_count <= 1;
             CallMethod(command_header.argument);
@@ -127,7 +181,7 @@ void DmaPusher::ProcessCommands(std::span<const CommandHeader> commands) {
             dma_state.method_count--;
             index++;
         } else {
-            auto const command_header = commands[index]; //can copy
+            auto const command_header = commands[index]; // can copy
             // No command active - this is the first word of a new one
             switch (command_header.mode) {
             case SubmissionMode::Increasing:
@@ -143,7 +197,8 @@ void DmaPusher::ProcessCommands(std::span<const CommandHeader> commands) {
             case SubmissionMode::Inline:
                 dma_state.method = command_header.method;
                 dma_state.subchannel = command_header.subchannel;
-                dma_state.dma_word_offset = u64(-s64(dma_state.dma_get)); // negate to set address as 0
+                dma_state.dma_word_offset =
+                    u64(-s64(dma_state.dma_get)); // negate to set address as 0
                 CallMethod(command_header.arg_count);
                 dma_state.non_incrementing = true;
                 dma_increment_once = false;
@@ -170,11 +225,11 @@ void DmaPusher::SetState(const CommandHeader& command_header) {
 void DmaPusher::CallMethod(u32 argument) {
     if (dma_state.method < non_puller_methods) {
         puller.CallPullerMethod(*this, Engines::Puller::MethodCall{
-            dma_state.method,
-            argument,
-            dma_state.subchannel,
-            dma_state.method_count,
-        });
+                                           dma_state.method,
+                                           argument,
+                                           dma_state.subchannel,
+                                           dma_state.method_count,
+                                       });
     } else {
         auto subchannel = subchannels[dma_state.subchannel];
         if (!subchannel->execution_mask[dma_state.method]) {
@@ -189,12 +244,14 @@ void DmaPusher::CallMethod(u32 argument) {
 
 void DmaPusher::CallMultiMethod(const u32* base_start, u32 num_methods) {
     if (dma_state.method < non_puller_methods) {
-        puller.CallMultiMethod(*this, dma_state.method, dma_state.subchannel, base_start, num_methods, dma_state.method_count);
+        puller.CallMultiMethod(*this, dma_state.method, dma_state.subchannel, base_start,
+                               num_methods, dma_state.method_count);
     } else {
         auto subchannel = subchannels[dma_state.subchannel];
         subchannel->ConsumeSink(system);
         subchannel->current_dma_segment = dma_state.dma_get + dma_state.dma_word_offset;
-        subchannel->CallMultiMethod(system, dma_state.method, base_start, num_methods, dma_state.method_count);
+        subchannel->CallMultiMethod(system, dma_state.method, base_start, num_methods,
+                                    dma_state.method_count);
     }
 }
 

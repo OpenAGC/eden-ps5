@@ -7,6 +7,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <condition_variable>
 #include <cstring>
 #include <deque>
@@ -16,6 +17,10 @@
 #include <queue>
 
 #include "common/common_types.h"
+#ifdef __PROSPERO__
+#include "common/logging.h"
+#include "common/ps5_qualification_trace.h"
+#endif
 #include "common/settings.h"
 #include "common/thread.h"
 #include "video_core/delayed_destruction_ring.h"
@@ -72,7 +77,11 @@ public:
     }
 
     void SignalFence(std::function<void()>&& func) {
-        const bool delay_fence = Settings::IsGPUFenceBehaviorDefault() ? Settings::IsGPULevelHigh() : Settings::IsGPUFenceBehaviorBalanced() || Settings::IsGPUFenceBehaviorAccurate() || Settings::IsGPUFenceBehaviorStrict();
+        const bool delay_fence = Settings::IsGPUFenceBehaviorDefault()
+                                     ? Settings::IsGPULevelHigh()
+                                     : Settings::IsGPUFenceBehaviorBalanced() ||
+                                           Settings::IsGPUFenceBehaviorAccurate() ||
+                                           Settings::IsGPUFenceBehaviorStrict();
         const bool should_flush = ShouldFlush();
         if constexpr (!can_async_check) {
             TryReleasePendingFences<false>();
@@ -102,9 +111,53 @@ public:
     }
 
     void SignalSyncPoint(u32 value) {
+#ifdef __PROSPERO__
+        static std::atomic<u32> syncpoint_sequence{0};
+        const u32 sequence = syncpoint_sequence.fetch_add(1, std::memory_order_relaxed);
+        const bool trace_qualification = Common::ShouldTracePS5QualificationSequence(sequence);
+        if (trace_qualification) {
+            LOG_INFO(HW_GPU,
+                     "PS5 rasterizer syncpoint: sequence={} stage=entry id={} host={} guest={}",
+                     sequence, value, syncpoint_manager.GetHostSyncpointValue(value),
+                     syncpoint_manager.GetGuestSyncpointValue(value));
+        }
+#endif
         syncpoint_manager.IncrementGuest(value);
+#ifdef __PROSPERO__
+        if (trace_qualification) {
+            LOG_INFO(HW_GPU,
+                     "PS5 rasterizer syncpoint: sequence={} stage=guest-incremented id={} host={} "
+                     "guest={}",
+                     sequence, value, syncpoint_manager.GetHostSyncpointValue(value),
+                     syncpoint_manager.GetGuestSyncpointValue(value));
+        }
+        std::function<void()> func([this, value, sequence, trace_qualification] {
+            if (trace_qualification) {
+                LOG_INFO(HW_GPU,
+                         "PS5 rasterizer syncpoint: sequence={} stage=host-callback-entry id={} "
+                         "host={} guest={}",
+                         sequence, value, syncpoint_manager.GetHostSyncpointValue(value),
+                         syncpoint_manager.GetGuestSyncpointValue(value));
+            }
+            syncpoint_manager.IncrementHost(value);
+            if (trace_qualification) {
+                LOG_INFO(HW_GPU,
+                         "PS5 rasterizer syncpoint: sequence={} stage=host-callback-complete id={} "
+                         "host={} guest={}",
+                         sequence, value, syncpoint_manager.GetHostSyncpointValue(value),
+                         syncpoint_manager.GetGuestSyncpointValue(value));
+            }
+        });
+#else
         std::function<void()> func([this, value] { syncpoint_manager.IncrementHost(value); });
+#endif
         SignalFence(std::move(func));
+#ifdef __PROSPERO__
+        if (trace_qualification) {
+            LOG_INFO(HW_GPU, "PS5 rasterizer syncpoint: sequence={} stage=fence-queued id={}",
+                     sequence, value);
+        }
+#endif
     }
 
     void WaitPendingFences([[maybe_unused]] bool force) {

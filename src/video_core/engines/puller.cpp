@@ -4,8 +4,13 @@
 // SPDX-FileCopyrightText: 2022 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <atomic>
+
 #include "common/assert.h"
 #include "common/logging.h"
+#ifdef __PROSPERO__
+#include "common/ps5_qualification_trace.h"
+#endif
 #include "common/settings.h"
 #include "core/core.h"
 #include "video_core/control/channel_state.h"
@@ -25,12 +30,13 @@ namespace Tegra::Engines {
 namespace {
 
 constexpr u32 Gf100BindClassMask = 0xffff;
-constexpr u32 Gf100BindValidMask =  0x1f0000 | Gf100BindClassMask;
+constexpr u32 Gf100BindValidMask = 0x1f0000 | Gf100BindClassMask;
 
 } // Anonymous namespace
 
 void Puller::ProcessBindMethod(DmaPusher& dma_pusher, const MethodCall& method_call) {
-    LOG_DEBUG(HW_GPU, "Binding subchannel {} to engine {:#x}", method_call.subchannel, method_call.argument);
+    LOG_DEBUG(HW_GPU, "Binding subchannel {} to engine {:#x}", method_call.subchannel,
+              method_call.argument);
     u32 engine = method_call.argument;
     if ((engine & ~Gf100BindClassMask) != 0 && (engine & ~Gf100BindValidMask) == 0) {
         engine &= Gf100BindClassMask;
@@ -40,22 +46,28 @@ void Puller::ProcessBindMethod(DmaPusher& dma_pusher, const MethodCall& method_c
     bound_engines[method_call.subchannel] = engine_id;
     switch (engine_id) {
     case EngineID::FERMI_TWOD_A:
-        dma_pusher.BindSubchannel(&dma_pusher.channel_state.payload->fermi_2d, method_call.subchannel, EngineTypes::Fermi2D);
+        dma_pusher.BindSubchannel(&dma_pusher.channel_state.payload->fermi_2d,
+                                  method_call.subchannel, EngineTypes::Fermi2D);
         break;
     case EngineID::MAXWELL_B:
-        dma_pusher.BindSubchannel(&dma_pusher.channel_state.payload->maxwell_3d, method_call.subchannel, EngineTypes::Maxwell3D);
+        dma_pusher.BindSubchannel(&dma_pusher.channel_state.payload->maxwell_3d,
+                                  method_call.subchannel, EngineTypes::Maxwell3D);
         break;
     case EngineID::KEPLER_COMPUTE_B:
-        dma_pusher.BindSubchannel(&dma_pusher.channel_state.payload->kepler_compute, method_call.subchannel, EngineTypes::KeplerCompute);
+        dma_pusher.BindSubchannel(&dma_pusher.channel_state.payload->kepler_compute,
+                                  method_call.subchannel, EngineTypes::KeplerCompute);
         break;
     case EngineID::MAXWELL_DMA_COPY_A:
-        dma_pusher.BindSubchannel(&dma_pusher.channel_state.payload->maxwell_dma, method_call.subchannel, EngineTypes::MaxwellDMA);
+        dma_pusher.BindSubchannel(&dma_pusher.channel_state.payload->maxwell_dma,
+                                  method_call.subchannel, EngineTypes::MaxwellDMA);
         break;
     case EngineID::KEPLER_INLINE_TO_MEMORY_B:
-        dma_pusher.BindSubchannel(&dma_pusher.channel_state.payload->kepler_memory, method_call.subchannel, EngineTypes::KeplerMemory);
+        dma_pusher.BindSubchannel(&dma_pusher.channel_state.payload->kepler_memory,
+                                  method_call.subchannel, EngineTypes::KeplerMemory);
         break;
     case EngineID::NV01_TIMER:
-        dma_pusher.BindSubchannel(&dma_pusher.channel_state.payload->nv01_timer, method_call.subchannel, EngineTypes::Nv01Timer);
+        dma_pusher.BindSubchannel(&dma_pusher.channel_state.payload->nv01_timer,
+                                  method_call.subchannel, EngineTypes::Nv01Timer);
         break;
     default:
         UNIMPLEMENTED_MSG("Unimplemented engine {:04X}", engine_id);
@@ -64,6 +76,17 @@ void Puller::ProcessBindMethod(DmaPusher& dma_pusher, const MethodCall& method_c
 }
 
 void Puller::ProcessFenceActionMethod(DmaPusher& dma_pusher) {
+#ifdef __PROSPERO__
+    static std::atomic<u32> fence_action_sequence{0};
+    const u32 sequence = fence_action_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = Common::ShouldTracePS5QualificationSequence(sequence);
+    if (trace_qualification) {
+        LOG_INFO(HW_GPU,
+                 "PS5 puller fence: sequence={} stage=entry operation={} syncpoint={} value={}",
+                 sequence, regs.fence_action.op.Value(), regs.fence_action.syncpoint_id.Value(),
+                 regs.fence_value);
+    }
+#endif
     switch (regs.fence_action.op) {
     case Puller::FenceOperation::Acquire:
         // UNIMPLEMENTED_MSG("Channel Scheduling pending.");
@@ -77,6 +100,11 @@ void Puller::ProcessFenceActionMethod(DmaPusher& dma_pusher) {
         UNIMPLEMENTED_MSG("Unimplemented operation {}", regs.fence_action.op.Value());
         break;
     }
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        LOG_INFO(HW_GPU, "PS5 puller fence: sequence={} stage=complete", sequence);
+    }
+#endif
 }
 
 void Puller::ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher) {
@@ -85,10 +113,12 @@ void Puller::ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher) {
     if (op == GpuSemaphoreOperation::WriteLong) {
         const GPUVAddr sequence_address{regs.semaphore_address.SemaphoreAddress()};
         const u32 payload = regs.semaphore_sequence;
-        dma_pusher.rasterizer->Query(sequence_address, VideoCommon::QueryType::Payload, VideoCommon::QueryPropertiesFlags::HasTimeout, payload, 0);
+        dma_pusher.rasterizer->Query(sequence_address, VideoCommon::QueryType::Payload,
+                                     VideoCommon::QueryPropertiesFlags::HasTimeout, payload, 0);
     } else {
         do {
-            const u32 word = dma_pusher.memory_manager.Read<u32>(regs.semaphore_address.SemaphoreAddress());
+            const u32 word =
+                dma_pusher.memory_manager.Read<u32>(regs.semaphore_address.SemaphoreAddress());
             regs.acquire_source = true;
             regs.acquire_value = regs.semaphore_sequence;
             if (op == GpuSemaphoreOperation::AcquireEqual) {
@@ -120,7 +150,8 @@ void Puller::ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher) {
 void Puller::ProcessSemaphoreRelease(DmaPusher& dma_pusher) {
     const GPUVAddr sequence_address{regs.semaphore_address.SemaphoreAddress()};
     const u32 payload = regs.semaphore_release;
-    dma_pusher.rasterizer->Query(sequence_address, VideoCommon::QueryType::Payload, VideoCommon::QueryPropertiesFlags::IsAFence, payload, 0);
+    dma_pusher.rasterizer->Query(sequence_address, VideoCommon::QueryType::Payload,
+                                 VideoCommon::QueryPropertiesFlags::IsAFence, payload, 0);
 }
 
 void Puller::ProcessSemaphoreAcquire(DmaPusher& dma_pusher) {
@@ -209,22 +240,28 @@ void Puller::CallEngineMethod(DmaPusher& dma_pusher, const MethodCall& method_ca
     const EngineID engine = bound_engines[method_call.subchannel];
     switch (engine) {
     case EngineID::FERMI_TWOD_A:
-        dma_pusher.channel_state.payload->fermi_2d.CallMethod(dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
+        dma_pusher.channel_state.payload->fermi_2d.CallMethod(
+            dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
         break;
     case EngineID::MAXWELL_B:
-        dma_pusher.channel_state.payload->maxwell_3d.CallMethod(dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
+        dma_pusher.channel_state.payload->maxwell_3d.CallMethod(
+            dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
         break;
     case EngineID::KEPLER_COMPUTE_B:
-        dma_pusher.channel_state.payload->kepler_compute.CallMethod(dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
+        dma_pusher.channel_state.payload->kepler_compute.CallMethod(
+            dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
         break;
     case EngineID::MAXWELL_DMA_COPY_A:
-        dma_pusher.channel_state.payload->maxwell_dma.CallMethod(dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
+        dma_pusher.channel_state.payload->maxwell_dma.CallMethod(
+            dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
         break;
     case EngineID::KEPLER_INLINE_TO_MEMORY_B:
-        dma_pusher.channel_state.payload->kepler_memory.CallMethod(dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
+        dma_pusher.channel_state.payload->kepler_memory.CallMethod(
+            dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
         break;
     case EngineID::NV01_TIMER:
-        dma_pusher.channel_state.payload->nv01_timer.CallMethod(dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
+        dma_pusher.channel_state.payload->nv01_timer.CallMethod(
+            dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
         break;
     default:
         UNIMPLEMENTED_MSG("Unimplemented engine");
@@ -233,26 +270,33 @@ void Puller::CallEngineMethod(DmaPusher& dma_pusher, const MethodCall& method_ca
 }
 
 /// Calls a GPU engine multivalue method.
-void Puller::CallEngineMultiMethod(DmaPusher& dma_pusher, u32 method, u32 subchannel, const u32* base_start, u32 amount, u32 methods_pending) {
+void Puller::CallEngineMultiMethod(DmaPusher& dma_pusher, u32 method, u32 subchannel,
+                                   const u32* base_start, u32 amount, u32 methods_pending) {
     const EngineID engine = bound_engines[subchannel];
     switch (engine) {
     case EngineID::FERMI_TWOD_A:
-        dma_pusher.channel_state.payload->fermi_2d.CallMultiMethod(dma_pusher.system, method, base_start, amount, methods_pending);
+        dma_pusher.channel_state.payload->fermi_2d.CallMultiMethod(
+            dma_pusher.system, method, base_start, amount, methods_pending);
         break;
     case EngineID::MAXWELL_B:
-        dma_pusher.channel_state.payload->maxwell_3d.CallMultiMethod(dma_pusher.system, method, base_start, amount, methods_pending);
+        dma_pusher.channel_state.payload->maxwell_3d.CallMultiMethod(
+            dma_pusher.system, method, base_start, amount, methods_pending);
         break;
     case EngineID::KEPLER_COMPUTE_B:
-        dma_pusher.channel_state.payload->kepler_compute.CallMultiMethod(dma_pusher.system, method, base_start, amount, methods_pending);
+        dma_pusher.channel_state.payload->kepler_compute.CallMultiMethod(
+            dma_pusher.system, method, base_start, amount, methods_pending);
         break;
     case EngineID::MAXWELL_DMA_COPY_A:
-        dma_pusher.channel_state.payload->maxwell_dma.CallMultiMethod(dma_pusher.system, method, base_start, amount, methods_pending);
+        dma_pusher.channel_state.payload->maxwell_dma.CallMultiMethod(
+            dma_pusher.system, method, base_start, amount, methods_pending);
         break;
     case EngineID::KEPLER_INLINE_TO_MEMORY_B:
-        dma_pusher.channel_state.payload->kepler_memory.CallMultiMethod(dma_pusher.system, method, base_start, amount, methods_pending);
+        dma_pusher.channel_state.payload->kepler_memory.CallMultiMethod(
+            dma_pusher.system, method, base_start, amount, methods_pending);
         break;
     case EngineID::NV01_TIMER:
-        dma_pusher.channel_state.payload->nv01_timer.CallMultiMethod(dma_pusher.system, method, base_start, amount, methods_pending);
+        dma_pusher.channel_state.payload->nv01_timer.CallMultiMethod(
+            dma_pusher.system, method, base_start, amount, methods_pending);
         break;
     default:
         UNIMPLEMENTED_MSG("Unimplemented engine");
@@ -262,7 +306,8 @@ void Puller::CallEngineMultiMethod(DmaPusher& dma_pusher, u32 method, u32 subcha
 
 /// Calls a GPU method.
 void Puller::CallMethod(DmaPusher& dma_pusher, const MethodCall& method_call) {
-    LOG_TRACE(HW_GPU, "Processing method {:08X} on subchannel {}", method_call.method, method_call.subchannel);
+    LOG_TRACE(HW_GPU, "Processing method {:08X} on subchannel {}", method_call.method,
+              method_call.subchannel);
     ASSERT(method_call.subchannel < bound_engines.size());
 
     if (ExecuteMethodOnEngine(dma_pusher, method_call.method)) {
@@ -273,7 +318,8 @@ void Puller::CallMethod(DmaPusher& dma_pusher, const MethodCall& method_call) {
 }
 
 /// Calls a GPU multivalue method.
-void Puller::CallMultiMethod(DmaPusher& dma_pusher, u32 method, u32 subchannel, const u32* base_start, u32 amount, u32 methods_pending) {
+void Puller::CallMultiMethod(DmaPusher& dma_pusher, u32 method, u32 subchannel,
+                             const u32* base_start, u32 amount, u32 methods_pending) {
     LOG_TRACE(HW_GPU, "Processing method {:08X} on subchannel {}", method, subchannel);
     ASSERT(subchannel < bound_engines.size());
     if (ExecuteMethodOnEngine(dma_pusher, method)) {
@@ -281,11 +327,11 @@ void Puller::CallMultiMethod(DmaPusher& dma_pusher, u32 method, u32 subchannel, 
     } else {
         for (u32 i = 0; i < amount; i++) {
             CallPullerMethod(dma_pusher, MethodCall{
-                method,
-                base_start[i],
-                subchannel,
-                methods_pending - i,
-            });
+                                             method,
+                                             base_start[i],
+                                             subchannel,
+                                             methods_pending - i,
+                                         });
         }
     }
 }

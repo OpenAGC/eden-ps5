@@ -4,7 +4,12 @@
 // SPDX-FileCopyrightText: Copyright 2019 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
+
 #include "common/assert.h"
+#ifdef __PROSPERO__
+#include "common/ps5_qualification_trace.h"
+#endif
 #include "common/scope_exit.h"
 #include "common/settings.h"
 #include "common/thread.h"
@@ -19,13 +24,13 @@
 
 namespace VideoCommon::GPUThread {
 
-ThreadManager::ThreadManager(Core::System& system_)
-    : system{system_}
-{}
+ThreadManager::ThreadManager(Core::System& system_) : system{system_} {}
 
 ThreadManager::~ThreadManager() = default;
 
-void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Frontend::GraphicsContext& context, Tegra::Control::Scheduler& scheduler) {
+void ThreadManager::StartThread(VideoCore::RendererBase& renderer,
+                                Core::Frontend::GraphicsContext& context,
+                                Tegra::Control::Scheduler& scheduler) {
     rasterizer = renderer.ReadRasterizer();
     thread = std::jthread([&](std::stop_token stop_token) {
         Common::SetCurrentThreadName("GPU");
@@ -41,8 +46,29 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
                     break;
                 }
                 if (auto* submit_list = std::get_if<SubmitListCommand>(&next.data)) {
+#ifdef __PROSPERO__
+                    static std::atomic<u32> dispatch_sequence{0};
+                    const u32 sequence = dispatch_sequence.fetch_add(1, std::memory_order_relaxed);
+                    const bool trace_qualification =
+                        Common::ShouldTracePS5QualificationSequence(sequence);
+                    if (trace_qualification) {
+                        LOG_INFO(HW_GPU,
+                                 "PS5 GPU thread submit: sequence={} stage=dispatch-entry "
+                                 "channel={} headers={} prefetched={}",
+                                 sequence, submit_list->channel,
+                                 submit_list->entries.command_lists.size(),
+                                 submit_list->entries.prefetch_command_list.size());
+                    }
+#endif
                     scheduler.Push(system.GPU(), submit_list->channel,
                                    std::move(submit_list->entries));
+#ifdef __PROSPERO__
+                    if (trace_qualification) {
+                        LOG_INFO(HW_GPU,
+                                 "PS5 GPU thread submit: sequence={} stage=dispatch-complete",
+                                 sequence);
+                    }
+#endif
                 } else if (std::holds_alternative<GPUTickCommand>(next.data)) {
                     system.GPU().TickWork();
                 } else if (const auto* flush = std::get_if<FlushRegionCommand>(&next.data)) {
