@@ -2507,17 +2507,21 @@ void Call(Core::System& system, u32 imm) {
     std::array<uint64_t, 8> args;
     kernel.CurrentPhysicalCore().SaveSvcArguments(process, args);
 #ifdef __PROSPERO__
+    static std::atomic<u64> submit_thread_id{0};
     static std::atomic<u32> post_submit_svc_sequence{0};
     const bool post_submit_entry = Common::IsPS5QualificationGuestSubmitResponseReady();
-    const u32 sequence =
-        post_submit_entry ? post_submit_svc_sequence.fetch_add(1, std::memory_order_relaxed) : 0;
-    const bool trace_qualification = post_submit_entry && sequence < 128u;
+    const u64 thread_id = GetCurrentThread(kernel).GetThreadId();
+    const bool submit_thread_entry =
+        post_submit_entry && thread_id == submit_thread_id.load(std::memory_order_acquire);
+    const u32 sequence = submit_thread_entry
+                             ? post_submit_svc_sequence.fetch_add(1, std::memory_order_relaxed)
+                             : 0;
+    const bool trace_qualification = submit_thread_entry && sequence < 256u;
     if (trace_qualification) {
         LOG_INFO(Kernel_SVC,
                  "PS5 guest SVC: sequence={} stage=entry thread={} imm={:#x} x0={:#x} x1={:#x} "
                  "x2={:#x} x3={:#x}",
-                 sequence, GetCurrentThread(kernel).GetThreadId(), imm, args[0], args[1], args[2],
-                 args[3]);
+                 sequence, thread_id, imm, args[0], args[1], args[2], args[3]);
     }
 #endif
     LOG_TRACE(Kernel_SVC, "{} [0]={:#x} [1]={:#x} [2]={:#x} [3]={:#x} [4]={:#x} [5]={:#x} [6]={:#x}",
@@ -2531,14 +2535,15 @@ void Call(Core::System& system, u32 imm) {
 #ifdef __PROSPERO__
     const bool post_submit_return = Common::IsPS5QualificationGuestSubmitResponseReady();
     if (!post_submit_entry && post_submit_return) {
+        submit_thread_id.store(thread_id, std::memory_order_release);
         LOG_INFO(Kernel_SVC,
                  "PS5 guest SVC: sequence=0 stage=submit-response-return thread={} imm={:#x} "
                  "x0={:#x}",
-                 GetCurrentThread(kernel).GetThreadId(), imm, args[0]);
+                 thread_id, imm, args[0]);
     } else if (trace_qualification) {
         LOG_INFO(Kernel_SVC,
                  "PS5 guest SVC: sequence={} stage=return thread={} imm={:#x} x0={:#x}", sequence,
-                 GetCurrentThread(kernel).GetThreadId(), imm, args[0]);
+                 thread_id, imm, args[0]);
     }
 #endif
     //kernel.ExitSVCProfile();
