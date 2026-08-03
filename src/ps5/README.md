@@ -80,15 +80,15 @@ qualifies immediate cache reload, but not the separate 300-present gate: the
 Qualification sidecars may use `input_cycle=N`. `input_cycle=1` preserves the
 legacy unbounded cycle; values from 2 through 10000 stop key injection after
 exactly N presses while retaining nonblocking event polling. Flappy currently
-uses 48 so the initial flow advances before the next restart can enter another
-guest-time loading delay. Its wrapper requires the exact stop marker before a
-300-present result can pass.
+uses two: the first advances the splash and the second is consumed during the
+following loading interval, leaving the title/intro to render continuously.
+Its wrapper requires the exact stop marker before a 300-present result can
+pass.
 
-The 48-press hardware replay confirmed that injection stopped before the final
-loading interval, yet Flappy still ended at native present sequence 63. Its
-pipeline-cache qualification is complete, but it is not the continuous-frame
-workload. Use the input-independent InvadersNX gate for long presentation and
-teardown qualification.
+The 48-press hardware replay confirmed that later input was still able to enter
+another scene transition before injection stopped, ending at native present
+sequence 63. The two-press calibration removes those later transitions while
+preserving the exact same Eden ELF.
 
 The first Flappy hardware attempt reached its accelerated GLES2 renderer and
 one native present, then exposed an eager allocation in the guest GPU

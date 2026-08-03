@@ -4140,9 +4140,12 @@ name absent twice. This rules out perpetual restart input as the owner of the
 64-frame ceiling. Flappy has now supplied its intended visible guest graphics,
 record-write, and immediate record-reload evidence; do not spend more hardware
 cycles adjusting its timeout or input cap for the independent long-frame gate.
-Use the pinned InvadersNX workload for continuous presentation because its
-source calls `SDL_RenderPresent` unconditionally on every applet-loop
-iteration and does not require input to keep submitting frames.
+The final calibration keeps the full Flappy goal rather than substituting a
+different workload. It limits injection to two presses: the first advances the
+splash, the second is consumed by the following loading scene, and no later
+press can trigger another transition. The identical ELF is retained; the new
+sidecar SHA-256 is
+`44f0abd17639f09a237074de03db839c755d7e0767a9d32e1de99f35977ff5f2`.
 
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
