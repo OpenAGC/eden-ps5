@@ -186,6 +186,26 @@ The sequence-zero canary wrapper now forces continuous klog itself, matching
 the two-run production wrapper. Callers cannot accidentally omit the
 pre-launch listener while still satisfying the wrapper's pinned-hash gate.
 
+The first post-panic canary used ELF `415a8ced...` and log
+`20260803T084733Z-swapchain-run1.log`. It presented magenta and then the 2048
+game visibly, completed all eight native presents, emitted the exact magenta
+readback and `GAME PASS 8 frames`, and retired PID 89 with same-app `KillApp`
+and `All processes exited`. Exact-name postflight found no `eboot.bin`, the
+continuous klog is nonempty, and the console remained responsive. It is not a
+canary pass: native present-chain teardown returned the synthesized OpenAGC
+`AGC_ERROR_INTERNAL` `0x8089000a`; Vulkan retained the registered memory,
+blocked device/surface release, and the wrapper rejected the run as designed.
+
+The available log could not identify which of delete-flip-event, unregister,
+close-handle, or delete-equeue failed because all four raw native results were
+collapsed to the same OpenAGC error. OpenAGC commit `7e714a5` adds stage and raw
+native-result diagnostics without changing the fail-closed order or ownership
+state. Its 20,085-assertion host suite, Prospero static build, and source-order
+audit pass. The rebuilt diagnostic Eden ELF is SHA-256
+`708f29d48446d5d2d489bfe6c535acd3dab36a068e83d244cf7bdf788036091e`.
+It remains ineligible for the 600-frame pair until one cleanup-first canary
+identifies and then clears native teardown.
+
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
 process-lifetime guard: cache eligibility allocation and initial demotion,
