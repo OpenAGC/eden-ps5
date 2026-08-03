@@ -600,6 +600,28 @@ criterion is that the `Read64 @ 0x8` disappears and execution advances beyond
 the SDL audio callback; that result alone will not satisfy the required
 120-presented-frame, cache-telemetry, or bounded-teardown qualification gates.
 
+PID 131 rejected the allocator-wide spill implementation before it reached the
+previous 14-second audio fault. At 2.706 seconds Dynarmic asserted that every
+candidate register was allocated, then attempted to spill a non-register and
+stopped code generation. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T165005Z-swapchain-run1.log`.
+The wrapper ran the pinned cleanup first, and after termination proved both
+PID-specific and global exact `eboot.bin` absence twice. Because this run ended
+earlier, the absence of `Read64 @ 0x8` does not yet prove that issue fixed.
+
+Revision `5f17d4b` replaces allocator-wide spilling with ABI-boundary
+preservation. Prospero-generated calls now push and restore Dynarmic's six
+SysV callee-save GPRs with its existing alignment-aware helpers; callback
+arguments and return registers retain the established allocation contract, and
+other platforms retain their existing generated call sequence. The generic
+guest host-call emitter now uses the same guarded call path. Host `dynarmic`
+and `core` targets and the strict integrated Prospero build pass. The rebuilt
+ELF embeds `5f17d4b` and has SHA-256
+`81eb9588446977b24a3b22a406c2c5c3d7d37f5c0158b6e7da298acc8f8f8f05`.
+It is pinned for a cleanup-first 30-second A/B; success first requires reaching
+beyond the prior 14.58-second fault without either the low read or register
+allocator assertions.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
