@@ -399,6 +399,12 @@ prints the exact native result and resource range for both. The accepted log is
 `examples/qualification-logs/flappy-bird/20260803T151849Z-swapchain-run1.log`;
 all four exact-process absence checks passed after PID 179 exited.
 
+The barrier-state diagnostic ELF embeds Eden revision
+`199c9736c9da902629446a89d649dacc1b43da17`, includes Vulkan-PS5
+`641dc9d`, and has SHA-256
+`af0101f437f31172240cf65cff66ef70424c2a9620ca6b96b884ec096d8edc19`.
+The wrapper pins these bytes for one cleanup-first 110-second replay.
+
 The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
 reached the next draw-preparation boundary at about 98 seconds. The guest draw
 reported `descriptors=0 vertex_buffers=0`; descriptor preparation had returned
