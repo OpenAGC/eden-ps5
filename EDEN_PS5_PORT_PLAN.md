@@ -96,6 +96,26 @@ cycles, and 80 cache unmaps. Every PID-scoped and global exact-process check
 passed. The serial-plus-concurrent GPU-free gate is qualified; the immediate
 remaining proof is the pinned 20-process production 2048 gate.
 
+The first three processes of the production gate passed completely in logs
+`20260803T034913Z-swapchain-run1.log`,
+`20260803T034943Z-swapchain-run1.log`, and
+`20260803T035013Z-swapchain-run1.log`. Each has all four JIT caches, FW
+5.500.008, exact magenta intermediate/swapchain hashes, `GAME PASS 8 frames`,
+clean process retirement, and no protection/presentation failure. On the
+fourth fresh cleanup-first attempt, log
+`20260803T035044Z-swapchain-run1.log` contains only the bounded 60-second
+launcher timeout. The console then became unreachable on websrv and the
+debugger port, so no target klog or exact-process-absence verdict exists for
+that attempt. The wrapper stopped and did not send a fifth process. This is
+not a 20-process qualification pass and must not be labeled one.
+
+Do not launch again until the console has rebooted. On a fresh direct-backend
+boot, run the pinned cleanup and independent exact-process preflight, then use
+continuous kernel-log capture around one pinned 2048 process so a repeated
+host loss retains its final kernel events. If that run is clean, restart the
+20-process production gate from run one; the interrupted three-run prefix does
+not substitute for the required consecutive gate.
+
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
 process-lifetime guard: cache eligibility allocation and initial demotion,
