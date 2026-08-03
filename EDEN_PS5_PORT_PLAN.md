@@ -1,5 +1,38 @@
 # Eden PS5 Port Plan
 
+## Current active slice (2026-08-03)
+
+Solve the intermittent Dynarmic RW-to-RX `mprotect` `EPERM` without weakening
+the Prospero W^X or fail-closed contracts. The active implementation must use
+OS-chosen virtual addresses, keep write and execute permissions mutually
+exclusive, never execute after an inconclusive or failed transition, and
+release every mapping on bounded teardown. In-process retry after an `EPERM`
+is not accepted as a fix because the payload SDK collapses every
+`kernel_mprotect` helper failure to `EPERM` and the mapping's partial state is
+then unknown.
+
+The immediate evidence is the cleanup-first InvadersNX run
+`Vulkan-PS5/examples/qualification-logs/20260803T022033Z-swapchain-run1.log`.
+It allocated and demoted the same four 32 MiB caches and addresses used by
+successful 2048 runs, then the first cache's first full-entry promotion failed
+at `base=0x303200000 size=0x2004000 errno=1` before guest JIT execution. Eden
+terminated fail-closed; the cleanup trap ran and both PID-scoped and global
+checks found no exact `eboot.bin`. This is neither an InvadersNX failure nor a
+qualification pass.
+
+Next, add a bounded, GPU-free, cleanup-gated diagnostic that records the raw
+`kernel_mprotect` result and exact mapping/cache role/transition sequence while
+using only OS-chosen addresses. Use it to distinguish transient VM-entry lookup
+failure from a stable capability or mapping-contract rejection. Implement the
+smallest safe same-address protection correction supported by that evidence;
+do not restore the rejected JIT-shm-plus-generic-`mprotect` hybrid. A dual-alias
+JIT-shm design is acceptable only with systematic Dynarmic RW-to-RX pointer
+translation and complete handle/alias teardown. Host tests must prove full-map
+geometry and that every failed transition prevents execution. Target proof
+requires repeated cleanup-first transition cycles followed by two identical
+600-native-present InvadersNX runs on FW 5.50, bounded teardown, and exact
+process absence. Only then resume the wider completion goal below.
+
 ## Active construction diagnostic (2026-08-02)
 
 The unnormalized-sampler fix, OpenAGC runtime API 55 compute-scratch path, and
