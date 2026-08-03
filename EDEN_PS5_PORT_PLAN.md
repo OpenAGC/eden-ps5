@@ -405,6 +405,15 @@ The barrier-state diagnostic ELF embeds Eden revision
 `af0101f437f31172240cf65cff66ef70424c2a9620ca6b96b884ec096d8edc19`.
 The wrapper pins these bytes for one cleanup-first 110-second replay.
 
+The replay after console recovery ran as PID 89. Neither timestamp nor
+indirect-count diagnostics fired; it again reached two draws and exited with
+`-8`. Regular direct/indexed indirect draws remain an unlabelled validation
+path capable of producing that exact result before incrementing the draw
+count. Vulkan-PS5 now logs their complete contract and marks successful
+barrier completion separately. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T152855Z-swapchain-run1.log`;
+cleanup passed both PID and global absence checks twice.
+
 PID 182 produced no buffer-range or image-subresource state-query failure, so
 the barrier completed and a later unlabelled command latched `-8`. Eden has no
 timestamp call in this path but does have a Maxwell indirect-count draw path.
