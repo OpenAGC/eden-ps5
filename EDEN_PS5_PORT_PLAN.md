@@ -351,9 +351,14 @@ Its cleanup-first canary passed in
 `20260803T103359Z-swapchain-run1.log`: RW `0x20006c000`, direct-JIT RX
 `0x9000d8000`, known-return execution, both unmaps, both closes, PID 211
 absence, and global exact `eboot.bin` absence all passed. The console web
-service became unreachable before the separate 20-run command launched, so
-the remaining 20-process hybrid gate is still pending and no unguarded retry
-was attempted.
+service became unreachable before the first 20-run command launched, so no
+unguarded retry was attempted. After the fresh reboot, the complete hybrid
+gate passed in 20 cleanup-first processes, logs
+`20260803T104158Z-swapchain-run1.log` through
+`20260803T104559Z-swapchain-run1.log`, PIDs 89 through 127. Every run used RW
+`0x20006c000` and direct-JIT RX `0x9000d8000`, executed the known-return stub,
+retired both mappings and descriptors, and proved both PID-specific and global
+exact `eboot.bin` absence.
 
 Production integration now uses that same hybrid mechanism. The Xbyak patch
 keeps execution-visible addresses on RX while redirecting emission, rewrites,
@@ -369,7 +374,10 @@ becomes cleanup-authoritative only after a successful result plus non-null,
 non-`MAP_FAILED`, page-aligned validation; failed-call output is never unmapped.
 The Prospero
 `dynarmic` target and full `yuzu-cmd` target both build successfully; hardware
-Dynarmic execution and teardown remain pending after the reboot.
+Dynarmic execution and teardown remain pending after the reboot. The committed
+production ELF is SHA-256
+`c49362194ccd31b9c110d845a2618875d3981aa231438348f44991cd9bbb6bcc`;
+the sequence-zero and 600-frame wrappers pin these exact bytes.
 
 The prior sequence-zero canary's operator-visible result is also confirmed:
 magenta appeared first, followed by the 2048 game with a faint but otherwise
