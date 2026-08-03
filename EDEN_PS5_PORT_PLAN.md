@@ -301,6 +301,12 @@ The regression forces a storage descriptor through CopyDestination before its
 draw and proves use-site recovery. Command-recording, lifecycle, validation,
 and the Prospero static build pass.
 
+The integrated descriptor-preparation retry ELF embeds Eden revision
+`8eb7a2b3a368c7d0e369d55d7e18971b8a11ee03`, has SHA-256
+`8c50d1654ab7cbc10a3e1c9f400e09afd23520528ca8d11d33b48803e5678fdc`,
+and is pinned by the Flappy wrapper for the next cleanup-first 110-second
+diagnostic.
+
 The zero-stride replay, PID 148, closes the pipeline-creation blocker: all
 guest pipelines compile/create, two opaque-black raw guest frames are observed,
 the first composite submits, and one native present returns successfully. The
