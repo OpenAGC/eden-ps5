@@ -61,7 +61,7 @@ one proves guest pipeline creation and writes a transferable record.
 
 Run the canary with `tools/run_fw550_flappy_bird.sh`. It requests exactly 300
 presented frames, cycles sustained A/B/directional input without another input
-thread, defaults to a 45-second host deadline, and performs two independently
+thread, defaults to a 55-second host deadline, and performs two independently
 separated absence checks. Run one has already created two guest graphics
 pipelines and written two transferable records. The current wrapper is the
 immediate-relaunch gate: it requires a nonzero discovered and successfully
@@ -89,6 +89,13 @@ The 48-press hardware replay confirmed that later input was still able to enter
 another scene transition before injection stopped, ending at native present
 sequence 63. The two-press calibration removes those later transitions while
 preserving the exact same Eden ELF.
+
+The two-press replay advanced through native present sequence 255. Its process
+clock reached 37.86 seconds when the 45-second web request expired because the
+request also includes roughly seven seconds of launch overhead. The wrapper
+therefore uses a bounded 55-second host deadline, giving the process enough
+time for the remaining 44 frames without approaching the rejected 150-second
+diagnostic window.
 
 The first Flappy hardware attempt reached its accelerated GLES2 renderer and
 one native present, then exposed an eager allocation in the guest GPU

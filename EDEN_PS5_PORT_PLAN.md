@@ -4147,6 +4147,16 @@ press can trigger another transition. The identical ELF is retained; the new
 sidecar SHA-256 is
 `44f0abd17639f09a237074de03db839c755d7e0767a9d32e1de99f35977ff5f2`.
 
+The two-press replay `20260803T231831Z-swapchain-run1.log` validates that
+choice: it stopped injection at 2.39 seconds and advanced through native
+present sequences 127 and 255 with the same 5/5 cache reload and zero
+rejections. The 45-second curl envelope expired when the process clock was
+37.86 seconds because launcher overhead consumes about seven seconds before
+the application clock starts. This is no longer a 64-frame stall. The wrapper
+now uses a bounded 55-second host deadline, leaving roughly ten seconds of
+margin for the final 44 frames and teardown while remaining far below the
+rejected 150-second diagnostic window.
+
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
    through Vulkan-PS5 into `openagc-psbc`, record it in versioned shader
