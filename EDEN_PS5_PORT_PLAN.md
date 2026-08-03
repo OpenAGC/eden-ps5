@@ -409,6 +409,15 @@ changing abort policy. The diagnostic ELF embeds Eden revision
 `6bb364b7ce83e56055509e308f704060e7b39a75bf7546d6356d55d884d90adc`.
 The wrapper pins these bytes for the next cleanup-first replay.
 
+The 30-second PID 98 replay captured `pc=0x80f7b6d4`, `lr=0x80f50054`,
+`x0=0`, and the invalid `x0+8` read at 13.98 seconds. It again completed one
+native present first, and cleanup passed two PID-specific plus two global
+absence checks. Because the NRO uses randomized page-aligned ASLR, the next
+diagnostic also records the process entry point so the PC and LR can be mapped
+unambiguously to NRO offsets. It embeds Eden revision
+`8e3dfb5dba5a24dad69124ecdde66cd2d1d0f701` and has SHA-256
+`5665857fa32867fffb9dc1fcd8ecfc663f9060be5d44b705571b86c8a1aa5706`.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
