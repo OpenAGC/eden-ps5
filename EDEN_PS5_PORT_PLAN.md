@@ -814,6 +814,25 @@ pass. The rebuilt ELF embeds `b9e05b3793`, has SHA-256
 `72196063c6bf2a6c53854ca8c7eeb375ef01c70833740d1d7f6906c838897eec`, and
 is pinned for the cleanup-first replay.
 
+PID 161 confirmed the final fail-soft audio timing in
+`examples/qualification-logs/flappy-bird/20260803T175021Z-swapchain-run1.log`.
+The appended tags were released in order after 85.2 ms and 84.3 ms, matching
+4,096 frames at 48 kHz within scheduler tolerance. Only the first two records
+were logged, the low read remained absent, and cleanup proved PID-specific
+and global exact-process absence twice. Audio is no longer the active blocker.
+
+The run still completed only one native present before the 30-second bound.
+The remaining throughput quarantine came from the disproven CPU diagnosis:
+Prospero ended every translated block after a memory access and disabled block
+linking, return-stack, fast-dispatch, context-elimination, constant-propagation,
+and miscellaneous IR optimizations. The exact-PC and audout-tag captures now
+prove the null read was a real SDL dereference caused by a premature AudioOut
+event, not register loss. Prospero therefore returns to Eden's selected CPU
+accuracy policy while retaining callback-only memory, synchronous
+`MemoryAbort`, strict W^X, and fail-closed mapping transitions. The next replay
+must preserve the audio evidence while materially increasing guest/native
+frame progress.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the
