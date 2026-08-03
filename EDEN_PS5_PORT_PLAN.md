@@ -1431,6 +1431,14 @@ never-launched Eden ELF is SHA-256
 `18295a780e72d724c4f2eeb4bcf4a868c4ba2fe3c122b7de0dab43b922251f22`.
 It is not qualification evidence until a direct-backend-only FW 5.50 boot has
 passed the pinned cleanup/exact-process preflight and sequence-zero scanout.
+The dedicated `tools/run_fw550_2048_sequence0.sh` gate now enforces that order
+with the eight-frame sidecar and requires exact magenta intermediate and
+swapchain readback at sequence zero before the long gate. It and the two-run
+600-frame wrapper pin the current Eden/cleanup/runner/helper identities and the
+canonical PyPS4debug source revision and lockfile, keep
+allocation/JIT/presentation failure rejection mandatory, and constrain the
+application request to 1-120 seconds (60 by default). Visual confirmation
+remains required before advancing from the sequence-zero gate.
 
 The successful PS4 port uses Eden's native `renderer_gnm` over `opengnm`, not
 Vulkan. That is relevant evidence for a future direct `renderer_agc`: its

@@ -115,3 +115,16 @@ For an Eden run, set the runner's `VULKAN_PS5_QUALIFICATION_ELF`,
 `VULKAN_PS5_QUALIFICATION_PASS_PATTERN`, and
 `VULKAN_PS5_QUALIFICATION_PASS_DESCRIPTION` controls as documented in
 `../Vulkan-PS5/README.md`, and pin both application and cleanup ELF hashes.
+
+After an address32/compiler change, do not start with the long gate. Run
+`tools/run_fw550_2048_sequence0.sh` first. It uses the eight-frame sidecar but
+accepts the run only when sequence zero reads back exact BGRA magenta from both
+the renderer intermediate and the swapchain image, FW 5.50 is identified, the
+bounded teardown completes, and no exact `eboot.bin` remains. Obtain visual
+confirmation before advancing to `tools/run_fw550_2048.sh`, which performs the
+two cleanup-first 600-frame runs with identical ELF, sidecar, and ROM hashes.
+Both wrappers pin the current Eden ELF, cleanup ELF, guarded Vulkan runner,
+exact-process helper hashes, canonical PyPS4debug source revision, and exact
+PyPS4debug lockfile bytes. Their mandatory failure pattern cannot be replaced,
+and the web-service deadline is restricted to 1-120 seconds (60 by default);
+callers may only append additional rejection patterns.
