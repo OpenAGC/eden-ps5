@@ -540,6 +540,26 @@ builds pass. The resulting ELF has SHA-256
 `9fbcc11c6775011dcd4fc5df53fb3488beab102d3e069cece6ad6ab51e2a68e6` and is
 pinned for one cleanup-first capture.
 
+PID 122 finally correlated the callback itself in
+`examples/qualification-logs/flappy-bird/20260803T163609Z-swapchain-run1.log`:
+the invalid `Read64` is attached to module offset `+0x13afb4`, the
+`SDL_RunAudio` call to `SDL_UnlockMutex`. Immediately before that call,
+`+0x13afb0` loads the mixer mutex which the same capture proved is non-null and
+mapped. The linked callee nevertheless computes address `0x8`. This proves a
+Prospero Dynarmic cross-block register-handoff failure rather than an audout,
+TLS, heap, or SDL object failure. PID 122 and global `eboot.bin` were absent
+twice after cleanup.
+
+Revision `283c785` disables Dynarmic `BlockLinking` only on Prospero, forcing
+translated blocks through the dispatcher so architectural registers are
+committed at the boundary. Other platforms and all other optimization flags
+are unchanged. Host `core` and strict integrated Prospero builds pass. The A/B
+ELF has SHA-256
+`d35245af271860f444635a7ca2ea1ff5a710840773787db3089836bb15bb3938` and is
+pinned for one cleanup-first 30-second replay. Success requires the prior
+`Read64 @ 0x8` to disappear; advancing beyond it is evidence for the fix but
+does not by itself satisfy the full 120-frame canary.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
