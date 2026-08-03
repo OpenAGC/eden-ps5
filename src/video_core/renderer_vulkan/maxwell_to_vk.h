@@ -35,6 +35,7 @@ struct FormatInfo {
     VkFormat format;
     bool attachable;
     bool storage;
+    bool sampled{true};
 };
 
 /**

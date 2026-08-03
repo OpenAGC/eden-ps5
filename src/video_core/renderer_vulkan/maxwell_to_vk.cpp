@@ -296,6 +296,7 @@ FormatInfo SurfaceFormat(const Device& device, FormatType format_type, bool with
     }
     bool const attachable = (tuple.usage & usage_attachable) != 0;
     bool const storage = (tuple.usage & usage_storage) != 0;
+    bool sampled = true;
     VkFormatFeatureFlags usage{};
     switch (format_type) {
     case FormatType::Buffer:
@@ -313,9 +314,20 @@ FormatInfo SurfaceFormat(const Device& device, FormatType format_type, bool with
         if (storage) {
             usage |= VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
         }
+#if defined(__PROSPERO__)
+        // PS5 qualifies combined D32/S8 for attachment and transfer, but a
+        // direct sampled-depth dispatch leaves the native queue pending.
+        // Permit D24/S8 emulation only as the qualified attachment fallback;
+        // a sampled view remains unavailable and therefore fails closed.
+        if (tuple.format == VK_FORMAT_D24_UNORM_S8_UINT) {
+            usage &= ~VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+            sampled = false;
+        }
+#endif
         break;
     }
-    return {device.GetSupportedFormat(tuple.format, usage, format_type), attachable, storage};
+    return {device.GetSupportedFormat(tuple.format, usage, format_type), attachable, storage,
+            sampled};
 }
 
 VkShaderStageFlagBits ShaderStage(Shader::Stage stage) {

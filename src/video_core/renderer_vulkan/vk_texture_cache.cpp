@@ -110,7 +110,7 @@ constexpr VkBorderColor ConvertBorderColor(const std::array<float, 4>& color) {
 [[nodiscard]] VkImageUsageFlags ImageUsageFlags(const MaxwellToVK::FormatInfo& info,
                                                 PixelFormat format) {
     VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                              VK_IMAGE_USAGE_SAMPLED_BIT;
+                              (info.sampled ? VK_IMAGE_USAGE_SAMPLED_BIT : 0);
     if (info.attachable) {
         switch (VideoCore::Surface::GetFormatType(format)) {
         case VideoCore::Surface::SurfaceType::ColorTexture:
@@ -157,6 +157,7 @@ constexpr VkBorderColor ConvertBorderColor(const std::array<float, 4>& color) {
         format_info.format = *format_override;
         format_info.attachable = false;
         format_info.storage = true;
+        format_info.sampled = true;
     }
     VkImageCreateFlags flags{};
     if (info.type == ImageType::e2D && info.resources.layers >= 6 &&
