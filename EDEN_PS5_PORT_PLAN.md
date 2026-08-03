@@ -638,6 +638,32 @@ embeds `dc7b95b` and has SHA-256
 `bf79993144501f03169f61c87d3cea64d93139c99e4de6c04ac857a1dba639d7`.
 It is pinned for the next cleanup-first 30-second A/B.
 
+PID 140 crossed the old fault boundary and disproved callee-save register
+clobbering: despite guarding both allocatable SysV callee-save registers, the
+same `Read64 @ 0x8` recurred at 13.999 seconds. Architectural guest `x19`, TLS,
+the SDL audio device and mutex, and both audout buffers remained valid. The
+accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T170251Z-swapchain-run1.log`.
+This matches Dynarmic's existing allocator warning that overspill can produce
+zero reads: the guest-derived address value is lost while spanning earlier
+callback-mode memory accesses. Cleanup again proved PID-specific and global
+exact-process absence twice.
+
+Revision `e5c3c08` removes the disproven register guard and adds an opt-in A64
+translation fallback that ends a block after a guest instruction emitting a
+data-memory access. Both x64 and arm64 backends honor the public option.
+Prospero enables it only for its callback-only memory path, ensuring the next
+block reloads architectural state instead of carrying allocator spill values
+across multiple host callbacks. A focused regression proves an `LDR` block
+reads only that instruction, advances PC by four, and returns the correct
+loaded value. The complete Dynarmic suite passes 201,927 assertions in 130 test
+cases; host `dynarmic` and `core` targets and the strict integrated Prospero
+build also pass. The rebuilt ELF embeds `e5c3c08` and has SHA-256
+`397b905f0356d691cc27e26ff1f1278b3df74242e2aa35c333374cfdc9bf685b`.
+It is pinned for a cleanup-first bounded replay. This fallback prioritizes
+correctness; its performance remains to be measured before it can qualify as
+the final allocator solution.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the
