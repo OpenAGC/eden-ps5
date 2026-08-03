@@ -9,12 +9,14 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <ps5/kernel.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
 extern "C" {
 int sceKernelJitCreateSharedMemory(int flags, std::size_t size, int protection, int* handle);
 int sceKernelJitCreateAliasOfSharedMemory(int handle, int protection, int* alias_handle);
+int sceKernelJitMapSharedMemory(int handle, int protection, void** address);
 int sceKernelMunmap(void* address, std::size_t size);
 }
 
@@ -82,11 +84,13 @@ public:
         writer = address;
 
         errno = 0;
-        address = mmap(nullptr, PageSize, PROT_READ | PROT_EXEC, MAP_SHARED, executor_handle, 0);
-        const int executor_error = address == MAP_FAILED ? errno : 0;
-        LogOperation("mmap-executor-RX", address == MAP_FAILED ? nullptr : address,
-                     address == MAP_FAILED ? -1 : 0, executor_error);
-        if (address == MAP_FAILED || address == writer) {
+        address = nullptr;
+        kernel_vm_operation_lock();
+        result = sceKernelJitMapSharedMemory(executor_handle, PROT_READ | PROT_EXEC, &address);
+        const int executor_error = result == 0 ? 0 : errno;
+        kernel_vm_operation_unlock();
+        LogOperation("jit-map-executor-RX", address, result, executor_error);
+        if (result != 0 || address == nullptr || address == writer) {
             return false;
         }
         executor = address;
@@ -132,8 +136,11 @@ private:
             return true;
         }
         errno = 0;
+        kernel_vm_operation_lock();
         const int result = sceKernelMunmap(address, PageSize);
-        LogOperation(operation, address, result, result == 0 ? 0 : errno);
+        const int unmap_error = result == 0 ? 0 : errno;
+        kernel_vm_operation_unlock();
+        LogOperation(operation, address, result, unmap_error);
         if (result == 0) {
             address = nullptr;
             return true;
