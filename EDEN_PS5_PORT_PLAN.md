@@ -11,9 +11,9 @@ cleanup-first, bounded `Flappy_Bird_NX.nro` canary using the post-checkpoint
 Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
-The latest launched restored-throughput Eden ELF is SHA-256
-`50b914312a42af0eb6cf7fc395f3f24cf210bac51a4ea69c9f008db8409e0552`,
-embeds Eden `90db104f0a`, and incorporates Vulkan-PS5 checkpoint-retirement
+The current unlaunched composite-fence diagnostic Eden ELF is SHA-256
+`cbb3ddae0aadfb2f0c5aad97e8720e7a429665034b9561b2644dd85c2c5299fb`,
+embeds Eden `ae950bfbee`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
 usage fix `2d84b89`.
 
@@ -861,7 +861,11 @@ first-16-then-power-of-two trace policy as the renderer/present path. One
 30-second cleanup-first replay can therefore distinguish no second guest
 display request from a later request held behind an unsignaled acquire fence,
 without changing presentation or synchronization behavior. The host `core`
-target and strict integrated Prospero build pass.
+target and strict integrated Prospero build pass. Revision `ae950bf` contains
+the diagnostic and PID 164 evidence. Its rebuilt ELF embeds `ae950bfbee`, has
+SHA-256
+`cbb3ddae0aadfb2f0c5aad97e8720e7a429665034b9561b2644dd85c2c5299fb`, and
+is pinned for exactly one cleanup-first 30-second replay.
 
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
