@@ -4047,6 +4047,34 @@ process name were absent after cleanup. This persistent relaunch failure is
 now an active owner of the eventual two-run gate, not merely a historical
 observation.
 
+The cleanup-first FW 5.50 Flappy canary now uses a 300-frame sidecar and a
+45-second host bound. The longer bound is intentional: renderer startup takes
+about 23 seconds on this build, so the former 30-second bound captured only a
+small part of the live game while 150 seconds remains unnecessarily long.
+OpenAGC runtime API v58 exposes the first uniform command-local buffer state
+span (`a812187`), and Vulkan-PS5 walks those exact spans for vertex tails
+(`e1b9be8`) and transfer copies (`1a62d45`) without relaxing mixed descriptor
+validation. OpenAGC also accounts transition reference journals by resource
+type (`9dc517f`) and gives persistent buffer state its own 32,769-interval,
+512-KiB metadata bound with a cross-command 2,048-interval regression
+(`d7ed7f2`). The OpenAGC host suite passes 36,396 assertions and the focused
+Vulkan command-recording test passes.
+
+Hardware logs show monotonic progress. Run
+`20260803T224251Z-swapchain-run1.log` passed the former vertex-tail blocker and
+isolated a fragmented `vkCmdCopyBuffer`; run
+`20260803T224529Z-swapchain-run1.log` then reached native present sequence 31
+without a Vulkan error. Run `20260803T224657Z-swapchain-run1.log` created two
+real guest graphics pipelines and wrote two transferable cache records before
+exposing the old persistent-state bound. With the independent persistent
+bound, `20260803T225229Z-swapchain-run1.log` reached native present sequence
+63, retained changing nonzero intermediate and swapchain hashes, and ended
+only at the 45-second host deadline. The user visually confirmed magenta
+followed by the Flappy Bird intro. PID 113 and the global exact `eboot.bin`
+name were absent in both post-run checks. This is visible guest presentation
+evidence, but not yet the automated 300-present or immediate cache-reload
+completion gate because the static intro stops submitting new frames.
+
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
    through Vulkan-PS5 into `openagc-psbc`, record it in versioned shader

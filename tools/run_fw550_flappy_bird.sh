@@ -15,7 +15,7 @@ cleanup_elf=${EDEN_PS5_CLEANUP_ELF:-$vulkan_repo/build-prospero-msaa/vulkan_ps5_
 homebrew=${EDEN_PS5_FLAPPY_BIRD_NRO:-$repo_dir/../Flappy_Bird_NX.nro}
 sidecar="$repo_dir/src/ps5/eden-flappy-bird.launch"
 log_dir="$vulkan_repo/examples/qualification-logs/flappy-bird"
-pinned_eden_sha256=6e04da04e3caea7ce35ceebde45128b729027b98f0dd90377add2c8275986102
+pinned_eden_sha256=3a6e8d9524f62a7bb4eff67297d919d6651eabb75b116d56901249092d7355b2
 pinned_cleanup_sha256=ff88ac293a55ec4ba5636a6556b74ffbeaf5d1093e96f86208cc55ce262565c5
 pinned_runner_sha256=96e396e42d6b3a73eef0ed7de78fe0e318b1aa51cdcf8ff2c89a54b013452c08
 pinned_process_helper_sha256=8dff282cdbc7ac1f4a037ad9e2a0e800fa82838cd1342b804b1eaff65ffd1ef6
@@ -24,7 +24,7 @@ pinned_pyps4debug_lock_sha256=c9eb85e0f0bc1bde6c4e00f1112a1aea982dc7eed024eb973f
 sidecar_sha256=50a577a2de2c6e858312d146779a9a1fbf1a39dcf92d830950ef5efd1022c5ce
 homebrew_sha256=6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d
 cache_identity=ee7cd9a1a22a0102
-websrv_timeout=${EDEN_PS5_WEBSRV_TIMEOUT:-30}
+websrv_timeout=${EDEN_PS5_WEBSRV_TIMEOUT:-45}
 
 verify_file_sha256() {
     file=$1
