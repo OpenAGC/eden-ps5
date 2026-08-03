@@ -292,12 +292,32 @@ The rebuilt probe is SHA-256
 `9e25987d640a5ebbe8ca4e2f1e1623217d4b419196767c095380f6fba2daea9c` and the
 rebuilt full ELF is SHA-256
 `24aacb2e4198b282b7d30328c7f194705230edc1689dafdc8838d18961519f77`.
-All FW 5.50 wrappers pin these bytes. The next gate is the 20-process GPU-free
-W^X probe, followed by the cleanup-first sequence-zero canary, 20-process 2048
-JIT stress, and only then the identical two-run 600-frame gate. If a fresh
-full-map exact transition still returns `EFAULT`, stop this incremental path
-and implement PS5 JIT shared-memory aliases with explicit RW/executable pointer
-translation; never retry a failed raw-tree mutation or use fixed placement.
+All FW 5.50 wrappers pin these bytes. The 20-process GPU-free W^X probe passed,
+but the immediately following full Eden sequence-zero run
+`20260803T100241Z-swapchain-run1.log` reproduced `EFAULT` on the first cache's
+exact full-map RX-to-RW transition at raw base `0x303200000`, size `0x2004000`.
+Eden terminated fail-closed and cleanup proved exact process absence. This
+rejects further raw VM-tree mutation work: do not retry a failed transition or
+use fixed placement.
+
+The replacement path uses PS5 JIT shared memory with independent OS-chosen RW
+and RX aliases. Commit `df9e03b` adds the GPU-free
+`eden-ps5-dynarmic-jit-dual-alias-probe.elf`; it creates one page of RWX-capable
+backing memory, maps distinct RW and RX views, emits only through RW, executes a
+known-return stub only through RX, and requires both aliases and descriptors to
+tear down cleanly. The source-committed probe is SHA-256
+`0fee0f81169bd2ea77d7eed32de037802bfbbfebe90ea5d8960eee63acbc5e24`.
+Its cleanup-first 20-process FW 5.50 gate is next. Only after that primitive is
+proven may Xbyak keep executable `getCode`/`getCurr` pointers while routing all
+emission and patch writes through the paired RW alias. Constant-pool storage
+must likewise write through RW while retaining RX addresses for generated
+RIP-relative targets, and Prospero's separate startup spin-lock generator must
+be replaced or moved onto the same alias-safe allocator.
+
+The prior sequence-zero canary's operator-visible result is also confirmed:
+magenta appeared first, followed by the 2048 game with a faint but otherwise
+correct palette. This is positive presentation evidence, not the outstanding
+two-run 600-frame qualification and not yet a color-transfer calibration pass.
 
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
