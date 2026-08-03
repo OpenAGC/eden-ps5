@@ -434,6 +434,12 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
     default:
         break;
     }
+#if defined(__PROSPERO__)
+    // PS5 callback-mode qualification observed x0 becoming null across a linked BL boundary
+    // even though the caller had just loaded a valid guest pointer. Force dispatcher handoff so
+    // architectural registers are committed between blocks until linked execution is qualified.
+    config.optimizations &= ~Dynarmic::OptimizationFlag::BlockLinking;
+#endif
     if (!Settings::IsFastmemEnabled()) {
         config.fastmem_pointer = std::nullopt;
         config.fastmem_exclusive_access = false;
