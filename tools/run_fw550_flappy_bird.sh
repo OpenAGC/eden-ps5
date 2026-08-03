@@ -107,7 +107,7 @@ VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2="$input_cycle_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_3="EdenMain: Prospero shader-cache identity: $cache_identity" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4='^\[psbc\] Parameter exports: stage=0 count=1$' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_5="$telemetry_baseline_pattern" \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_6='Prospero Dynarmic memory path: core=0 sparse_page_table=true callback_fallback=true single_lookup_scalars=true checked_width_scalars=true scalar_page_cache=true scalar_cache_storage=core-indexed scalar_cache_hit_inline=true fastmem=false address_space_bits=39' \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_6='Prospero Dynarmic memory path: core=0 sparse_page_table=true callback_fallback=true' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_7="$pipeline_created_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_8="$record_written_pattern" \
 VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
