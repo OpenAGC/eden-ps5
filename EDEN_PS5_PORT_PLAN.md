@@ -919,6 +919,29 @@ trace and PID 170 evidence. Its rebuilt ELF embeds `60db38bdca`, has SHA-256
 `9e323f6be18db7ddbcc5be5b52b36943b5534118db6daaa0d01c80686e1cd49b`, and
 is pinned for exactly one cleanup-first 30-second replay.
 
+That replay ran as PID 173 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T181636Z-swapchain-run1.log`.
+It localizes the missing frame beyond the BufferQueue consumer. VI continued
+at 60 Hz through sparse sequence 1,023. The guest dequeued slot zero, queued
+frame one, and immediately dequeued slot one for frame two. VI then acquired,
+presented, and released frame one, including a successful producer-wait-event
+signal. No second dequeue was pending and no queue commit for slot one ever
+arrived. Thus VI, acquisition, release, the producer event, and native
+presentation all remain live; the guest stalls while producing frame two
+after a successful dequeue. Audio remained correctly paced, no fatal
+diagnostic appeared, and cleanup proved PID 173 and global `eboot.bin`
+absence twice each.
+
+The next boundary is the guest GLES/NVDRV submission and completion contract.
+Prospero now sparsely traces each GPFIFO submit's channel syncpoint, flags,
+input fence, output target, increment, and current host/guest values. NVHOST
+control waits report their target, timeout/allocation mode, cached minimum,
+live host/guest counters, immediate-completion path, registered event slot,
+and callback. This can prove whether frame two is waiting on a target that was
+never incremented, waiting correctly for queued GPU work, or never reaching
+NVDRV at all. Host `core` passes; strict Prospero build and one cleanup-first
+30-second replay remain required.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the

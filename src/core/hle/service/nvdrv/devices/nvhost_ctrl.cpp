@@ -6,12 +6,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <bit>
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 
 #include <fmt/ranges.h>
 #include "common/assert.h"
 #include "common/logging.h"
+#ifdef __PROSPERO__
+#include "common/ps5_qualification_trace.h"
+#endif
 #include "common/scope_exit.h"
 #include "core/core.h"
 #include "core/hle/kernel/k_event.h"
@@ -90,6 +94,11 @@ NvResult nvhost_ctrl::NvOsGetConfigU32(IocGetConfigParams& params) {
 }
 
 NvResult nvhost_ctrl::IocCtrlEventWait(IocCtrlEventWaitParams& params, bool is_allocation) {
+#ifdef __PROSPERO__
+    static std::atomic<u32> wait_sequence{0};
+    const u32 sequence = wait_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = Common::ShouldTracePS5QualificationSequence(sequence);
+#endif
     LOG_DEBUG(Service_NVDRV, "syncpt_id={}, threshold={}, timeout={}, is_allocation={}",
               params.fence.id, params.fence.value, params.timeout, is_allocation);
 
@@ -106,6 +115,20 @@ NvResult nvhost_ctrl::IocCtrlEventWait(IocCtrlEventWaitParams& params, bool is_a
     if (fence_id >= MaxSyncPoints) {
         return NvResult::BadParameter;
     }
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        const auto& host_syncpoints = system.Host1x().GetSyncpointManager();
+        const bool allocated = syncpoint_manager.IsSyncpointAllocated(fence_id);
+        LOG_INFO(Service_NVDRV,
+                 "PS5 syncpoint wait: sequence={} stage=entry fence={}:{} timeout={} "
+                 "allocation={} value={:#x} allocated={} min={} host={} guest={}",
+                 sequence, params.fence.id, params.fence.value, params.timeout, is_allocation,
+                 params.value.raw, allocated,
+                 allocated ? syncpoint_manager.ReadSyncpointMinValue(fence_id) : 0,
+                 host_syncpoints.GetHostSyncpointValue(fence_id),
+                 host_syncpoints.GetGuestSyncpointValue(fence_id));
+    }
+#endif
 
     if (params.fence.value == 0) {
         if (!syncpoint_manager.IsSyncpointAllocated(params.fence.id)) {
@@ -120,12 +143,26 @@ NvResult nvhost_ctrl::IocCtrlEventWait(IocCtrlEventWaitParams& params, bool is_a
 
     if (syncpoint_manager.IsFenceSignalled(params.fence)) {
         params.value.raw = syncpoint_manager.ReadSyncpointMinValue(fence_id);
+#ifdef __PROSPERO__
+        if (trace_qualification) {
+            LOG_INFO(Service_NVDRV,
+                     "PS5 syncpoint wait: sequence={} stage=already-signalled value={}", sequence,
+                     params.value.raw);
+        }
+#endif
         return NvResult::Success;
     }
 
     if (const auto new_value = syncpoint_manager.UpdateMin(fence_id);
         syncpoint_manager.IsFenceSignalled(params.fence)) {
         params.value.raw = new_value;
+#ifdef __PROSPERO__
+        if (trace_qualification) {
+            LOG_INFO(Service_NVDRV,
+                     "PS5 syncpoint wait: sequence={} stage=updated-signalled value={}", sequence,
+                     params.value.raw);
+        }
+#endif
         return NvResult::Success;
     }
 
@@ -199,14 +236,34 @@ NvResult nvhost_ctrl::IocCtrlEventWait(IocCtrlEventWaitParams& params, bool is_a
     params.value.raw |= slot;
 
     event.wait_handle =
-        host1x_syncpoint_manager.RegisterHostAction(fence_id, target_value, [this, slot]() {
+        host1x_syncpoint_manager.RegisterHostAction(fence_id, target_value, [this, slot
+#ifdef __PROSPERO__
+                                                                           , sequence,
+                                                                           trace_qualification,
+                                                                           fence_id, target_value
+#endif
+        ]() {
             auto& event_ = events[slot];
             if (event_.status.exchange(EventState::Signalling, std::memory_order_acq_rel) ==
                 EventState::Waiting) {
                 event_.kevent->Signal(system.Kernel());
             }
             event_.status.store(EventState::Signalled, std::memory_order_release);
+#ifdef __PROSPERO__
+            if (trace_qualification) {
+                LOG_INFO(Service_NVDRV,
+                         "PS5 syncpoint wait: sequence={} stage=callback fence={}:{} slot={}",
+                         sequence, fence_id, target_value, slot);
+            }
+#endif
         });
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        LOG_INFO(Service_NVDRV,
+                 "PS5 syncpoint wait: sequence={} stage=registered fence={}:{} slot={} result=timeout",
+                 sequence, fence_id, target_value, slot);
+    }
+#endif
     return NvResult::Timeout;
 }
 

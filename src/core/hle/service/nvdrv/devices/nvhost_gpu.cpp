@@ -4,9 +4,13 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
 #include <cstring>
 #include "common/assert.h"
 #include "common/logging.h"
+#ifdef __PROSPERO__
+#include "common/ps5_qualification_trace.h"
+#endif
 #include "core/core.h"
 #include "core/hle/kernel/k_process.h"
 #include "core/hle/service/nvdrv/core/container.h"
@@ -339,6 +343,20 @@ static boost::container::small_vector<Tegra::CommandHeader, 512> BuildIncrementW
 }
 
 NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandList&& entries) {
+#ifdef __PROSPERO__
+    static std::atomic<u32> submit_sequence{0};
+    const u32 sequence = submit_sequence.fetch_add(1, std::memory_order_relaxed);
+    const bool trace_qualification = Common::ShouldTracePS5QualificationSequence(sequence);
+    const NvFence input_fence = params.fence;
+    const u32 input_flags = params.flags.raw;
+    if (trace_qualification) {
+        LOG_INFO(Service_NVDRV,
+                 "PS5 GPFIFO submit: sequence={} stage=entry channel_syncpoint={} entries={} "
+                 "flags={:#x} input_fence={}:{}",
+                 sequence, channel_syncpoint, params.num_entries, input_flags, input_fence.id,
+                 input_fence.value);
+    }
+#endif
     LOG_TRACE(Service_NVDRV, "called, gpfifo={:X}, num_entries={:X}, flags={:X}", params.address,
               params.num_entries, params.flags.raw);
 
@@ -381,6 +399,18 @@ NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandL
                                Tegra::CommandList{BuildIncrementWithWfiCommandList(params.fence)});
         }
     }
+
+#ifdef __PROSPERO__
+    if (trace_qualification) {
+        const auto& host_syncpoints = system.Host1x().GetSyncpointManager();
+        LOG_INFO(Service_NVDRV,
+                 "PS5 GPFIFO submit: sequence={} stage=queued output_fence={}:{} increment={} "
+                 "host={} guest={}",
+                 sequence, params.fence.id, params.fence.value, increment,
+                 host_syncpoints.GetHostSyncpointValue(channel_syncpoint),
+                 host_syncpoints.GetGuestSyncpointValue(channel_syncpoint));
+    }
+#endif
 
     flags.raw = 0;
 
