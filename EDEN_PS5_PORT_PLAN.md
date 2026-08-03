@@ -1236,11 +1236,12 @@ startup bottleneck without weakening checked guest-memory semantics. The
 Prospero scalar checked path now has a per-thread, direct-mapped cache for
 ordinary `PageType::Memory` translations. It never caches debug or
 rasterizer-coherent pages, and cross-page operations retain their checked slow
-path. Each `Memory::Impl` has a unique identity and an atomic odd/even
-translation generation; process page-table changes, mappings, debug marking,
-and rasterizer-cache marking invalidate entries around the mutation so stale
-host pointers cannot be used. The final 256-entry cache covers the observed
-font working set at 8 KiB per participating thread. The Dynarmic marker now
+path. A globally unique atomic odd/even translation epoch identifies each
+mapping generation; process page-table changes, mappings, debug marking, and
+rasterizer-cache marking invalidate entries around the mutation so stale host
+pointers cannot be used. The initial 256-entry cache covered the observed font
+working set at 8 KiB per participating thread; its final compact layout is
+recorded below. The Dynarmic marker now
 requires `scalar_page_cache=true`. Host core, strict Prospero `yuzu-cmd`, and
 the five focused tests (`dynarmic_tests`, `eden.multi_level_page_table`,
 `eden.ps5_thread_budget`, `eden_ps5.launch_config`, and
@@ -1293,6 +1294,66 @@ The next slice must reduce the emulator's checked-memory overhead enough to
 finish that guest workload, create a real guest pipeline/record, and present
 repeated frames inside the existing bound; further timeout or blind cache-size
 increases are not qualification evidence.
+
+Revision `169b72a` removes two remaining steady-state costs without relaxing
+that contract. It replaces each entry's separate `Memory::Impl` identity and
+generation with one globally unique even translation epoch (odd while a
+mutation is active), and caches the current address-space end rather than
+recomputing `1 << address_space_bits` for every scalar access. Revisions
+`78efc23` then move the common epoch into one thread-local cache header and
+clear exact guest-page tags only when that rare epoch changes. A steady cache
+entry is now exactly the guest-page tag and host-page pointer, so all 256
+entries occupy 4 KiB per thread instead of 8 KiB. Debug, rasterizer-coherent,
+cross-page, unmapped, and mutation paths remain fail-closed slow paths.
+
+Two byte-identical cleanup-first runs of the `169b72a` ELF prove the speedup is
+reproducible. PID 215 in
+`examples/qualification-logs/flappy-bird/20260803T200153Z-swapchain-run1.log`
+and PID 218 in `20260803T200305Z-swapchain-run1.log` reached the third
+`0x90000` allocation at 21.734 and 22.242 seconds, then reached two subsequent
+`0x3c0000` allocations by 25.003 and 25.621 seconds. The older PID 212 did not
+finish the third `0x90000` allocation inside 30 seconds. The final 4 KiB layout
+ran as PID 221 in `20260803T200922Z-swapchain-run1.log`; it reached the same
+milestones at 22.184, 25.397, and 25.464 seconds, preserving the gain without a
+material additional speedup. All three runs committed one BufferQueue frame,
+submitted GPFIFO, kept fail-soft AudioOut active, returned every recorded SVC,
+and contained no invalid checked access, JIT/memory failure, or fatal
+diagnostic. Each emitted only the authoritative zero guest-cache baseline:
+there was still no guest graphics/compute creation, transferable record,
+second commit, or 120-frame verdict. Pinned cleanup proved the PID-specific
+and global exact `eboot.bin` absence twice after every run.
+
+The current ELF embeds exact revision
+`78efc23c4968b1b18debf6e74d56c5c5432c1f0b`, has SHA-256
+`973f161105ab009259340ce75051516c655383e89ca42917ab63a935984cd76f`,
+and remains distinct from the banned diagnostic. The Flappy wrapper pins those
+bytes and has SHA-256
+`09333074292af160033efe72ccdc3b91fd6a1651acda63ba11b1cb83b55c7a49`.
+Host core and strict Prospero `yuzu-cmd` builds pass, as do the same five
+focused tests. A broader pre-existing host build target remains independently
+broken because Dynarmic's generated `test_reader`/`test_generator` expect an
+`A64TestEnv::interrupts` member absent from their checked-in test environment;
+the built `dynarmic_tests` target itself passes.
+
+The user-selected InvadersNX diagnostic was also repinned and executed rather
+than assumed to be a better canary. Its current NRO remains SHA-256
+`4ad1a05d7e7edba203d086151bf83d2be02bf2ead8695ce4d21f21b4bdf27433`;
+the sidecar remains
+`182bbf2e1cf750ffe5b068bc60473eb44ba47e800704a761a5dfe8db122a06e2`,
+and the updated wrapper is
+`e8d58a6e2a839ce91a3e7bfe82a74fe114ef2135fd0fbcdd11b831a440943033`.
+The cleanup-first PID 224 run is preserved at
+`examples/qualification-logs/20260803T201149Z-swapchain-run1.log`. The guest
+called `ExitProcess` normally at 3.205 seconds before creating any display
+buffer, GPFIFO submission, guest pipeline, or transferable record; orderly
+destruction confirmed all four guest counters remained zero and the frame
+oracle rejected `expected=600 actual=0`. Cleanup then proved PID and global
+absence twice. Thus the existing InvadersNX NRO is not presently a substitute
+for Flappy: it exits earlier and provides less renderer coverage. Its source
+initializes SDL video, timer, and audio in one fatal `SDL_Init` call before
+window creation, making fail-soft audio initialization the leading early-exit
+hypothesis; a rebuilt diagnostic NRO would need to separate optional audio
+from required video/timer initialization and receive a new pinned identity.
 
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
