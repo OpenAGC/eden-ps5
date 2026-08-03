@@ -2,6 +2,29 @@
 
 ## Current active slice (2026-08-03)
 
+### Payload SDK identity
+
+The current `build-prospero-full-audit2` CMake cache resolves both
+`CMAKE_TOOLCHAIN_FILE` and `PS5_PAYLOAD_SDK` through the installed prefix
+`/Users/bizkut/ps5-payload-sdk`. That directory is an installed SDK tree, not a
+Git checkout or symlink. The currently consumed pre-hardening artifacts are
+`target/lib/libc.a` SHA-256
+`dc258aae03c1a8c8c7725cfee413c205c7254668966c46eb0b8fc26b289c02c6`
+and `target/lib/crt1.o` SHA-256
+`04ec94435cdf2dd70e36b61fd0ccd949927c96149d78dfacbd132c1e8c7237d4`.
+Those bytes, rather than an assumed source checkout, identify the SDK linked
+into the current pinned Eden ELF.
+
+The source candidate for the RW-to-RX hardening is
+`/Users/bizkut/Downloads/PS5/homebrew/ps5debug-NG/ps5-payload-sdk`, owned by
+the `ps5debug-NG` repository at revision
+`d32d2d001dbbfd4cd2c0b7d6335b9a49d8a1cb86`. Its existing unrelated debugger
+changes and untracked `sce_stubs/libSceAgcDriver.c` are outside this work and
+must remain untouched. Before rebuilding Eden, install only a reviewed,
+committed SDK hardening from that source into `/Users/bizkut/ps5-payload-sdk`,
+record the replacement `libc.a` and `crt1.o` hashes here, and rebuild the
+identical qualification ELF against those exact installed bytes.
+
 Solve the intermittent Dynarmic RW-to-RX `mprotect` `EPERM` without weakening
 the Prospero W^X or fail-closed contracts. The active implementation must use
 OS-chosen virtual addresses, keep write and execute permissions mutually
