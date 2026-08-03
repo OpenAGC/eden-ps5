@@ -507,6 +507,24 @@ builds pass. The resulting diagnostic ELF has SHA-256
 pinned for one cleanup-first capture that must identify the actual null-base
 instruction before any behavioral fix is attempted.
 
+PID 116 repeated the exact SVC-boundary PC in
+`examples/qualification-logs/flappy-bird/20260803T162612Z-swapchain-run1.log`;
+the new abort callback therefore does not yet identify the generating load.
+The intact device snapshot repeated, and all four cleanup absence checks
+passed. The unstripped Switch SDL2 disassembly exposes a stronger immediate
+oracle: `SWITCHAUDIO_OpenDevice` stores two unchecked `memalign(0x1000, size)`
+returns at hidden-driver offsets `0` and `8`, then immediately calls `memset`.
+A null allocation can therefore produce the observed low-address access while
+leaving the device and mixer mutex intact.
+
+Revision `e8759e8` extends the guarded snapshot to those exact two audout
+buffer pointers. The strict integrated Prospero build passes. Its ELF has
+SHA-256
+`16c79dbd5878bfef10845b7786c65150008397224680f7d00d52fed36add7076` and is
+pinned for a bounded cleanup-first capture. If either pointer is null, the
+next slice owns guest heap expansion/aligned-allocation failure rather than
+audout IPC or SDL mutex state.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
