@@ -67,6 +67,9 @@ public:
         , polyfill_options(GenPolyfillOptions(block_of_code))
     {
         ASSERT(conf.page_table_address_space_bits >= 12 && conf.page_table_address_space_bits <= 64);
+        ASSERT(conf.sparse_page_table_leaf_bits == 0 ||
+               (conf.page_table != nullptr && conf.sparse_page_table_leaf_bits < 32 &&
+                conf.sparse_page_table_leaf_bits <= conf.page_table_address_space_bits - 12));
     }
 
     ~Impl() = default;

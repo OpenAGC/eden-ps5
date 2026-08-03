@@ -164,6 +164,11 @@ struct UserConfig {
     /// If page_table is nullptr, all memory accesses hit the memory callbacks.
     void** page_table = nullptr;
 
+    /// When non-zero, page_table points to a root array of leaf pointers instead of a flat array.
+    /// The low N bits of the guest page index select an entry within a leaf; the remaining bits
+    /// select its root pointer. A null root pointer or page entry falls back to the callback.
+    std::uint8_t sparse_page_table_leaf_bits = 0;
+
     /// This selects other optimizations than can't otherwise be disabled by setting other
     /// configuration options. This includes:
     /// - IR optimizations

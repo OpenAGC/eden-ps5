@@ -21,6 +21,7 @@ function(target_architecture_specific_sources project arch)
                                          "-Doutput_file=${output_file}"
                                          -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/impl/TargetArchitectureSpecificSourcesWrapFile.cmake"
                 DEPENDS "${input_file}"
+                        "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/impl/TargetArchitectureSpecificSourcesWrapFile.cmake"
                 VERBATIM
             )
             target_sources(${project} PRIVATE "${output_file}")

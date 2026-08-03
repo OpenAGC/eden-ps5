@@ -409,12 +409,22 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
         config.detect_misaligned_access_via_page_table = 16 | 32 | 64 | 128;
         config.only_detect_misalignment_via_page_table_on_page_boundary = true;
 #else
-        // Prospero uses a lazily allocated sparse page table because a contiguous 39-bit table
-        // would reserve 4 GiB. Dynarmic must use the memory callbacks until a qualified sparse
-        // host-MMU path exists.
-        config.page_table = nullptr;
-        // Callback validation requests MemoryAbort on an invalid data access. Require Dynarmic
-        // to stop at that instruction so it cannot execute the remainder of the guest block.
+        // Prospero exposes its stable sparse root to Dynarmic. Generated x64 code resolves normal
+        // pages through the two-level table and falls back to checked callbacks for absent leaves,
+        // special pages, and boundary/misaligned accesses.
+        static_assert(sizeof(std::atomic<Common::PageTable::PageEntryData*>) == sizeof(void*));
+        config.page_table = reinterpret_cast<void**>(page_table->entries.RootData());
+        config.page_table_address_space_bits = std::uint32_t(address_space_bits);
+        config.page_table_pointer_mask_bits = Common::PageTable::ATTRIBUTE_BITS;
+        config.page_table_log2_stride = 5;
+        config.sparse_page_table_leaf_bits =
+            std::uint8_t(Common::PageTable::SparseEntries::LeafIndexBits);
+        config.silently_mirror_page_table = false;
+        config.absolute_offset_page_table = true;
+        config.detect_misaligned_access_via_page_table = 16 | 32 | 64 | 128;
+        config.only_detect_misalignment_via_page_table_on_page_boundary = true;
+        // Callback fallback requests MemoryAbort on an invalid data access. Require Dynarmic to
+        // stop at that instruction so it cannot execute the remainder of the guest block.
         config.check_halt_on_memory_access = true;
 #endif
 
@@ -555,7 +565,8 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
     }
 #if defined(__PROSPERO__)
     LOG_INFO(Core_ARM,
-             "Prospero Dynarmic memory path: core={} sparse_callbacks=true "
+             "Prospero Dynarmic memory path: core={} sparse_page_table=true "
+             "callback_fallback=true "
              "single_lookup_scalars=true checked_width_scalars=true scalar_page_cache=true "
              "scalar_cache_storage=core-indexed scalar_cache_hit_inline=true "
              "fastmem={} address_space_bits={}",

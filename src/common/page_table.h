@@ -147,6 +147,12 @@ struct PageTable {
 #if defined(__PROSPERO__)
     class SparseEntries final {
     public:
+        static constexpr std::size_t ChunkBytes = 0x10000;
+        static constexpr std::size_t EntriesPerChunk = ChunkBytes / sizeof(PageEntryData);
+        static constexpr std::size_t LeafIndexBits = 11;
+        static_assert(ChunkBytes % sizeof(PageEntryData) == 0);
+        static_assert(EntriesPerChunk == (std::size_t{1} << LeafIndexBits));
+
         SparseEntries() = default;
 
         ~SparseEntries() noexcept {
@@ -203,11 +209,15 @@ struct PageTable {
             return nullptr;
         }
 
-    private:
-        static constexpr std::size_t ChunkBytes = 0x10000;
-        static constexpr std::size_t EntriesPerChunk = ChunkBytes / sizeof(PageEntryData);
-        static_assert(ChunkBytes % sizeof(PageEntryData) == 0);
+        [[nodiscard]] std::atomic<PageEntryData*>* RootData() noexcept {
+            return chunks.get();
+        }
 
+        [[nodiscard]] const std::atomic<PageEntryData*>* RootData() const noexcept {
+            return chunks.get();
+        }
+
+    private:
         [[nodiscard]] PageEntryData& Get(std::size_t index) const noexcept {
             const std::size_t chunk_index = index / EntriesPerChunk;
             PageEntryData* chunk = chunks[chunk_index].load(std::memory_order_acquire);
