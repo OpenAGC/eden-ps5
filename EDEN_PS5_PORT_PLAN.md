@@ -66,7 +66,17 @@ The lock protects participating Eden/OpenAGC/SDK paths; it is not claimed to
 replace the unavailable kernel `vm_map` lock against unknown nonparticipating
 mutators.
 
-The GPU-free probe now adds a second thread with exactly 128 bounded anonymous
+Eden commit `22d06c5` adds the direct-memory guards, uses the exact-entry helper
+for Dynarmic promotions, and adds the concurrent probe. The committed-source
+rebuilds are full Eden ELF SHA-256
+`32838191b2c611ae7a46318720bae9895f3e45f1fc730ef95a84470830ede1d0`
+and GPU-free probe SHA-256
+`20bbb80118fa6e4817acc170b1e272c84a7093d8b0d5ef031266b5933a08f1ea`.
+The full ELF embeds `22d06c55fd-master`, defines the VM lock, exact helpers,
+and libc `munmap`, and has no unresolved ordinary `mmap`/`mprotect`/`munmap`.
+These are pinned build artifacts, not target evidence.
+
+The GPU-free probe adds a second thread with exactly 128 bounded anonymous
 map/write/unmap cycles while the four Dynarmic-sized mappings execute their W^X
 cycles. It uses no GPU API, fixed address, retry, or execution after failure.
 Target proof requires 20 cleanup-first concurrent probe processes followed by
@@ -74,7 +84,8 @@ Target proof requires 20 cleanup-first concurrent probe processes followed by
 bounded teardown, and exact process absence. Only after that repeated gate may
 the fix be considered hardware-qualified and the wider renderer goal resume.
 
-Eden now serializes every Prospero Dynarmic executable-VM operation with one
+The preceding serial-only slice serialized every Prospero Dynarmic
+executable-VM operation with one
 process-lifetime guard: cache eligibility allocation and initial demotion,
 full-entry RW/RX transitions, unmap, and the separate lazy Xbyak spin-lock code
 generator's construction, protection changes, and teardown. Non-Prospero
