@@ -88,17 +88,19 @@ public:
     requires std::is_pointer_v<F> && std::is_function_v<std::remove_pointer_t<F>>
     void CallFunction(F fn) {
 #if defined(__PROSPERO__)
-        // Payload callbacks have not reliably preserved the SysV callee-save GPRs. Preserve
-        // them at translated-block boundaries without changing register-allocation pressure.
-        // Keep the size-sensitive fixed prelude unchanged.
+        // Payload callbacks have not reliably preserved the SysV callee-save GPRs. RBX and
+        // R12 are the only such registers SelectARegister can assign to live IR values; guard
+        // them at translated-block boundaries and keep the size-sensitive fixed prelude intact.
         if (prelude_complete) {
-            ABI_PushCalleeSaveRegistersAndAdjustStack(*this);
+            push(HostLocToReg64(HostLoc::RBX));
+            push(HostLocToReg64(HostLoc::R12));
         }
 #endif
         ::Common::X64::CallFarFunction(*this, fn);
 #if defined(__PROSPERO__)
         if (prelude_complete) {
-            ABI_PopCalleeSaveRegistersAndAdjustStack(*this);
+            pop(HostLocToReg64(HostLoc::R12));
+            pop(HostLocToReg64(HostLoc::RBX));
         }
 #endif
     }
@@ -108,13 +110,15 @@ public:
     void CallLambda(Lambda l) {
 #if defined(__PROSPERO__)
         if (prelude_complete) {
-            ABI_PushCalleeSaveRegistersAndAdjustStack(*this);
+            push(HostLocToReg64(HostLoc::RBX));
+            push(HostLocToReg64(HostLoc::R12));
         }
 #endif
         ::Common::X64::CallFarFunction(*this, Common::FptrCast(l));
 #if defined(__PROSPERO__)
         if (prelude_complete) {
-            ABI_PopCalleeSaveRegistersAndAdjustStack(*this);
+            pop(HostLocToReg64(HostLoc::R12));
+            pop(HostLocToReg64(HostLoc::RBX));
         }
 #endif
     }
