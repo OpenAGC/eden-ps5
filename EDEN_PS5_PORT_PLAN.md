@@ -325,9 +325,8 @@ per-RB occlusion records into Vulkan results before signaling completion.
 Eden's host-visible result-buffer path supports 32/64-bit values, WAIT,
 PARTIAL, and availability output; unsupported flags, ranges, strides,
 operation overflow, and device-local destinations fail closed. The exact
-zero-count no-op, WAIT|64-bit copy, and following barrier regression,
-command-recording,
-lifecycle, validation, and Prospero static-library build pass. The next action
+zero-count no-op, WAIT|64-bit copy, and following barrier regression, command-
+recording, lifecycle, validation, and Prospero static-library build pass. The next action
 is an integrated rebuild, identity pin, and one cleanup-first 110-second retry;
 visible guest presentation, orderly telemetry, audio fail-soft behavior, and
 cache persistence remain unproven.
@@ -341,6 +340,13 @@ Eden's host-visible result buffer; the RADV-style GPU reducer is required
 before device-local query-copy destinations can be qualified. Linux winsys
 code and generation-specific packets must not be copied without translating
 them through public OpenAGC and PS5 hardware tests.
+
+The integrated query-copy retry ELF embeds Eden revision
+`86814b384834e788a0bb8b9f2d15a44645ad553f`, includes Vulkan-PS5
+`ce2fdde`, and has SHA-256
+`10cc52d7005e16bda2944f2ea1c871f4eab2acc2acd77bc877f225fbe36147da`.
+The Flappy wrapper pins those exact bytes for the next cleanup-first,
+direct-`/dev/gc`, 110-second hardware diagnostic.
 
 The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
 reached the next draw-preparation boundary at about 98 seconds. The guest draw
