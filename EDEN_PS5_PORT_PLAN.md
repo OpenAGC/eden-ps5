@@ -363,6 +363,11 @@ slow guest input poll can miss every such pulse. The next input slice uses
 the 110-second deadline while making title/tutorial progression overlap slow
 guest polls. Rebuild and identity pinning are required before another launch.
 
+The sustained-input retry ELF embeds Eden revision
+`0b2d29bdd4aa9ffc9ace6cdbb993410b749c5dc4` and has SHA-256
+`47906f4f9a1c377f237a296b4c1dadeb8097e47c1568938b7f4fcc56213a5b41`.
+The wrapper pins these bytes for the next cleanup-first 110-second diagnostic.
+
 The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
 reached the next draw-preparation boundary at about 98 seconds. The guest draw
 reported `descriptors=0 vertex_buffers=0`; descriptor preparation had returned
