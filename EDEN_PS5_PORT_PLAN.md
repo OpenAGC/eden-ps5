@@ -120,6 +120,28 @@ produce identical replacement bytes, SHA-256
 The Flappy wrapper now pins those exact bytes; it rejected the stale hash
 before making network contact, so no unpinned cleanup or Eden payload was sent.
 
+The next Eden retry, PID 121, proved the format-51 correction: the former
+480x480 allocation rejection did not recur. It still produced only the
+magenta calibration present, then failed at 98.9 seconds on a different,
+fail-closed request: `VK_FORMAT_D24_UNORM_S8_UINT` (format 129), 1280x720,
+usage `0x27`. A graphics-pipeline build had also returned
+`VK_ERROR_FEATURE_NOT_PRESENT` immediately beforehand. Cleanup proved the PID
+and global exact-process absence twice.
+
+Before changing Eden again, the exact format-51 path was isolated through
+public Vulkan-PS5/OpenAGC. Vulkan-PS5 commit `0833663` extends the existing
+storage probe; pinned ELF SHA-256
+`215169ea600dac81901ab423d36d342ee7d9df98537e5119b0fb591c1e09f96e`
+passed on FW 5.500.008 as PID 124. It repeated all 30 storage formats and 480
+exact-bit readbacks, created and bound the 480x480 optimal extended image,
+dispatched through its listed SNORM storage view, completed the fence, exited,
+and passed two PID plus two global absence checks. The accepted log is
+`examples/qualification-logs/extended-storage/20260803T132208Z-swapchain-run1.log`.
+This closes the format-51/OpenAGC question. The next slice is the existing
+D24 fail-closed policy: qualify a supported D32/S8 substitute through a direct
+probe or reject Flappy as unsuitable; do not advertise D24 or retry Eden until
+that evidence exists.
+
 ### Payload SDK identity
 
 The current `build-prospero-full-audit2` CMake cache resolves both
