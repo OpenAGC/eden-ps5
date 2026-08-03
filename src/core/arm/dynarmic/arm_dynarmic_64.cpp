@@ -42,6 +42,7 @@ u64 DynarmicCallbacks64::MemoryRead64(u64 vaddr) {
                      vaddr, GetInteger(m_process->GetEntryPoint()), m_parent.m_jit->GetPC(),
                      m_parent.m_jit->GetSP(), registers[30], registers[0], registers[1],
                      registers[8], registers[19], registers[20], registers[29]);
+        m_parent.LogBacktrace(m_process);
     }
     CheckMemoryAccess(vaddr, 8, Kernel::DebugWatchpointType::Read);
     return m_memory.Read64(vaddr);
