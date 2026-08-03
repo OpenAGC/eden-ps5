@@ -1414,6 +1414,24 @@ to every PSBC compile; host lifecycle and Prospero static builds pass. Shader
 reflection/cache identity validation and cleanup-first hardware evidence remain
 required before this defect is closed.
 
+The artifact-identity half is implemented in OpenAGC commit `f7ec59e` and
+openagc-psbc commit `89bce63`. Reflection v3/compiler API 20 and PSBC API 22
+record the compile request's address32 high dword, bind it into the shared
+linkage hash with an explicit little-endian encoding, and reject a v3 shader
+whose recorded window differs from the device before native shader allocation.
+Legacy v1/v2 shaders remain accepted only when they carry no address32 resource
+pointer. Re-tagging a stale sidecar without recomputing its linkage and a
+correctly hashed artifact from another window both fail closed. The OpenAGC
+runtime suite passes 20,077 assertions, the unaffected host CTest set passes
+10/10, both OpenAGC and PSBC Prospero builds pass, and Vulkan-PS5's host and
+Prospero static libraries still build. Vulkan's current pipeline cache stores
+only its standard header and does not reuse PSBC native binaries, so executable
+cache identity is presently enforced at this reflection boundary. The rebuilt,
+never-launched Eden ELF is SHA-256
+`18295a780e72d724c4f2eeb4bcf4a868c4ba2fe3c122b7de0dab43b922251f22`.
+It is not qualification evidence until a direct-backend-only FW 5.50 boot has
+passed the pinned cleanup/exact-process preflight and sequence-zero scanout.
+
 The successful PS4 port uses Eden's native `renderer_gnm` over `opengnm`, not
 Vulkan. That is relevant evidence for a future direct `renderer_agc`: its
 rasterizer/cache/presentation structure can be forward-ported while replacing
