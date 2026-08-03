@@ -622,6 +622,22 @@ It is pinned for a cleanup-first 30-second A/B; success first requires reaching
 beyond the prior 14.58-second fault without either the low read or register
 allocator assertions.
 
+PID 134 rejected the first ABI-boundary implementation during construction of
+the first Dynarmic code cache: Xbyak threw `label is too far` before Eden
+loaded the game. Adding save/restore instructions to calls emitted inside the
+fixed prelude exceeded one of its compact branch displacements. The accepted
+failure log is
+`examples/qualification-logs/flappy-bird/20260803T165556Z-swapchain-run1.log`;
+both PID-specific and global exact-process absence checks again passed twice.
+
+Revision `dc7b95b` leaves the fixed prelude unchanged and emits the Prospero
+callee-save guard only after `PreludeComplete()`, which covers translated guest
+blocks where the corrupt live guest register was observed. Host `dynarmic` and
+`core` targets and the strict integrated Prospero build pass. The rebuilt ELF
+embeds `dc7b95b` and has SHA-256
+`bf79993144501f03169f61c87d3cea64d93139c99e4de6c04ac857a1dba639d7`.
+It is pinned for the next cleanup-first 30-second A/B.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
