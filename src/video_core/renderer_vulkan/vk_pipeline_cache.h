@@ -144,6 +144,10 @@ private:
     vk::PipelineCache LoadVulkanPipelineCache(const std::filesystem::path& filename,
                                               u32 expected_cache_version);
 
+#ifdef __PROSPERO__
+    void LogProsperoGuestCacheTelemetry(const char* reason) const;
+#endif
+
     const Device& device;
     Scheduler& scheduler;
     DescriptorPool& descriptor_pool;

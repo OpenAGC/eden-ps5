@@ -541,16 +541,25 @@ PipelineCache::PipelineCache(Tegra::MaxwellDeviceMemoryManager& device_memory_,
         device.SupportsProvokingVertexLastMode();
     dynamic_features.has_provoking_vertex_tf_preserve =
         device.SupportsTransformFeedbackProvokingVertexPreservation();
+#ifdef __PROSPERO__
+    LogProsperoGuestCacheTelemetry("baseline");
+#endif
 }
+
+#ifdef __PROSPERO__
+void PipelineCache::LogProsperoGuestCacheTelemetry(const char* const reason) const {
+    LOG_INFO(Render_Vulkan,
+             "Prospero guest pipeline cache live: reason={} graphics_created={} "
+             "compute_created={} records_written={} records_skipped={}",
+             reason, runtime_graphics_pipelines.load(), runtime_compute_pipelines.load(),
+             transferable_records_written.load(), transferable_records_skipped.load());
+}
+#endif
 
 PipelineCache::~PipelineCache() {
     serialization_thread.WaitForRequests();
 #ifdef __PROSPERO__
-    LOG_INFO(Render_Vulkan,
-             "Prospero guest pipeline cache telemetry: graphics_created={} compute_created={} "
-             "records_written={} records_skipped={}",
-             runtime_graphics_pipelines.load(), runtime_compute_pipelines.load(),
-             transferable_records_written.load(), transferable_records_skipped.load());
+    LogProsperoGuestCacheTelemetry("destructor");
 #endif
     if (use_vulkan_pipeline_cache && !vulkan_pipeline_cache_filename.empty()) {
         SerializeVulkanPipelineCache(vulkan_pipeline_cache_filename, vulkan_pipeline_cache,
@@ -883,12 +892,14 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline() {
 #ifdef __PROSPERO__
     if (pipeline) {
         runtime_graphics_pipelines.fetch_add(1);
+        LogProsperoGuestCacheTelemetry("graphics-created");
     }
 #endif
     if (!pipeline || pipeline_cache_filename.empty()) {
 #ifdef __PROSPERO__
         if (pipeline) {
             transferable_records_skipped.fetch_add(1);
+            LogProsperoGuestCacheTelemetry("graphics-record-skipped");
         }
 #endif
         return pipeline;
@@ -905,6 +916,8 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline() {
             SerializePipeline(key, env_ptrs, pipeline_cache_filename, CACHE_VERSION);
 #ifdef __PROSPERO__
         (written ? transferable_records_written : transferable_records_skipped).fetch_add(1);
+        LogProsperoGuestCacheTelemetry(written ? "graphics-record-written"
+                                                : "graphics-record-skipped");
 #endif
     });
     return pipeline;
@@ -922,12 +935,14 @@ std::unique_ptr<ComputePipeline> PipelineCache::CreateComputePipeline(
 #ifdef __PROSPERO__
     if (pipeline) {
         runtime_compute_pipelines.fetch_add(1);
+        LogProsperoGuestCacheTelemetry("compute-created");
     }
 #endif
     if (!pipeline || pipeline_cache_filename.empty()) {
 #ifdef __PROSPERO__
         if (pipeline) {
             transferable_records_skipped.fetch_add(1);
+            LogProsperoGuestCacheTelemetry("compute-record-skipped");
         }
 #endif
         return pipeline;
@@ -938,6 +953,8 @@ std::unique_ptr<ComputePipeline> PipelineCache::CreateComputePipeline(
                               pipeline_cache_filename, CACHE_VERSION);
 #ifdef __PROSPERO__
         (written ? transferable_records_written : transferable_records_skipped).fetch_add(1);
+        LogProsperoGuestCacheTelemetry(written ? "compute-record-written"
+                                                : "compute-record-skipped");
 #endif
     });
     return pipeline;

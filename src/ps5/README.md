@@ -61,10 +61,13 @@ one proves guest pipeline creation and writes a transferable record.
 
 Run the first canary with `tools/run_fw550_flappy_bird.sh`. It presents exactly
 120 frames, cycles A/B/directions without another input thread, defaults to a
-240-second host deadline, and performs two independently separated absence
-checks. Its final cache observation distinguishes runtime guest graphics and
-compute creation from actually written transferable records. Zero counts may
-still document a lifecycle canary, but they do not qualify cache reuse.
+30-second host deadline, and performs two independently separated absence
+checks. The guest cache emits a zero baseline plus every graphics/compute
+creation and transferable-record outcome as it happens, so forced bounded
+cleanup does not erase the evidence. The wrapper requires both a guest
+pipeline-created transition and a nonzero record-written transition before it
+can pass. Zero counts may still document a lifecycle canary, but they do not
+qualify cache reuse.
 
 The first Flappy hardware attempt reached its accelerated GLES2 renderer and
 one native present, then exposed an eager allocation in the guest GPU
