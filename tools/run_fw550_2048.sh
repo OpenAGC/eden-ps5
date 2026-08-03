@@ -22,7 +22,7 @@ pinned_pyps4debug_commit=8f1443bb97bd6e2a77ed5ea2cc9145975d3152eb
 pinned_pyps4debug_lock_sha256=c9eb85e0f0bc1bde6c4e00f1112a1aea982dc7eed024eb973fca91e436051033
 sidecar_sha256=e5c10f0d91bcb683f8e9f41a1bce44228d07317ff1f07236fcfabf702f4a4bac
 homebrew_sha256=cd7e7f343830920196590d99c82a9f1ab8a375eeaeb943fa6c671aa68250a20d
-websrv_timeout=${EDEN_PS5_WEBSRV_TIMEOUT:-60}
+websrv_timeout=${EDEN_PS5_WEBSRV_TIMEOUT:-900}
 
 verify_file_sha256() {
     file=$1
@@ -68,12 +68,13 @@ if [ -n "${EDEN_PS5_CLEANUP_EXPECTED_SHA256:-}" ] && \
     exit 2
 fi
 case "$websrv_timeout" in
-    ''|*[!0-9]*) echo "EDEN_PS5_WEBSRV_TIMEOUT must be 1-120 seconds" >&2; exit 2 ;;
+    ''|*[!0-9]*) echo "EDEN_PS5_WEBSRV_TIMEOUT must be 1-1200 seconds" >&2; exit 2 ;;
 esac
-if [ "$websrv_timeout" -lt 1 ] || [ "$websrv_timeout" -gt 120 ]; then
-    echo "EDEN_PS5_WEBSRV_TIMEOUT must be 1-120 seconds" >&2
+if [ "$websrv_timeout" -lt 1 ] || [ "$websrv_timeout" -gt 1200 ]; then
+    echo "EDEN_PS5_WEBSRV_TIMEOUT must be 1-1200 seconds" >&2
     exit 2
 fi
+live_klog_timeout=$((websrv_timeout + 120))
 if [ "${EDEN_PS5_QUALIFICATION_REJECT_PATTERN+x}" = x ]; then
     echo "EDEN_PS5_QUALIFICATION_REJECT_PATTERN cannot replace mandatory failures; use EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN" >&2
     exit 2
@@ -107,6 +108,7 @@ while [ "$run" -le 2 ]; do
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4="$required_pattern_4" \
     VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
     VULKAN_PS5_WEBSRV_TIMEOUT="$websrv_timeout" \
+    VULKAN_PS5_LIVE_KLOG_TIMEOUT="$live_klog_timeout" \
     VULKAN_PS5_CONTINUOUS_KLOG=1 \
     VULKAN_PS5_SWAPCHAIN_EXPECTED_SHA256="$pinned_eden_sha256" \
     VULKAN_PS5_CLEANUP_EXPECTED_SHA256="$pinned_cleanup_sha256" \

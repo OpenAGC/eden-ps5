@@ -129,8 +129,11 @@ identical ELF, sidecar, and ROM hashes. Both active 2048 wrappers pin the
 current Eden ELF, cleanup ELF, guarded
 Vulkan runner, exact-process helper hashes, canonical PyPS4debug source
 revision, and exact PyPS4debug lockfile bytes. Their mandatory failure pattern
-cannot be replaced, and the web-service deadline is restricted to 1-120
-seconds (60 by default); callers may only append additional rejection patterns.
+cannot be replaced; callers may only append additional rejection patterns.
+The eight-frame preflight keeps its 60-second default and 120-second ceiling.
+The measured PS5 rate is about 0.75 presented 2048 frames per second, so the
+authoritative 600-frame wrapper defaults to 900 seconds and permits 1-1200;
+its continuous target-klog deadline is kept 120 seconds beyond the web request.
 
 The address32 build passed that 2048 sequence-zero gate and was repeatedly
 confirmed visible on the console: magenta appeared before the 2048 board,

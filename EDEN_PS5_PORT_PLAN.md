@@ -413,6 +413,18 @@ otherwise correct palette. This is the required visible sequence-zero evidence
 and clears the same bytes for the two cleanup-first 600-frame immediate-relaunch
 gate.
 
+The first long-gate attempt, `20260803T105437Z-swapchain-run1.log`, was a
+host-timeout diagnostic rather than an Eden failure. The exact ELF created four
+dual-alias caches and presented successfully through frame 32, but the wrapper's
+60-second `curl` deadline expired before either 600-frame oracle could be
+reached; cleanup then proved PID 91 and global exact-process absence. The
+observed rate is about 0.75 presents per second, making the old 120-second
+ceiling structurally incapable of satisfying 600 real presents. The long
+wrapper now defaults to 900 seconds, permits at most 1200, and extends continuous
+target-klog capture 120 seconds past the selected request deadline. The
+eight-frame preflight retains its shorter bounded policy. This is a host-only
+gate correction; ELF, ROM, sidecar, and their hashes remain identical.
+
 The prior sequence-zero canary's operator-visible result is also confirmed:
 magenta appeared first, followed by the 2048 game with a faint but otherwise
 correct palette. This is positive presentation evidence, not the outstanding
