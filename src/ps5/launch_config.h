@@ -10,9 +10,10 @@
 
 namespace Eden::PS5 {
 
-constexpr std::size_t MaxLaunchConfigBytes = 1058;
+constexpr std::size_t MaxLaunchConfigBytes = 1062;
 constexpr std::size_t MaxGamePathBytes = 1024;
 constexpr std::uint32_t MaxPresentedFrameLimit = 108000;
+constexpr std::uint32_t MaxQualificationInputPressLimit = 10000;
 constexpr std::string_view DefaultLaunchConfigPath = "/data/homebrew/eden_ps5/eden.launch";
 
 enum class LaunchMode {
@@ -32,6 +33,7 @@ struct LaunchConfig {
     std::string game_path;
     std::uint32_t presented_frame_limit = 0;
     bool qualification_input_cycle = false;
+    std::uint32_t qualification_input_press_limit = 0;
 };
 
 LaunchConfigError ParseLaunchConfig(std::string_view text, LaunchConfig& config);

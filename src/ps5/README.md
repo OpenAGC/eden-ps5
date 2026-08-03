@@ -77,6 +77,13 @@ native present sequence 63 and left no exact `eboot.bin` after cleanup. This
 qualifies immediate cache reload, but not the separate 300-present gate: the
 45-second bound expired while the title remained at its static intro.
 
+Qualification sidecars may use `input_cycle=N`. `input_cycle=1` preserves the
+legacy unbounded cycle; values from 2 through 10000 stop key injection after
+exactly N presses while retaining nonblocking event polling. Flappy uses 64 so
+the initial title/tutorial flow advances without repeatedly restarting into a
+guest-time loading delay. Its wrapper requires the exact stop marker before a
+300-present result can pass.
+
 The first Flappy hardware attempt reached its accelerated GLES2 renderer and
 one native present, then exposed an eager allocation in the guest GPU
 `MultiLevelPageTable`: a 37-bit `nvhost-as-gpu` address space tried to commit a

@@ -41,7 +41,7 @@ public:
     void SetPresentedFrameLimit(u32 limit);
     u32 GetPresentedFrameCount() const;
     void OnFrameDisplayed() override;
-    void SetQualificationInputCycle(bool enabled);
+    void SetQualificationInputCycle(bool enabled, u32 press_limit = 0);
 
     // Sets the window icon from yuzu.bmp
     void SetWindowIcon();
@@ -104,10 +104,12 @@ protected:
     std::atomic<u32> presented_frames = 0;
     std::atomic<u32> presented_frame_limit = 0;
     bool qualification_input_cycle_enabled = false;
+    bool qualification_input_cycle_capped = false;
     int qualification_input_held_key = 0;
     std::size_t qualification_input_direction = 0;
     u64 qualification_input_last_step_ms = 0;
     u32 qualification_input_press_count = 0;
+    u32 qualification_input_press_limit = 0;
 
     /// Input subsystem to use with this window.
     InputCommon::InputSubsystem* input_subsystem;

@@ -117,8 +117,9 @@ void EmuWindow_SDL3::OnKeyEvent(int key, u8 state) {
     }
 }
 
-void EmuWindow_SDL3::SetQualificationInputCycle(bool enabled) {
-    if (qualification_input_cycle_enabled == enabled) {
+void EmuWindow_SDL3::SetQualificationInputCycle(bool enabled, u32 press_limit) {
+    if (qualification_input_cycle_enabled == enabled &&
+        qualification_input_press_limit == press_limit) {
         return;
     }
     if (qualification_input_held_key != 0) {
@@ -126,10 +127,13 @@ void EmuWindow_SDL3::SetQualificationInputCycle(bool enabled) {
         qualification_input_held_key = 0;
     }
     qualification_input_cycle_enabled = enabled;
+    qualification_input_cycle_capped = false;
+    qualification_input_press_limit = enabled ? press_limit : 0;
     qualification_input_direction = 0;
     qualification_input_press_count = 0;
     qualification_input_last_step_ms = SDL_GetTicks();
-    LOG_INFO(Frontend, "PS5 qualification input cycle: enabled={} interval_ms=250", enabled);
+    LOG_INFO(Frontend, "PS5 qualification input cycle: enabled={} interval_ms=250 press_limit={}",
+             enabled, qualification_input_press_limit);
 }
 
 void EmuWindow_SDL3::AdvanceQualificationInputCycle() {
@@ -159,6 +163,15 @@ void EmuWindow_SDL3::AdvanceQualificationInputCycle() {
     if (qualification_input_held_key != 0) {
         OnKeyEvent(qualification_input_held_key, 0);
         qualification_input_held_key = 0;
+        if (qualification_input_press_limit != 0 &&
+            qualification_input_press_count >= qualification_input_press_limit) {
+            qualification_input_cycle_capped = true;
+            LOG_INFO(Frontend, "PS5 qualification input cycle: stopped presses={} limit={}",
+                     qualification_input_press_count, qualification_input_press_limit);
+        }
+        return;
+    }
+    if (qualification_input_cycle_capped) {
         return;
     }
 

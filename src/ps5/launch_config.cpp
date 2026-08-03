@@ -41,7 +41,7 @@ LaunchConfigError ParseLaunchConfig(std::string_view text, LaunchConfig& config)
     config.game_path.assign(path);
     if (option_offset != std::string_view::npos) {
         constexpr std::string_view FramePrefix = "frames=";
-        constexpr std::string_view InputCycleOption = "input_cycle=1";
+        constexpr std::string_view InputCyclePrefix = "input_cycle=";
         const std::string_view options = body.substr(option_offset + 1);
         const std::size_t second_option_offset = options.find('\n');
         const std::string_view frame_option = options.substr(0, second_option_offset);
@@ -58,10 +58,22 @@ LaunchConfigError ParseLaunchConfig(std::string_view text, LaunchConfig& config)
         }
         config.presented_frame_limit = frame_limit;
         if (second_option_offset != std::string_view::npos) {
-            if (options.substr(second_option_offset + 1) != InputCycleOption) {
+            const std::string_view input_option = options.substr(second_option_offset + 1);
+            if (!input_option.starts_with(InputCyclePrefix)) {
+                return LaunchConfigError::Malformed;
+            }
+            const std::string_view input_value = input_option.substr(InputCyclePrefix.size());
+            std::uint32_t press_limit = 0;
+            const auto [input_end, input_error] = std::from_chars(
+                input_value.data(), input_value.data() + input_value.size(), press_limit);
+            if (input_error != std::errc{} || input_end != input_value.data() + input_value.size() ||
+                press_limit == 0 || press_limit > MaxQualificationInputPressLimit) {
                 return LaunchConfigError::Malformed;
             }
             config.qualification_input_cycle = true;
+            // Preserve input_cycle=1 as the original unbounded mode. Values
+            // greater than one cap synthesized presses for deterministic games.
+            config.qualification_input_press_limit = press_limit == 1 ? 0 : press_limit;
         }
     }
     return LaunchConfigError::None;

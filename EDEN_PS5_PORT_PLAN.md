@@ -12,7 +12,7 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current pinned guest diagnostic Eden ELF is SHA-256
-`01a0aa1da1469078243127777a725d5cf84b09d85403ff3d1ca16263b2490a83`.
+`4fbccbe733095447f6d851110986c58c7eb0ce363be581043e808b3b5628d67d`.
 It includes OpenAGC command-state span and capacity fixes through `d7ed7f2`,
 Vulkan-PS5 fragmented vertex/copy preparation through `1a62d45`, and explicit
 Eden disk-cache discovery/load/rejection telemetry. The guarded wrapper pins
@@ -4111,6 +4111,19 @@ independent long-frame gate as designed, launched pinned cleanup, and proved
 PID 116 plus the global exact `eboot.bin` name absent twice. Do not extend the
 deadline merely to wait on a static intro; progress the workload or improve
 guest throughput before retrying the 300-present gate.
+
+The next diagnostic does not lengthen that deadline. Flappy's source renders
+every applet-loop iteration, but its scene loader's intended one-second delay
+costs roughly ten host seconds in the current run. Perpetual A injection can
+therefore re-enter a loading scene after death/restart and consume most of the
+bounded window. The sidecar grammar now accepts `input_cycle=N`: legacy value
+one remains unbounded, while values 2-10000 cap synthesized key presses without
+restoring blocking SDL event waits. Flappy is pinned to 64 presses, after which
+input stops but rendering/event polling continues. Parser coverage passes 47
+assertions, the Prospero build completes, the sidecar SHA-256 is
+`1cc0da7595693d255c9ac46c9b30b22d5e1851e243b0d6c0d5352393ce8feee4`,
+and the new ELF SHA-256 is
+`4fbccbe733095447f6d851110986c58c7eb0ce363be581043e808b3b5628d67d`.
 
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
