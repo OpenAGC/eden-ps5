@@ -12,16 +12,16 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current pinned guest startup diagnostic Eden ELF is SHA-256
-`e7817665a307558b593b31d33ef223312ce7d97a1cd0e81ad9a8d944b110ccf2`,
-embeds Eden `c838e1bb61`, and incorporates OpenAGC byte-granular transfer commit
+`72ca7527cd1dfbe2565d8bbc6e118789011b633ee2e0c38d3549b96a2e9502ed`,
+embeds Eden `7c1de93`, and incorporates OpenAGC byte-granular transfer commit
 `4719611` plus Vulkan-PS5 first-command diagnostics `237ba9f`, buffer-image
 failure telemetry `ed9eada`, and exact buffer-image range preparation
 `edba96d`. It also includes OpenAGC capacity diagnostics `7e87dd8` and the
 Vulkan-PS5 256-KiB native DCB plus old-budget regression at `d518591`, empty
 native scissors `993952e`, signed Vulkan scissor clipping `f9ae5ad`, and
 buffer-image validation telemetry `aa82230`. Vulkan-PS5 `dab93b4` adds the
-first tiled D32 depth-plane meta upload. The guarded ELF pin is Eden commit
-`ad2b6ec`.
+first tiled D32 depth-plane meta upload, while `dbe9973` adds the matching
+packed S8 upload. The guarded ELF pin is Eden commit `c2cea14`.
 
 Before launch, pin the ELF, NRO, sidecar, cleanup ELF, guarded runner,
 exact-process helper, and PyPS4debug revision/lockfile. Run only the direct
@@ -145,6 +145,27 @@ reads plus fragment stencil export through a stencil-write meta pipeline, and
 retain fail-closed validation for malformed or unsupported aspect mixtures.
 The guarded runner cleaned PID 254 and proved PID-specific and global exact
 `eboot.bin` absence twice.
+
+Vulkan-PS5 `dbe9973` completes the two-region path with a second meta pipeline.
+Its fragment shader performs packed 32-bit loads, extracts the addressed S8
+byte, and exports `FragStencilRefEXT`; the Vulkan stencil state writes that
+per-fragment value. Depth and stencil use independent exact aligned staging
+ranges so disjoint buffer state remains valid. The host regression records
+both regions together, includes a deliberately unaligned stencil offset, and
+rejects a malformed combined-aspect region. SPIR-V inspection confirms
+`StencilExportEXT` and `FragStencilRefEXT`; the focused host test and strict
+Prospero ICD build pass.
+
+The first guarded retry with those bytes did not execute Eden and is not a
+renderer result. Pre-launch cleanup proved global exact `eboot.bin` absence
+twice, then PID 257 stopped at `mDBG: Waiting for debug subsystem .. 1` in
+`examples/qualification-logs/flappy-bird/20260803T215522Z-swapchain-run1.klog`.
+There is no Eden, Vulkan-PS5, OpenAGC, or guest GPU output after process exec.
+The web request timed out, port 744 became unreachable, the host stopped
+responding to ping, and post-run cleanup could not prove process absence. On
+the next boot, run the pinned cleanup ELF and independently prove exact global
+absence twice before retrying this same pinned canary. Do not classify this
+debug-service/console loss as either an S8 pass or an S8 failure.
 
 `InvadersNX.nro` remains the second workload and long-running presentation
 canary, not a substitute for the current diagnosis. Switch to it after Flappy
