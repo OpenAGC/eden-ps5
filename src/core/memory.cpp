@@ -68,6 +68,17 @@ struct Memory::Impl {
     {}
 
 #if defined(__PROSPERO__)
+    struct ScalarCacheEntry {
+        u64 guest_page{};
+        u8* host_page{};
+    };
+    static constexpr std::size_t ScalarCacheSlots = 256;
+    static_assert((ScalarCacheSlots & (ScalarCacheSlots - 1)) == 0);
+    struct ScalarCache {
+        u64 epoch{};
+        std::array<ScalarCacheEntry, ScalarCacheSlots> entries{};
+    };
+
     void BeginPageTableMutation() {
         // Odd epochs prevent a scalar lookup from populating the cache while entries change.
         scalar_translation_epoch.fetch_or(1, std::memory_order_acq_rel);
@@ -378,7 +389,8 @@ struct Memory::Impl {
     }
 
     template <typename T>
-    [[nodiscard]] bool ReadChecked(const Common::ProcessAddress vaddr, T& value)
+    [[nodiscard]] bool ReadChecked(const Common::ProcessAddress vaddr, T& value,
+                                   [[maybe_unused]] const std::size_t cache_index)
         requires(std::is_trivially_copyable_v<T>)
     {
         const u64 addr = GetInteger(vaddr);
@@ -401,7 +413,7 @@ struct Memory::Impl {
 
         const u8* ptr{};
 #if defined(__PROSPERO__)
-        ptr = GetCachedNormalScalarPointer(addr);
+        ptr = GetCachedNormalScalarPointer(addr, cache_index);
 #endif
         if (!ptr) {
             ptr = GetPointerImpl(
@@ -455,7 +467,8 @@ struct Memory::Impl {
     }
 
     template <typename T>
-    [[nodiscard]] bool WriteChecked(const Common::ProcessAddress vaddr, const T& value)
+    [[nodiscard]] bool WriteChecked(const Common::ProcessAddress vaddr, const T& value,
+                                    [[maybe_unused]] const std::size_t cache_index)
         requires(std::is_trivially_copyable_v<T>)
     {
         const u64 addr = GetInteger(vaddr);
@@ -477,7 +490,7 @@ struct Memory::Impl {
 
         u8* ptr{};
 #if defined(__PROSPERO__)
-        ptr = GetCachedNormalScalarPointer(addr);
+        ptr = GetCachedNormalScalarPointer(addr, cache_index);
 #endif
         if (!ptr) {
             ptr = GetPointerImpl(
@@ -819,31 +832,23 @@ struct Memory::Impl {
     }
 
 #if defined(__PROSPERO__)
-    [[nodiscard]] u8* GetCachedNormalScalarPointer(const u64 addr) const {
-        struct CacheEntry {
-            u64 guest_page{};
-            u8* host_page{};
-        };
-        static constexpr std::size_t CacheSlots = 256;
-        static_assert((CacheSlots & (CacheSlots - 1)) == 0);
-        struct ScalarCache {
-            u64 epoch{};
-            std::array<CacheEntry, CacheSlots> entries{};
-        };
-        static thread_local ScalarCache cache{};
+    [[nodiscard]] u8* GetCachedNormalScalarPointer(const u64 addr,
+                                                   const std::size_t cache_index) const {
+        ASSERT(cache_index < scalar_caches.size());
+        ScalarCache& cache = scalar_caches[cache_index];
 
         const u64 epoch = scalar_translation_epoch.load(std::memory_order_acquire);
         if ((epoch & 1) != 0) {
             return nullptr;
         }
         if (cache.epoch != epoch) {
-            for (CacheEntry& entry : cache.entries) {
+            for (ScalarCacheEntry& entry : cache.entries) {
                 entry.guest_page = std::numeric_limits<u64>::max();
             }
             cache.epoch = epoch;
         }
         const u64 guest_page = addr >> YUZU_PAGEBITS;
-        CacheEntry& entry = cache.entries[guest_page & (CacheSlots - 1)];
+        ScalarCacheEntry& entry = cache.entries[guest_page & (ScalarCacheSlots - 1)];
         if (entry.guest_page == guest_page) {
             return entry.host_page + (addr & YUZU_PAGEMASK);
         }
@@ -860,7 +865,7 @@ struct Memory::Impl {
 
         u8* const host_page =
             reinterpret_cast<u8*>(pointer + (guest_page << YUZU_PAGEBITS));
-        entry = CacheEntry{
+        entry = ScalarCacheEntry{
             .guest_page = guest_page,
             .host_page = host_page,
         };
@@ -1041,6 +1046,7 @@ struct Memory::Impl {
 #if defined(__PROSPERO__)
     std::atomic<u64> scalar_translation_epoch;
     u64 current_address_space_end{};
+    mutable std::array<ScalarCache, Core::Hardware::NUM_CPU_CORES> scalar_caches{};
 #endif
 
     std::array<VideoCore::RasterizerDownloadArea, Core::Hardware::NUM_CPU_CORES>
@@ -1123,40 +1129,45 @@ u64 Memory::Read64(const Common::ProcessAddress addr) {
     return impl->Read64(addr);
 }
 
-bool Memory::Read8Checked(const Common::ProcessAddress addr, u8& value) {
-    return impl->ReadChecked(addr, value);
+bool Memory::Read8Checked(const Common::ProcessAddress addr, u8& value,
+                          const std::size_t cache_index) {
+    return impl->ReadChecked(addr, value, cache_index);
 }
 
-bool Memory::Read16Checked(const Common::ProcessAddress addr, u16& value) {
+bool Memory::Read16Checked(const Common::ProcessAddress addr, u16& value,
+                           const std::size_t cache_index) {
     u16_le little_value{};
-    if (!impl->ReadChecked(addr, little_value)) {
+    if (!impl->ReadChecked(addr, little_value, cache_index)) {
         return false;
     }
     value = little_value;
     return true;
 }
 
-bool Memory::Read32Checked(const Common::ProcessAddress addr, u32& value) {
+bool Memory::Read32Checked(const Common::ProcessAddress addr, u32& value,
+                           const std::size_t cache_index) {
     u32_le little_value{};
-    if (!impl->ReadChecked(addr, little_value)) {
+    if (!impl->ReadChecked(addr, little_value, cache_index)) {
         return false;
     }
     value = little_value;
     return true;
 }
 
-bool Memory::Read64Checked(const Common::ProcessAddress addr, u64& value) {
+bool Memory::Read64Checked(const Common::ProcessAddress addr, u64& value,
+                           const std::size_t cache_index) {
     u64_le little_value{};
-    if (!impl->ReadChecked(addr, little_value)) {
+    if (!impl->ReadChecked(addr, little_value, cache_index)) {
         return false;
     }
     value = little_value;
     return true;
 }
 
-bool Memory::Read128Checked(const Common::ProcessAddress addr, u64& low, u64& high) {
+bool Memory::Read128Checked(const Common::ProcessAddress addr, u64& low, u64& high,
+                            const std::size_t cache_index) {
     std::array<u64_le, 2> little_value{};
-    if (!impl->ReadChecked(addr, little_value)) {
+    if (!impl->ReadChecked(addr, little_value, cache_index)) {
         return false;
     }
     low = little_value[0];
@@ -1180,24 +1191,29 @@ void Memory::Write64(Common::ProcessAddress addr, u64 data) {
     impl->Write64(addr, data);
 }
 
-bool Memory::Write8Checked(const Common::ProcessAddress addr, const u8 value) {
-    return impl->WriteChecked(addr, value);
+bool Memory::Write8Checked(const Common::ProcessAddress addr, const u8 value,
+                           const std::size_t cache_index) {
+    return impl->WriteChecked(addr, value, cache_index);
 }
 
-bool Memory::Write16Checked(const Common::ProcessAddress addr, const u16 value) {
-    return impl->WriteChecked(addr, u16_le{value});
+bool Memory::Write16Checked(const Common::ProcessAddress addr, const u16 value,
+                            const std::size_t cache_index) {
+    return impl->WriteChecked(addr, u16_le{value}, cache_index);
 }
 
-bool Memory::Write32Checked(const Common::ProcessAddress addr, const u32 value) {
-    return impl->WriteChecked(addr, u32_le{value});
+bool Memory::Write32Checked(const Common::ProcessAddress addr, const u32 value,
+                            const std::size_t cache_index) {
+    return impl->WriteChecked(addr, u32_le{value}, cache_index);
 }
 
-bool Memory::Write64Checked(const Common::ProcessAddress addr, const u64 value) {
-    return impl->WriteChecked(addr, u64_le{value});
+bool Memory::Write64Checked(const Common::ProcessAddress addr, const u64 value,
+                            const std::size_t cache_index) {
+    return impl->WriteChecked(addr, u64_le{value}, cache_index);
 }
 
-bool Memory::Write128Checked(const Common::ProcessAddress addr, const u64 low, const u64 high) {
-    return impl->WriteChecked(addr, std::array<u64_le, 2>{low, high});
+bool Memory::Write128Checked(const Common::ProcessAddress addr, const u64 low, const u64 high,
+                             const std::size_t cache_index) {
+    return impl->WriteChecked(addr, std::array<u64_le, 2>{low, high}, cache_index);
 }
 
 bool Memory::WriteExclusive8(Common::ProcessAddress addr, u8 data, u8 expected) {

@@ -214,11 +214,16 @@ public:
      * These helpers combine validation, sparse page translation, rasterizer coherency, and the
      * copy. They return false without exposing a partial value when any byte is unmapped.
      */
-    [[nodiscard]] bool Read8Checked(Common::ProcessAddress addr, u8& value);
-    [[nodiscard]] bool Read16Checked(Common::ProcessAddress addr, u16& value);
-    [[nodiscard]] bool Read32Checked(Common::ProcessAddress addr, u32& value);
-    [[nodiscard]] bool Read64Checked(Common::ProcessAddress addr, u64& value);
-    [[nodiscard]] bool Read128Checked(Common::ProcessAddress addr, u64& low, u64& high);
+    [[nodiscard]] bool Read8Checked(Common::ProcessAddress addr, u8& value,
+                                    std::size_t cache_index);
+    [[nodiscard]] bool Read16Checked(Common::ProcessAddress addr, u16& value,
+                                     std::size_t cache_index);
+    [[nodiscard]] bool Read32Checked(Common::ProcessAddress addr, u32& value,
+                                     std::size_t cache_index);
+    [[nodiscard]] bool Read64Checked(Common::ProcessAddress addr, u64& value,
+                                     std::size_t cache_index);
+    [[nodiscard]] bool Read128Checked(Common::ProcessAddress addr, u64& low, u64& high,
+                                      std::size_t cache_index);
 
     /**
      * Writes an 8-bit unsigned integer to the given virtual address in
@@ -270,11 +275,16 @@ public:
      * Cross-page writes validate the whole range before changing guest memory, so an invalid
      * access cannot leave a partially written scalar behind.
      */
-    [[nodiscard]] bool Write8Checked(Common::ProcessAddress addr, u8 value);
-    [[nodiscard]] bool Write16Checked(Common::ProcessAddress addr, u16 value);
-    [[nodiscard]] bool Write32Checked(Common::ProcessAddress addr, u32 value);
-    [[nodiscard]] bool Write64Checked(Common::ProcessAddress addr, u64 value);
-    [[nodiscard]] bool Write128Checked(Common::ProcessAddress addr, u64 low, u64 high);
+    [[nodiscard]] bool Write8Checked(Common::ProcessAddress addr, u8 value,
+                                     std::size_t cache_index);
+    [[nodiscard]] bool Write16Checked(Common::ProcessAddress addr, u16 value,
+                                      std::size_t cache_index);
+    [[nodiscard]] bool Write32Checked(Common::ProcessAddress addr, u32 value,
+                                      std::size_t cache_index);
+    [[nodiscard]] bool Write64Checked(Common::ProcessAddress addr, u64 value,
+                                      std::size_t cache_index);
+    [[nodiscard]] bool Write128Checked(Common::ProcessAddress addr, u64 low, u64 high,
+                                       std::size_t cache_index);
 
     /**
      * Writes a 8-bit unsigned integer to the given virtual address in

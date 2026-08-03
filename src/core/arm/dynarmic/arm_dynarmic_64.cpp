@@ -34,8 +34,10 @@ bool ShouldCheckMemoryAccess(bool debugger_enabled) {
 
 } // Anonymous namespace
 
-DynarmicCallbacks64::DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess* process)
+DynarmicCallbacks64::DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess* process,
+                                         const std::size_t core_index)
     : m_parent{parent}, m_memory(process->GetMemory()), m_process(process),
+      m_core_index{core_index},
       m_debugger_enabled{parent.m_system.DebuggerEnabled()},
       m_check_memory_access{ShouldCheckMemoryAccess(m_debugger_enabled)} {}
 
@@ -43,7 +45,7 @@ u8 DynarmicCallbacks64::MemoryRead8(u64 vaddr) {
 #if defined(__PROSPERO__)
     if (!m_debugger_enabled) {
         u8 value{};
-        if (!m_memory.Read8Checked(vaddr, value)) {
+        if (!m_memory.Read8Checked(vaddr, value, m_core_index)) {
             m_parent.m_jit->HaltExecution(DataAbort);
         }
         return value;
@@ -58,7 +60,7 @@ u16 DynarmicCallbacks64::MemoryRead16(u64 vaddr) {
 #if defined(__PROSPERO__)
     if (!m_debugger_enabled) {
         u16 value{};
-        if (!m_memory.Read16Checked(vaddr, value)) {
+        if (!m_memory.Read16Checked(vaddr, value, m_core_index)) {
             m_parent.m_jit->HaltExecution(DataAbort);
         }
         return value;
@@ -73,7 +75,7 @@ u32 DynarmicCallbacks64::MemoryRead32(u64 vaddr) {
 #if defined(__PROSPERO__)
     if (!m_debugger_enabled) {
         u32 value{};
-        if (!m_memory.Read32Checked(vaddr, value)) {
+        if (!m_memory.Read32Checked(vaddr, value, m_core_index)) {
             m_parent.m_jit->HaltExecution(DataAbort);
         }
         return value;
@@ -88,7 +90,7 @@ u64 DynarmicCallbacks64::MemoryRead64(u64 vaddr) {
 #if defined(__PROSPERO__)
     if (!m_debugger_enabled) {
         u64 value{};
-        if (!m_memory.Read64Checked(vaddr, value)) {
+        if (!m_memory.Read64Checked(vaddr, value, m_core_index)) {
             m_parent.m_jit->HaltExecution(DataAbort);
             RecordInvalidRead64(vaddr);
         }
@@ -109,7 +111,7 @@ Dynarmic::A64::Vector DynarmicCallbacks64::MemoryRead128(u64 vaddr) {
     if (!m_debugger_enabled) {
         u64 low{};
         u64 high{};
-        if (!m_memory.Read128Checked(vaddr, low, high)) {
+        if (!m_memory.Read128Checked(vaddr, low, high, m_core_index)) {
             m_parent.m_jit->HaltExecution(DataAbort);
         }
         return {low, high};
@@ -135,7 +137,7 @@ std::optional<u32> DynarmicCallbacks64::MemoryReadCode(u64 vaddr) {
 void DynarmicCallbacks64::MemoryWrite8(u64 vaddr, u8 value) {
 #if defined(__PROSPERO__)
     if (!m_debugger_enabled) {
-        if (!m_memory.Write8Checked(vaddr, value)) {
+        if (!m_memory.Write8Checked(vaddr, value, m_core_index)) {
             m_parent.m_jit->HaltExecution(DataAbort);
         }
         return;
@@ -148,7 +150,7 @@ void DynarmicCallbacks64::MemoryWrite8(u64 vaddr, u8 value) {
 void DynarmicCallbacks64::MemoryWrite16(u64 vaddr, u16 value) {
 #if defined(__PROSPERO__)
     if (!m_debugger_enabled) {
-        if (!m_memory.Write16Checked(vaddr, value)) {
+        if (!m_memory.Write16Checked(vaddr, value, m_core_index)) {
             m_parent.m_jit->HaltExecution(DataAbort);
         }
         return;
@@ -161,7 +163,7 @@ void DynarmicCallbacks64::MemoryWrite16(u64 vaddr, u16 value) {
 void DynarmicCallbacks64::MemoryWrite32(u64 vaddr, u32 value) {
 #if defined(__PROSPERO__)
     if (!m_debugger_enabled) {
-        if (!m_memory.Write32Checked(vaddr, value)) {
+        if (!m_memory.Write32Checked(vaddr, value, m_core_index)) {
             m_parent.m_jit->HaltExecution(DataAbort);
         }
         return;
@@ -174,7 +176,7 @@ void DynarmicCallbacks64::MemoryWrite32(u64 vaddr, u32 value) {
 void DynarmicCallbacks64::MemoryWrite64(u64 vaddr, u64 value) {
 #if defined(__PROSPERO__)
     if (!m_debugger_enabled) {
-        if (!m_memory.Write64Checked(vaddr, value)) {
+        if (!m_memory.Write64Checked(vaddr, value, m_core_index)) {
             m_parent.m_jit->HaltExecution(DataAbort);
         }
         return;
@@ -187,7 +189,7 @@ void DynarmicCallbacks64::MemoryWrite64(u64 vaddr, u64 value) {
 void DynarmicCallbacks64::MemoryWrite128(u64 vaddr, Dynarmic::A64::Vector value) {
 #if defined(__PROSPERO__)
     if (!m_debugger_enabled) {
-        if (!m_memory.Write128Checked(vaddr, value[0], value[1])) {
+        if (!m_memory.Write128Checked(vaddr, value[0], value[1], m_core_index)) {
             m_parent.m_jit->HaltExecution(DataAbort);
         }
         return;
@@ -555,6 +557,7 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
     LOG_INFO(Core_ARM,
              "Prospero Dynarmic memory path: core={} sparse_callbacks=true "
              "single_lookup_scalars=true checked_width_scalars=true scalar_page_cache=true "
+             "scalar_cache_storage=core-indexed "
              "fastmem={} address_space_bits={}",
              m_core_index, config.fastmem_pointer.has_value(), address_space_bits);
 #endif
@@ -615,7 +618,8 @@ void ArmDynarmic64::RewindBreakpointInstruction() {
 ArmDynarmic64::ArmDynarmic64(System& system, bool uses_wall_clock, Kernel::KProcess* process,
                              DynarmicExclusiveMonitor& exclusive_monitor, std::size_t core_index)
     : ArmInterface{uses_wall_clock}, m_system{system}, m_exclusive_monitor{exclusive_monitor},
-      m_cb(std::make_optional<DynarmicCallbacks64>(*this, process)), m_core_index{core_index} {
+      m_cb(std::make_optional<DynarmicCallbacks64>(*this, process, core_index)),
+      m_core_index{core_index} {
     auto& page_table = process->GetPageTable().GetBasePageTable();
     auto& page_table_impl = page_table.GetImpl();
     MakeJit(&page_table_impl, page_table.GetAddressSpaceWidth());

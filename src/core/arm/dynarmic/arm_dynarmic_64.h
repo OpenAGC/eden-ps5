@@ -34,7 +34,8 @@ class System;
 
 class DynarmicCallbacks64 : public Dynarmic::A64::UserCallbacks {
 public:
-    explicit DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess* process);
+    explicit DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess* process,
+                                 std::size_t core_index);
 
     u8 MemoryRead8(u64 vaddr) override;
     u16 MemoryRead16(u64 vaddr) override;
@@ -77,6 +78,7 @@ public:
     std::optional<u64> m_invalid_read64_address{};
     std::optional<u64> m_invalid_read64_pc{};
     Kernel::KProcess* m_process{};
+    const std::size_t m_core_index{};
     const bool m_debugger_enabled{};
     const bool m_check_memory_access{};
     static constexpr u64 MinimumRunCycles = 10000U;
