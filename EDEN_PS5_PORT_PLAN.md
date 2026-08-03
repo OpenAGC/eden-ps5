@@ -1190,10 +1190,46 @@ pipeline. Eden's current guest graphics/compute and transferable-record
 counters are emitted only from `PipelineCache` destruction. Bounded cleanup
 terminated PID 200 before that destructor ran, so this replay contains no
 authoritative final guest-cache snapshot. Guest pipeline creation and
-transferable record creation remain unproven, rather than zero. The next
-offline instrumentation slice must emit a baseline and every live guest
-pipeline/record counter transition so a bounded run can prove the result even
-when startup has not reached orderly teardown.
+transferable record creation remain unproven, rather than zero.
+
+Revision `f9b3704` closes that observability gap. The Prospero pipeline cache
+now emits an authoritative zero baseline when it becomes ready, then logs
+every guest graphics/compute pipeline creation and every transferable-record
+write/skip transition immediately; the destructor uses the same snapshot
+format when orderly teardown is reached. This is deliberately inside Eden's
+guest Maxwell `PipelineCache`, not OpenAGC, so native calibration/compositor
+pipeline requests cannot increment it. The Flappy wrapper now requires the
+zero baseline, an actual guest pipeline-created transition, and a nonzero
+record-written transition in addition to the existing 120-frame, identity,
+failure, and cleanup gates. Host `video_core`, strict Prospero `yuzu-cmd`, the
+wrapper syntax check, and all five focused tests pass.
+
+The rebuilt ELF embeds exact revision
+`f9b37041ed9296acfb0366e64bd6f1ef2d755282`, has SHA-256
+`f866212fd9554e6d819cffd63c6e4807255cfe8dfdacab1bd9d387b0cc72954b`,
+and remains distinct from the banned fixed-address diagnostic. The updated
+wrapper has SHA-256
+`49de418942663da73931adfdfe701050072ccf991d367a08cd7536e68c6ea899`;
+all other pinned NRO, sidecar, cleanup, runner, process-helper, PyPS4debug, and
+lockfile identities remain unchanged.
+
+The cleanup-first 30-second replay ran as PID 203 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T193417Z-swapchain-run1.log`.
+It emitted exactly one guest-cache snapshot: the authoritative baseline at
+1.410 seconds with `graphics_created=0 compute_created=0 records_written=0
+records_skipped=0`. No creation or record transition followed. Because every
+counter mutation now emits a live transition, this proves that Flappy had
+created no guest Maxwell graphics/compute pipeline and written no transferable
+record before the bound; raw OpenAGC pipeline requests in the same log are
+native activity only. The first BufferQueue commit occurred at 5.400 seconds,
+GPFIFO submission at 10.465 seconds, and fail-soft AudioOut append at 11.461
+seconds. Guest thread 77 remained active through successful font mappings at
+16.506, 16.562, 22.332, and 22.568 seconds, with every focused SVC returning.
+There was one committed buffer, no checked-memory abort or fatal diagnostic,
+no second commit, and no 120-frame verdict. The stricter cache patterns
+therefore failed exactly as intended. Pinned cleanup then proved PID 203 and
+global exact `eboot.bin` absence twice each. The direct `/dev/gc` boot-cycle
+invariant was preserved throughout.
 
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
