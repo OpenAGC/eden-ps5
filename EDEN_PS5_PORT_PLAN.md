@@ -279,6 +279,25 @@ The integrated clipped-scissor retry ELF embeds Eden revision
 and is pinned by the Flappy wrapper for the next cleanup-first 110-second
 diagnostic.
 
+The descriptor-preparation retry, PID 167, proved the descriptor fix with
+`descriptors=1` and advanced to vertex binding. It then rejected missing
+binding 3 because the pipeline's required mask was `0xffffffff`, even though
+the guest draw had not supplied or consumed all 32 bindings. Raw guest samples
+remained opaque black and the operator-visible result remained magenta. The
+accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T144835Z-swapchain-run1.log`.
+PID 167 exited, and both PID-scoped and global exact-absence checks passed
+twice. Orderly teardown, final telemetry, and visible guest presentation remain
+open.
+
+The all-bits mask came from treating every declared
+`VkVertexInputBindingDescription` as required. Vulkan only requires buffers for
+vertex inputs statically consumed by the compiled shader. Vulkan-PS5 commit
+`262fc83` now derives the mask from the PSBC vertex reflection already shared
+with OpenAGC. Its regression declares all 32 legal bindings, provides an
+attribute only on binding 0, binds only buffer 0, and completes the native draw.
+Command-recording, lifecycle, validation, and the Prospero static build pass.
+
 The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
 reached the next draw-preparation boundary at about 98 seconds. The guest draw
 reported `descriptors=0 vertex_buffers=0`; descriptor preparation had returned
