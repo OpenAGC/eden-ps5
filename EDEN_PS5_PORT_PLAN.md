@@ -304,6 +304,44 @@ The integrated reflected-binding retry ELF embeds Eden revision
 and is pinned by the Flappy wrapper for the next cleanup-first 110-second
 diagnostic.
 
+That retry, PID 170, proved the reflected-binding fix: both guest graphics
+pipelines compiled and two native draws recorded. The render pass closed, but
+the first command-side occlusion resolve then failed at
+`vkEndCommandBuffer` with `record_error=-8`, `draws=2`, and last labelled
+entry `vkCmdPipelineBarrier`. Eden does not issue timestamp commands; its
+query cache calls `vkCmdCopyQueryPoolResults` after leaving the render pass
+with `VK_QUERY_RESULT_WAIT_BIT|VK_QUERY_RESULT_64_BIT`, followed by a transfer
+write-to-read buffer barrier. Vulkan-PS5 previously rejected every such copy
+unconditionally. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T145423Z-swapchain-run1.log`.
+Two raw guest samples remained opaque black and only the magenta calibration
+present was visible. The wrapper retired PID 170 and passed both PID-scoped
+and global exact-absence checks twice.
+
+Vulkan-PS5 commit `ce2fdde` records bounded query-copy operations, prepares
+the exact destination range as `CopyDestination`, and uses the driver's
+already-synchronous native submit completion to reduce OpenAGC's opaque
+per-RB occlusion records into Vulkan results before signaling completion.
+Eden's host-visible result-buffer path supports 32/64-bit values, WAIT,
+PARTIAL, and availability output; unsupported flags, ranges, strides,
+operation overflow, and device-local destinations fail closed. The exact
+zero-count no-op, WAIT|64-bit copy, and following barrier regression,
+command-recording,
+lifecycle, validation, and Prospero static-library build pass. The next action
+is an integrated rebuild, identity pin, and one cleanup-first 110-second retry;
+visible guest presentation, orderly telemetry, audio fail-soft behavior, and
+cache persistence remain unproven.
+
+Mesa RADV under `../mesa/src/amd/vulkan` is the AMD Vulkan semantic and packet-
+strategy reference for this work. In particular, `radv_query.c` implements
+GFX10.3 occlusion copies by waiting on the last enabled RB's availability word
+and running a query-reduction shader over per-RB begin/end counters. Vulkan-
+PS5's synchronous CPU reducer is intentionally narrower and suitable for
+Eden's host-visible result buffer; the RADV-style GPU reducer is required
+before device-local query-copy destinations can be qualified. Linux winsys
+code and generation-specific packets must not be copied without translating
+them through public OpenAGC and PS5 hardware tests.
+
 The clipped-scissor retry, PID 164, passed viewport/scissor resolution and
 reached the next draw-preparation boundary at about 98 seconds. The guest draw
 reported `descriptors=0 vertex_buffers=0`; descriptor preparation had returned
