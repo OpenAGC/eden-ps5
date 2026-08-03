@@ -12,8 +12,8 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current unlaunched guest command-completion diagnostic Eden ELF is SHA-256
-`10e96740ff3dcafa8c819ecbe325e8ab3485ddde42d0697a181222621c2870e9`,
-embeds Eden `4b1b61673d`, and incorporates Vulkan-PS5 checkpoint-retirement
+`4de8c78f5335069a39c5438f82f694539d2c912f670ab11fc8690966350edbe6`,
+embeds Eden `20c63eb8e2`, and incorporates Vulkan-PS5 checkpoint-retirement
 commit `93c7325`, repeated-absence runner commit `b41393a`, and extended-image
 usage fix `2d84b89`.
 
@@ -1007,6 +1007,29 @@ ID, timeout, handle count, first four handles, result, and selected index. Host
 wait telemetry and PID 182 evidence. Its rebuilt ELF embeds `4b1b61673d`, has
 SHA-256
 `10e96740ff3dcafa8c819ecbe325e8ab3485ddde42d0697a181222621c2870e9`, and
+is pinned for exactly one cleanup-first 30-second replay.
+
+That replay ran as PID 185 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T184034Z-swapchain-run1.log`.
+It rules out a post-submit `WaitSynchronization` stall on the render thread.
+All observed waits belonged to guest thread 80, used the same handle
+`0x1483d8` with an infinite timeout, and returned successfully about every
+85 milliseconds. Their timing matches the healthy AudioOut release cadence;
+no other guest thread entered this SVC after the GPU response. No second
+BufferQueue commit followed. The run emitted no fatal diagnostic, audio
+remained correctly paced, and cleanup proved PID 185 and global `eboot.bin`
+absence twice each.
+
+The next diagnostic moves to the central SVC dispatcher. It records the SVC
+whose return first observes the completed GPFIFO response and up to 128
+subsequent SVC entries/returns with guest thread ID and leading arguments.
+This distinguishes a render thread entering another IPC/SVC from one remaining
+entirely in guest code. The checked-in generated dispatcher and its generator
+template carry the same instrumentation; no unrelated generated rewrite is
+included. Host `core` and the strict Prospero build pass. Revision `20c63eb`
+contains the SVC telemetry and PID 185 evidence. Its rebuilt ELF embeds
+`20c63eb8e2`, has SHA-256
+`4de8c78f5335069a39c5438f82f694539d2c912f670ab11fc8690966350edbe6`, and
 is pinned for exactly one cleanup-first 30-second replay.
 
 PID 137 completed the 30-second observation without the low read, allocator
