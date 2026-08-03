@@ -1355,6 +1355,51 @@ window creation, making fail-soft audio initialization the leading early-exit
 hypothesis; a rebuilt diagnostic NRO would need to separate optional audio
 from required video/timer initialization and receive a new pinned identity.
 
+Revision `433cd2b71070d5dc399e63a598a5fc0aadf2e04f` removes another
+Prospero-only checked-memory cost found by inspecting the generated x86-64
+object code. The function-local `thread_local` scalar cache was implemented by
+the Prospero toolchain through `__emutls_get_address`, so every checked scalar
+read or write paid an emulated-TLS resolver call before examining its cache
+entry. The cache now lives in `Memory::Impl` as four core-indexed 256-entry
+banks, and each `DynarmicCallbacks64` supplies its immutable CPU core index.
+The global odd/even translation epoch still invalidates every bank lazily;
+cross-page, special, unmapped, debugger, rasterizer-coherent, and mutation
+paths remain fail-closed. The runtime identity marker now includes
+`scalar_cache_storage=core-indexed`. The Prospero object retains
+`GetCachedNormalScalarPointer` but contains no `__emutls` symbol. Strict host
+core and Prospero `yuzu-cmd` builds pass, as do `dynarmic_tests`,
+`eden.multi_level_page_table`, `eden.ps5_thread_budget`,
+`eden_ps5.launch_config`, and `eden_ps5.shader_cache_identity`.
+
+The matching cleanup-first FW 5.50 run was PID 227 and is preserved at
+`examples/qualification-logs/flappy-bird/20260803T202316Z-swapchain-run1.log`
+(SHA-256
+`500907061bdc37e982511e8ecdcffac6b11eabe36c1bcff781e2411d97608553`).
+It committed its first BufferQueue frame at 3.899 seconds, submitted its first
+GPFIFO at 5.706 seconds, kept fail-soft AudioOut active, and returned every
+recorded SVC. It reached the third `0x90000` mapping at 21.667 seconds and the
+two following `0x3c0000` mappings at 24.847 and 24.912 seconds. Against PID
+221's 22.184, 25.397, and 25.464 seconds this is an approximately 0.52--0.55
+second improvement in the late font workload, but the initial frame and
+GPFIFO timings are effectively unchanged. The result is useful but not the
+breakthrough needed for the active gate: only the zero guest-cache baseline
+appeared, with no graphics/compute creation, transferable shader record,
+second BufferQueue commit, or 120-frame verdict before the unchanged
+30-second bound. There was no invalid checked access, JIT/memory failure, or
+fatal diagnostic. Cleanup proved PID 227 absence twice and global exact
+`eboot.bin` absence twice.
+
+The deployed ELF is SHA-256
+`b981af2919283e22e7c35afc4277b38d3ffddf4c5795a75d3040efdee95e19c4`,
+embeds `433cd2b710`, and is distinct from the banned fixed-address diagnostic.
+The repinned Flappy wrapper is SHA-256
+`118d0026855d32749b725f3f2554da571f6bac184b72373ec0d976b64d9f8cb3`
+and was committed at `8a2e0bb4aaf27f37da6518ed4b670cf4265b2a11` before the run.
+Flappy remains the primary renderer canary because it reaches BufferQueue,
+native presentation, GPFIFO, and live audio; the current InvadersNX binary
+still exits before all of those. Switching binaries now would reduce evidence
+unless InvadersNX is first rebuilt with fail-soft optional audio.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the
