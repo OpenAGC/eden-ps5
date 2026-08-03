@@ -402,6 +402,17 @@ baseline. Treat this boot as allocator-dirty. The next hardware diagnostic is
 one cleanup-first sequence-zero run immediately after a fresh reboot, with no
 preceding probe or other `/dev/gc` workload and with scoped target-klog capture.
 
+That fresh-boot discriminator passed in
+`20260803T105357Z-swapchain-run1.log`, PID 89. The exact pinned production ELF
+created all four 32 MiB dual-alias caches, completed the eight-frame
+sequence-zero oracle, retired cleanly, and left both PID-specific and global
+`eboot.bin` queries absent. Its scoped target klog contained only the accepted
+raw-ELF `0x4000` resource-leak baseline: the FMEM timeout did not recur. The
+operator saw magenta followed by the 2048 board with its known faint but
+otherwise correct palette. This is the required visible sequence-zero evidence
+and clears the same bytes for the two cleanup-first 600-frame immediate-relaunch
+gate.
+
 The prior sequence-zero canary's operator-visible result is also confirmed:
 magenta appeared first, followed by the 2048 game with a faint but otherwise
 correct palette. This is positive presentation evidence, not the outstanding
