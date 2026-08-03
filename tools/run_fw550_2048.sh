@@ -22,6 +22,8 @@ pinned_pyps4debug_commit=8f1443bb97bd6e2a77ed5ea2cc9145975d3152eb
 pinned_pyps4debug_lock_sha256=c9eb85e0f0bc1bde6c4e00f1112a1aea982dc7eed024eb973fca91e436051033
 sidecar_sha256=e5c10f0d91bcb683f8e9f41a1bce44228d07317ff1f07236fcfabf702f4a4bac
 homebrew_sha256=cd7e7f343830920196590d99c82a9f1ab8a375eeaeb943fa6c671aa68250a20d
+cache_identity=cd7e7f3438309201
+remote_cache_dir="/data/homebrew/eden_ps5/user/cache/shader/$cache_identity"
 websrv_timeout=${EDEN_PS5_WEBSRV_TIMEOUT:-900}
 
 verify_file_sha256() {
@@ -39,8 +41,10 @@ verify_file_sha256() {
     fi
 }
 
-if ! command -v shasum >/dev/null 2>&1; then
-    echo "shasum is required for the pinned qualification gate" >&2
+if ! command -v shasum >/dev/null 2>&1 || \
+   ! command -v curl >/dev/null 2>&1 || \
+   ! command -v uv >/dev/null 2>&1; then
+    echo "shasum, curl, and uv are required for the pinned qualification gate" >&2
     exit 2
 fi
 if ! command -v git >/dev/null 2>&1 || \
@@ -89,14 +93,29 @@ reject_pattern="$reject_pattern|Failed to derive the Prospero shader-cache ident
 if [ -n "${EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN:-}" ]; then
     reject_pattern="$reject_pattern|$EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN"
 fi
+
+uv run --project "$pyps4debug_dir" python "$process_helper" --assert-absent \
+    "$PS5_HOST" eboot.bin
+for cache_file in vulkan.bin vulkan_pipelines.bin; do
+    curl -sS --connect-timeout 3 --max-time 30 \
+        "ftp://${PS5_HOST}:2121/" --quote "DELE $remote_cache_dir/$cache_file" \
+        >/dev/null 2>&1 || true
+    if curl -fsS --connect-timeout 3 --max-time 10 \
+        "ftp://${PS5_HOST}:2121$remote_cache_dir/$cache_file" \
+        -o /dev/null 2>/dev/null; then
+        echo "failed to clear exact 2048 shader cache file: $cache_file" >&2
+        exit 1
+    fi
+done
+
 while [ "$run" -le 2 ]; do
     required_pattern="$native_present_600_pattern"
     required_pattern_2="$firmware_pattern"
     required_pattern_3="$input_cycle_pattern"
-    required_pattern_4='EdenMain: Prospero shader-cache identity: cd7e7f3438309201$'
-    required_pattern_5='LoadDiskResources: Total Pipeline Count: 0$'
+    required_pattern_4="EdenMain: Prospero shader-cache identity: $cache_identity"
+    required_pattern_5='LoadDiskResources: Total Pipeline Count: 0'
     if [ "$run" -eq 2 ]; then
-        required_pattern_5='LoadDiskResources: Total Pipeline Count: [1-9][0-9]*$'
+        required_pattern_5='LoadDiskResources: Total Pipeline Count: [1-9][0-9]*'
     fi
     VULKAN_PS5_QUALIFICATION_ELF="$elf" \
     VULKAN_PS5_CLEANUP_ELF="$cleanup_elf" \

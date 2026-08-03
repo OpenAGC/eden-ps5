@@ -144,7 +144,9 @@ transferable pipeline records before destroying cache state. For the pinned
 `cd7e7f3438309201`, a decorated pipeline count of zero on the first fresh run,
 and a nonzero count after immediate relaunch. The latter proves that run-one
 guest pipeline records were reopened; it does not claim native OpenAGC
-compiled-pipeline reuse.
+compiled-pipeline reuse. Before run one, the wrapper asserts exact process
+absence, removes only that identity's two cache files over FTP, and verifies
+both exact files absent.
 
 The address32 build passed that 2048 sequence-zero gate and was repeatedly
 confirmed visible on the console: magenta appeared before the 2048 board,

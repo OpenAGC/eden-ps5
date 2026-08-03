@@ -95,7 +95,7 @@ VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN='^eden-ps5: intermediate-frame samples
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2='^eden-ps5: swapchain-frame samples sequence=0 nonzero_bytes=48 hash=6fc6b825c3dda003 first=ff00ffff$' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_3='^\[openagc\] system software raw=0x05500008 string= 5\.500\.008$' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4='^eden-ps5 dynarmic dual-alias code cache: writable=[0-9a-f]+ executable=[0-9a-f]+ size=0x2000000$' \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_5='EdenMain: Prospero shader-cache identity: cd7e7f3438309201$' \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_5='EdenMain: Prospero shader-cache identity: cd7e7f3438309201' \
 VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
 VULKAN_PS5_WEBSRV_TIMEOUT="$websrv_timeout" \
 VULKAN_PS5_CONTINUOUS_KLOG=1 \

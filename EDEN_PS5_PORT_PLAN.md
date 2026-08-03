@@ -460,15 +460,29 @@ reads, and null content; the strict full Prospero frontend also builds.
 
 The rebuilt source-committed ELF is SHA-256
 `ad5160147212771bb43b98aea8f4a835bcb735c315b4c84e362761d9cdf956cb`.
-The 2048 wrapper pins those bytes and the exact derived cache identity. Run one
-must report a decorated `Total Pipeline Count: 0`, proving no stale
-transferable cache was loaded; cleanup preserves the resulting cache.
+The 2048 wrapper pins those bytes and the exact derived cache identity. Before
+run one it asserts exact `eboot.bin` absence, deletes only that identity's
+`vulkan.bin` and `vulkan_pipelines.bin`, and verifies both exact files absent.
+Run one must then report a decorated `Total Pipeline Count: 0`, proving no
+stale transferable cache was loaded; cleanup preserves the resulting cache.
 Immediate run two must report the identical identity and a decorated nonzero
 pipeline count, proving that run one's `vulkan.bin` records were reopened and
 scheduled. This oracle does not claim reduced ACO compilation or compiled
 OpenAGC driver-cache reuse. The rebuilt bytes still require sequence-zero
 hardware canary and the complete two-run 600-frame replay before this revised
 persistence gate is closed.
+
+The rebuilt sequence-zero hardware canary
+`Vulkan-PS5/examples/qualification-logs/20260803T114052Z-swapchain-run1.log`
+used PID 100 and passed the exact magenta intermediate/swapchain readbacks,
+eight native presents, `GAME PASS 8 frames`, clean teardown, derived identity
+`cd7e7f3438309201`, and a fresh `Total Pipeline Count: 0`. The operator saw
+magenta followed by the faint-but-correct 2048 board. The wrapper initially
+reported a false fifth-oracle failure because an ANSI reset follows decorated
+LOG_INFO text before the physical line end; removing the invalid end anchor
+matches the already-recorded exact identity without weakening its content.
+Cleanup then found PID 100 and global exact `eboot.bin` absent. This clears the
+new bytes for the cache-reset two-run 600-frame gate.
 
 An additional candidate workload is `../Flappy_Bird_NX.nro`, SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`.
