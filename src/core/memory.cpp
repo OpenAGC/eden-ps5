@@ -832,27 +832,21 @@ struct Memory::Impl {
     }
 
 #if defined(__PROSPERO__)
-    [[nodiscard]] u8* GetCachedNormalScalarPointer(const u64 addr,
-                                                   const std::size_t cache_index) const {
-        ASSERT(cache_index < scalar_caches.size());
-        ScalarCache& cache = scalar_caches[cache_index];
-
-        const u64 epoch = scalar_translation_epoch.load(std::memory_order_acquire);
-        if ((epoch & 1) != 0) {
+    [[nodiscard]] __attribute__((noinline)) u8* GetCachedNormalScalarPointerSlow(
+        const u64 addr, const std::size_t cache_index, const u64 epoch) const {
+        if ((epoch & 1) != 0 ||
+            scalar_translation_epoch.load(std::memory_order_acquire) != epoch) {
             return nullptr;
         }
+        ScalarCache& cache = scalar_caches[cache_index];
         if (cache.epoch != epoch) {
             for (ScalarCacheEntry& entry : cache.entries) {
                 entry.guest_page = std::numeric_limits<u64>::max();
             }
             cache.epoch = epoch;
         }
-        const u64 guest_page = addr >> YUZU_PAGEBITS;
-        ScalarCacheEntry& entry = cache.entries[guest_page & (ScalarCacheSlots - 1)];
-        if (entry.guest_page == guest_page) {
-            return entry.host_page + (addr & YUZU_PAGEMASK);
-        }
 
+        const u64 guest_page = addr >> YUZU_PAGEBITS;
         const uintptr_t raw_pointer = current_page_table->entries[guest_page].ptr.Raw();
         if (Common::PageTable::PageInfo::ExtractType(raw_pointer) != Common::PageType::Memory) {
             return nullptr;
@@ -865,11 +859,33 @@ struct Memory::Impl {
 
         u8* const host_page =
             reinterpret_cast<u8*>(pointer + (guest_page << YUZU_PAGEBITS));
-        entry = ScalarCacheEntry{
+        cache.entries[guest_page & (ScalarCacheSlots - 1)] = ScalarCacheEntry{
             .guest_page = guest_page,
             .host_page = host_page,
         };
         return host_page + (addr & YUZU_PAGEMASK);
+    }
+
+    [[nodiscard]] __attribute__((always_inline)) inline u8* GetCachedNormalScalarPointer(
+        const u64 addr, const std::size_t cache_index) const {
+        if (cache_index >= scalar_caches.size()) [[unlikely]] {
+            return nullptr;
+        }
+        ScalarCache& cache = scalar_caches[cache_index];
+
+        const u64 epoch = scalar_translation_epoch.load(std::memory_order_acquire);
+        if ((epoch & 1) != 0) {
+            return nullptr;
+        }
+        if (cache.epoch != epoch) {
+            return GetCachedNormalScalarPointerSlow(addr, cache_index, epoch);
+        }
+        const u64 guest_page = addr >> YUZU_PAGEBITS;
+        ScalarCacheEntry& entry = cache.entries[guest_page & (ScalarCacheSlots - 1)];
+        if (entry.guest_page == guest_page) {
+            return entry.host_page + (addr & YUZU_PAGEMASK);
+        }
+        return GetCachedNormalScalarPointerSlow(addr, cache_index, epoch);
     }
 #endif
 
