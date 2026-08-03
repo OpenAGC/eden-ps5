@@ -525,6 +525,21 @@ pinned for a bounded cleanup-first capture. If either pointer is null, the
 next slice owns guest heap expansion/aligned-allocation failure rather than
 audout IPC or SDL mutex state.
 
+PID 119 ruled out that allocation theory in
+`examples/qualification-logs/flappy-bird/20260803T163026Z-swapchain-run1.log`:
+the two hidden audout buffers are both mapped, non-null aligned addresses
+(`0x210314d000` and `0x2103152000`). Cleanup again proved PID-specific and
+global exact-process absence twice.
+
+Revision `c1c412f` adds an A64 callback-read variant which receives the guest
+PC at the same generated call site as the runtime address. Prospero uses it
+only for checked callback-mode `Read64`; other platforms and unchecked access
+retain the original callback. This avoids correlating a later halt boundary
+with an earlier invalid access. Host `core` and strict integrated Prospero
+builds pass. The resulting ELF has SHA-256
+`9fbcc11c6775011dcd4fc5df53fb3488beab102d3e069cece6ad6ab51e2a68e6` and is
+pinned for one cleanup-first capture.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
