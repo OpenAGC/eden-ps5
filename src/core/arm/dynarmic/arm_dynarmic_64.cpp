@@ -88,9 +88,12 @@ u64 DynarmicCallbacks64::MemoryRead64(u64 vaddr) {
                          audio_device, m_memory.Read64(audio_device + 0x60), mutex,
                          m_memory.Read64(audio_device + 0x78),
                          m_memory.Read64(audio_device + 0x80), hidden);
-            if (m_memory.IsValidVirtualAddressRange(hidden, 0x10)) {
-                LOG_CRITICAL(Core_ARM, "A64 guest audout buffers: first={:#x} second={:#x}",
-                             m_memory.Read64(hidden), m_memory.Read64(hidden + 0x8));
+            if (m_memory.IsValidVirtualAddressRange(hidden, 0x70)) {
+                LOG_CRITICAL(Core_ARM,
+                             "A64 guest audout buffers: first={:#x} second={:#x} released={:#x} "
+                             "released_count={}",
+                             m_memory.Read64(hidden), m_memory.Read64(hidden + 0x8),
+                             m_memory.Read64(hidden + 0x60), m_memory.Read32(hidden + 0x68));
             }
             if (m_memory.IsValidVirtualAddressRange(mutex, 0xc)) {
                 LOG_CRITICAL(Core_ARM, "A64 guest audio mutex: value={:#x} owner={:#x} count={}",

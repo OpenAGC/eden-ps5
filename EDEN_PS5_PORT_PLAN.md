@@ -709,6 +709,30 @@ It is pinned for the next cleanup-first 30-second diagnostic; the live-klog
 deadline is bounded to 60 seconds rather than retaining the former 150-second
 diagnostic window.
 
+The cleanup-first PID 149 replay is preserved at
+`examples/qualification-logs/flappy-bird/20260803T172708Z-swapchain-run1.log`.
+It verified exact FW `5.500.008`, created guest graphics pipelines, and
+completed one native present before the same low read at 19.365 seconds. The
+new fail-closed path requested `MemoryAbort` and reported the exact guest PC:
+module offset `+0x1666e4`. The pinned NRO bytes there are
+`ldr x0, [x0,#8]`, immediately after `ldr x0, [x0,#0x60]`. Their 12-byte tail
+matches the local mapped build's `SWITCHAUDIO_GetDeviceBuf`, which calls
+`audoutWaitPlayFinish` and returns the sample pointer from the released
+`AudioOutBuffer`. This supersedes the earlier custom-ABI attribution to
+`SDL_UnlockMutex`: the audio device and mutex are intact, but the released
+buffer pointer returned to SDL is null. PID-specific and global exact-process
+absence again passed twice after cleanup.
+
+The next diagnostic records both sides of that audout contract without
+changing behavior: the service logs every appended client tag and the count,
+capacity, and first tag returned by `GetReleasedAudioOutBuffers`; the guarded
+fault snapshot records SDL's two sample buffers plus its released-buffer
+pointer and count. If the service returns count zero, ownership is audio
+buffer release/event scheduling. If it returns a nonzero matching tag while
+SDL still holds null, ownership is CMIF output-array serialization or libnx
+guest memory delivery. A behavioral workaround is not permitted until this
+A/B identifies which side lost the pointer.
+
 PID 137 completed the 30-second observation without the low read, allocator
 assertion, Xbyak exception, or another fatal error. It created multiple guest
 graphics pipelines, sampled two opaque-black raw guest frames, submitted the
