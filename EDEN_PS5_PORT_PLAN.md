@@ -390,6 +390,25 @@ The exact-origin diagnostic ELF embeds Eden revision
 `69a61f08c4c515cb21746073494bea1d533229f4eb0ded7a1b3568209854ddf6`.
 The wrapper pins these bytes for the next cleanup-first 110-second replay.
 
+PID 95 did not reproduce the earlier command-buffer `-8`: it completed guest
+composition and one native present, then emitted the same deterministic
+`Unmapped Read64 @ 0x8` seen in every Flappy replay at 13.1-13.8 seconds. The
+first qualification compositor sequence deliberately clears magenta and skips
+guest layers, so this guest CPU stop explains why scanout remains magenta
+instead of advancing to the second frame. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T153821Z-swapchain-run1.log`;
+cleanup passed both PID-specific and global exact-process absence checks twice.
+The wrapper's required input-policy marker is corrected from the obsolete
+50-millisecond value to the active 250-millisecond sustained-input policy.
+
+Eden now records the AArch64 PC, SP, LR, and selected registers before an
+invalid guest `Read64`, allowing the repeatable null-adjacent access to be
+attributed to Flappy code, Horizon service code, or an emulator defect without
+changing abort policy. The diagnostic ELF embeds Eden revision
+`a45fc5553573404f866919aeda280b2bcaff5862` and has SHA-256
+`6bb364b7ce83e56055509e308f704060e7b39a75bf7546d6356d55d884d90adc`.
+The wrapper pins these bytes for the next cleanup-first replay.
+
 PID 179 again reached two draws and failed with `record_error=-8` at the
 barrier entry, while none of the new query-copy, fill, reset, begin, or end
 labels appeared. This proves those commands were not reached and returns the
