@@ -268,6 +268,20 @@ The reason-labelled ELF embeds revision
 `0668814c2b46d33d72b06e76a1a476bf30ed52405ce4e0be1ea9305c206a7a8d`,
 and is pinned by the wrapper.
 
+The reason-labelled replay, PID 145, identified the exact remaining validator:
+`vertex binding index, rate, stride, or duplicate`. The three failing Eden
+pipelines use zero-stride bindings, which core Vulkan permits to fetch the same
+element for every vertex. The other binding constraints were unchanged. The
+runner cleaned the process and passed both PID-scoped and global absence checks
+twice. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T140637Z-swapchain-run1.log`.
+OpenAGC commit `118841f` now binds zero-stride reflected vertex inputs using a
+structured descriptor with zero hardware stride and a nonzero range-derived
+record bound. Vulkan-PS5 commit `6a93398` removes its non-Vulkan zero-stride
+pipeline rejection. Focused OpenAGC draw/binding and Vulkan pipeline tests pass,
+and both Prospero libraries cross-build. The next cleanup-first Flappy retry
+must use a rebuilt ELF containing these commits.
+
 ### Payload SDK identity
 
 The current `build-prospero-full-audit2` CMake cache resolves both
