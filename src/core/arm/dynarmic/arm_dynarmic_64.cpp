@@ -67,13 +67,17 @@ u64 DynarmicCallbacks64::MemoryRead64(u64 vaddr) {
         if (audio_device <= std::numeric_limits<u64>::max() - AudioDeviceFieldEnd &&
             m_memory.IsValidVirtualAddressRange(audio_device, AudioDeviceFieldEnd)) {
             const u64 mutex = m_memory.Read64(audio_device + 0x70);
+            const u64 hidden = m_memory.Read64(audio_device + 0x90);
             LOG_CRITICAL(Core_ARM,
                          "A64 guest audio object: device={:#x} buffer={:#x} mutex={:#x} "
                          "thread={:#x} lock_owner={:#x} hidden={:#x}",
                          audio_device, m_memory.Read64(audio_device + 0x60), mutex,
                          m_memory.Read64(audio_device + 0x78),
-                         m_memory.Read64(audio_device + 0x80),
-                         m_memory.Read64(audio_device + 0x90));
+                         m_memory.Read64(audio_device + 0x80), hidden);
+            if (m_memory.IsValidVirtualAddressRange(hidden, 0x10)) {
+                LOG_CRITICAL(Core_ARM, "A64 guest audout buffers: first={:#x} second={:#x}",
+                             m_memory.Read64(hidden), m_memory.Read64(hidden + 0x8));
+            }
             if (m_memory.IsValidVirtualAddressRange(mutex, 0xc)) {
                 LOG_CRITICAL(Core_ARM, "A64 guest audio mutex: value={:#x} owner={:#x} count={}",
                              m_memory.Read32(mutex), m_memory.Read32(mutex + 0x4),
