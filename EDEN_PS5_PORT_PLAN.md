@@ -1440,6 +1440,20 @@ allocation/JIT/presentation failure rejection mandatory, and constrain the
 application request to 1-120 seconds (60 by default). Visual confirmation
 remains required before advancing from the sequence-zero gate.
 
+The first cleanup-first address32 replay now passes the automated sequence-zero
+gate with the identical Eden ELF above. Log
+`Vulkan-PS5/examples/qualification-logs/20260803T011355Z-swapchain-run1.log`
+identifies exact FW `5.500.008`, loads the pinned `2048.nro`, completes every
+Dynarmic cache demotion without an RW/RX failure, and reports exact BGRA
+magenta from both the intermediate and swapchain at sequence zero
+(`nonzero_bytes=48`, `hash=6fc6b825c3dda003`, `first=ff00ffff`). Subsequent
+readbacks are also nonzero and the application emits `GAME PASS 8 frames`.
+The scoped kernel log records PID 89, same-app `KillApp`, `All processes
+exited`, no crash/XoM violation, and only the accepted raw-ELF `0x4000` warning;
+independent PID-scoped and global exact-name checks both find no `eboot.bin`.
+This closes the automated black-scanout regression. User-visible confirmation
+is still pending, so the two-run 600-frame wrapper has not been launched.
+
 The successful PS4 port uses Eden's native `renderer_gnm` over `opengnm`, not
 Vulkan. That is relevant evidence for a future direct `renderer_agc`: its
 rasterizer/cache/presentation structure can be forward-ported while replacing
