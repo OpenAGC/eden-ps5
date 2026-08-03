@@ -405,6 +405,15 @@ The barrier-state diagnostic ELF embeds Eden revision
 `af0101f437f31172240cf65cff66ef70424c2a9620ca6b96b884ec096d8edc19`.
 The wrapper pins these bytes for one cleanup-first 110-second replay.
 
+PID 92 proved `vkCmdPipelineBarrier` completed and then ruled out regular
+indirect draw: the final label was `vkCmdPipelineBarrier-complete`, with no
+indirect rejection. A subsequent render-pass begin can set the same `-8`
+without activating the pass, matching final `render_pass=0`. Vulkan-PS5 now
+labels `vkCmdBeginRenderPass` and prints exact color/depth attachment, usage,
+layer, native-object, and layout failures. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T153315Z-swapchain-run1.log`;
+cleanup again passed two PID and two global exact-absence checks.
+
 The replay after console recovery ran as PID 89. Neither timestamp nor
 indirect-count diagnostics fired; it again reached two draws and exited with
 `-8`. Regular direct/indexed indirect draws remain an unlabelled validation
