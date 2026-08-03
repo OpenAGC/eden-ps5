@@ -15,7 +15,6 @@
 extern "C" {
 int sceKernelJitCreateSharedMemory(int flags, std::size_t size, int protection, int* handle);
 int sceKernelJitCreateAliasOfSharedMemory(int handle, int protection, int* alias_handle);
-int sceKernelJitMapSharedMemory(int handle, int protection, void** address);
 int sceKernelMunmap(void* address, std::size_t size);
 }
 
@@ -59,32 +58,35 @@ public:
         if (result != 0 || handle < 0) {
             return false;
         }
-        writer_handle = handle;
+        executor_handle = handle;
 
         handle = -1;
         errno = 0;
         result =
-            sceKernelJitCreateAliasOfSharedMemory(writer_handle, PROT_READ | PROT_EXEC, &handle);
-        LogOperation("create-alias-RX", nullptr, result, result == 0 ? 0 : errno);
+            sceKernelJitCreateAliasOfSharedMemory(executor_handle, PROT_READ | PROT_WRITE, &handle);
+        LogOperation("create-alias-RW", nullptr, result, result == 0 ? 0 : errno);
         if (result != 0 || handle < 0) {
             return false;
         }
-        executor_handle = handle;
+        writer_handle = handle;
 
-        void* address = nullptr;
         errno = 0;
-        result = sceKernelJitMapSharedMemory(writer_handle, PROT_READ | PROT_WRITE, &address);
-        LogOperation("map-writer-RW", address, result, result == 0 ? 0 : errno);
-        if (result != 0 || address == nullptr) {
+        void* address =
+            mmap(nullptr, PageSize, PROT_READ | PROT_WRITE, MAP_SHARED, writer_handle, 0);
+        const int writer_error = address == MAP_FAILED ? errno : 0;
+        LogOperation("mmap-writer-RW", address == MAP_FAILED ? nullptr : address,
+                     address == MAP_FAILED ? -1 : 0, writer_error);
+        if (address == MAP_FAILED) {
             return false;
         }
         writer = address;
 
-        address = nullptr;
         errno = 0;
-        result = sceKernelJitMapSharedMemory(executor_handle, PROT_READ | PROT_EXEC, &address);
-        LogOperation("map-executor-RX", address, result, result == 0 ? 0 : errno);
-        if (result != 0 || address == nullptr || address == writer) {
+        address = mmap(nullptr, PageSize, PROT_READ | PROT_EXEC, MAP_SHARED, executor_handle, 0);
+        const int executor_error = address == MAP_FAILED ? errno : 0;
+        LogOperation("mmap-executor-RX", address == MAP_FAILED ? nullptr : address,
+                     address == MAP_FAILED ? -1 : 0, executor_error);
+        if (address == MAP_FAILED || address == writer) {
             return false;
         }
         executor = address;
@@ -98,8 +100,8 @@ public:
         }
 
         std::memcpy(writer, KnownReturnStub.data(), KnownReturnStub.size());
-        __builtin___clear_cache(static_cast<char*>(writer),
-                                static_cast<char*>(writer) + KnownReturnStub.size());
+        __builtin___clear_cache(static_cast<char*>(executor),
+                                static_cast<char*>(executor) + KnownReturnStub.size());
 
         using StubFunction = int (*)();
         static_assert(sizeof(StubFunction) == sizeof(executor));
@@ -119,8 +121,8 @@ public:
 
         cleanup_succeeded = Unmap(executor, "unmap-executor-RX") && cleanup_succeeded;
         cleanup_succeeded = Unmap(writer, "unmap-writer-RW") && cleanup_succeeded;
-        cleanup_succeeded = Close(executor_handle, "close-alias-RX") && cleanup_succeeded;
-        cleanup_succeeded = Close(writer_handle, "close-shared-RW") && cleanup_succeeded;
+        cleanup_succeeded = Close(writer_handle, "close-alias-RW") && cleanup_succeeded;
+        cleanup_succeeded = Close(executor_handle, "close-shared-RX") && cleanup_succeeded;
         return cleanup_succeeded;
     }
 
