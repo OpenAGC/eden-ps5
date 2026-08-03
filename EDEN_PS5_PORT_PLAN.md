@@ -251,6 +251,21 @@ The diagnostic ELF embeds revision
 `933be07ee5a9a044db74bd01c6dd476891012e377cfb6bebfb713688e62f4234`,
 and is pinned by the Flappy wrapper.
 
+The zero-stride replay, PID 148, closes the pipeline-creation blocker: all
+guest pipelines compile/create, two opaque-black raw guest frames are observed,
+the first composite submits, and one native present returns successfully. The
+operator still saw the magenta calibration image, and the run later failed a
+different `vkCmdPipelineBarrier` with record error `-8` at about 98 seconds.
+The process was cleaned and all four exact-absence checks passed. The accepted
+failure log is
+`examples/qualification-logs/flappy-bird/20260803T141015Z-swapchain-run1.log`.
+Vulkan-PS5 commit `8836ed9` now reports whether the failing barrier is an
+unsupported memory access pair, buffer access/queue/range contract, image
+access/layout/queue/subresource contract, or a request for a native stream
+after an earlier unimplemented command. The next retry must use that diagnostic
+to solve the barrier; magenta remains a separate visible-output failure until
+a non-calibration swapchain readback is proven.
+
 The diagnostic replay, PID 142, again cleaned up with two PID-scoped and two
 global absence checks. Its request fingerprint rules out alpha-to-coverage,
 MSAA, depth/stencil tests, and unknown dynamic enums. Each rejected guest
