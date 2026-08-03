@@ -84,6 +84,18 @@ Target proof requires 20 cleanup-first concurrent probe processes followed by
 bounded teardown, and exact process absence. Only after that repeated gate may
 the fix be considered hardware-qualified and the wider renderer goal resume.
 
+The pinned concurrent probe bytes passed all 20 cleanup-first FW 5.50
+processes. Logs `20260803T034417Z-swapchain-run1.log` through
+`20260803T034825Z-swapchain-run1.log` cover the even PID sequence 190 through
+228. Every process reports four exact eligibility mappings/demotions, 16
+successful exact RW-to-RX promotions, 16 known-return executions, 16
+RX-to-RW demotions, 128 successful concurrent one-page map/write/unmap cycles,
+four successful cache unmaps, and the PASS oracle with `errno=0`. This totals
+320 promotions, 320 executions, 320 demotions, 2,560 concurrent mutation
+cycles, and 80 cache unmaps. Every PID-scoped and global exact-process check
+passed. The serial-plus-concurrent GPU-free gate is qualified; the immediate
+remaining proof is the pinned 20-process production 2048 gate.
+
 The preceding serial-only slice serialized every Prospero Dynarmic
 executable-VM operation with one
 process-lifetime guard: cache eligibility allocation and initial demotion,
