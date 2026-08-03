@@ -379,6 +379,22 @@ production ELF is SHA-256
 `c49362194ccd31b9c110d845a2618875d3981aa231438348f44991cd9bbb6bcc`;
 the sequence-zero and 600-frame wrappers pin these exact bytes.
 
+The first production dual-alias sequence-zero run,
+`20260803T104700Z-swapchain-run1.log`, created four distinct 32 MiB caches,
+completed sequences 0 through 7 with successful submit, wait, and present
+results, emitted `GAME PASS 8 frames`, terminated normally, and left no exact
+`eboot.bin`. The qualification runner nevertheless rejected the scoped target
+klog because it contained the first observed `FMEM allocation timeout` and
+`LOW FMEM ... timed-out 1 pages` warning. Swapdev still reported all 43,008
+pages free, and no fault, panic, JIT error, or GPU error occurred. The preceding
+20 one-page probes each proved complete teardown and would total only 320 KiB
+even if retained, while production allocates four concurrent 32 MiB shared
+backings; the evidence therefore identifies transient startup allocator
+pressure but does not yet prove its source. Do not expand the accepted warning
+baseline. Treat this boot as allocator-dirty. The next hardware diagnostic is
+one cleanup-first sequence-zero run immediately after a fresh reboot, with no
+preceding probe or other `/dev/gc` workload and with scoped target-klog capture.
+
 The prior sequence-zero canary's operator-visible result is also confirmed:
 magenta appeared first, followed by the 2048 game with a faint but otherwise
 correct palette. This is positive presentation evidence, not the outstanding
