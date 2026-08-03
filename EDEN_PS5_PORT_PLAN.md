@@ -251,6 +251,19 @@ The diagnostic ELF embeds revision
 `933be07ee5a9a044db74bd01c6dd476891012e377cfb6bebfb713688e62f4234`,
 and is pinned by the Flappy wrapper.
 
+The diagnostic replay, PID 142, again cleaned up with two PID-scoped and two
+global absence checks. Its request fingerprint rules out alpha-to-coverage,
+MSAA, depth/stencil tests, and unknown dynamic enums. Each rejected guest
+pipeline uses topology 4, the exact nine core dynamic states `0..8`, one
+sample, one blend attachment, and `depthClampEnable=1`; the successfully
+created presentation/meta pipelines use only viewport/scissor and leave depth
+clamp disabled. The accepted failure log is
+`examples/qualification-logs/flappy-bird/20260803T140203Z-swapchain-run1.log`.
+Because the request dump occurs before several later validation branches,
+depth clamp is a correlation rather than a proven cause. Vulkan-PS5 commit
+`8265c13` now labels each remaining post-request feature rejection so the next
+replay can identify the precise validator without inference.
+
 ### Payload SDK identity
 
 The current `build-prospero-full-audit2` CMake cache resolves both
