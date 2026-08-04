@@ -2,7 +2,38 @@
 
 ## Current active slice (2026-08-04)
 
-### Active goal: eliminate remaining Flappy runtime diagnostics
+### Active goal: qualify the SDL package dependency baseline
+
+Before FFmpeg or any other package that consumes SDL is rebuilt, the sibling
+`../SDL` tree must qualify against the current `../OpenAGC` and
+`../Vulkan-PS5` trees. The direct SDL renderer must consume only the installed
+`OpenAGC::openagc` contract, while the Zink path must use the current
+`libvulkan_ps5.so`; no installed SDL metadata may add `libSceAgcDriver` to the
+direct `/dev/gc` process. SDL must also build and export correct consumer
+metadata with libsamplerate disabled, and optionally consume pacbrew's
+`ps5-payload-libsamplerate` only when explicitly enabled. FFmpeg and later SDL
+consumers remain blocked until this baseline and an installed-package consumer
+link pass.
+
+The current OpenAGC and Vulkan-PS5 Prospero trees build successfully. A fresh
+combined SDL2 Release configuration with `SDL_PS5_OPENAGC=ON`,
+`SDL_PS5_ZINK=ON`, and tests enabled compiled the complete SDL library and test
+set against a freshly staged OpenAGC package. It exposed and fixed two stale
+package assumptions: PS5 audio unconditionally emitted `-lsamplerate` even
+when `SDL_LIBSAMPLERATE=OFF`, and installed OpenAGC metadata injected
+`-lSceAgcDriver` despite the selected direct backend. The corrected CMake,
+pkg-config, and `sdl2-config` metadata use OpenAGC 0.2.0, contain neither
+forbidden dependency in the disabled-samplerate configuration, and pass a
+focused metadata regression. A fresh installed CMake consumer links SDL2,
+OpenAGC, `kernel`, and `SceVideoOut` without libsamplerate or
+libSceAgcDriver. Vulkan-PS5's shared-ICD verifier also passes with 204 exports
+and only the qualified relocation set. The pacbrew libsamplerate recipe is
+`/Users/bizkut/Downloads/PS5/homebrew/pacbrew-repo/libsamplerate/PKGBUILD`.
+
+After this package slice is committed, resume the paused Flappy diagnostic
+goal below, then build FFmpeg and downstream SDL packages in dependency order.
+
+### Paused goal: eliminate remaining Flappy runtime diagnostics
 
 The visual Flappy Bird canary is complete. The active goal is now to remove
 the remaining actionable non-Vulkan diagnostics without regressing the proven
