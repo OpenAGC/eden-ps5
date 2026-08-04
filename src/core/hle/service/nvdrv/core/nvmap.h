@@ -37,6 +37,34 @@ class Container;
  */
 class NvMap {
 public:
+    class PinState {
+    public:
+        enum class ReleaseResult {
+            StillPinned,
+            LastPin,
+            Unbalanced,
+        };
+
+        void Add() noexcept {
+            ++count;
+        }
+
+        [[nodiscard]] ReleaseResult Release() noexcept {
+            if (count == 0) {
+                return ReleaseResult::Unbalanced;
+            }
+            --count;
+            return count == 0 ? ReleaseResult::LastPin : ReleaseResult::StillPinned;
+        }
+
+        [[nodiscard]] u64 Count() const noexcept {
+            return count;
+        }
+
+    private:
+        u64 count{};
+    };
+
     /**
      * @brief A handle to a contiguous block of memory in an application's address space
      */
@@ -54,7 +82,7 @@ public:
         using Id = u32;
         Id id; //!< A globally unique identifier for this handle
 
-        s64 pins{};
+        PinState pins{};
         u32 pin_virt_address{};
         std::optional<typename std::list<std::shared_ptr<Handle>>::iterator> unmap_queue_entry{};
 
@@ -119,6 +147,7 @@ public:
     };
 
     explicit NvMap(Container& core, Tegra::Host1x::Host1x& host1x);
+    ~NvMap();
 
     /**
      * @brief Creates an unallocated handle of the given size
@@ -168,6 +197,9 @@ private:
     static constexpr u32 HandleIdIncrement{
         4}; //!< Each new handle ID is an increment of 4 from the previous
     std::atomic<u32> next_handle_id{HandleIdIncrement};
+    std::atomic<u64> pin_calls{};
+    std::atomic<u64> unpin_calls{};
+    std::atomic<u64> unbalanced_unpins{};
     Tegra::Host1x::Host1x& host1x;
 
     void AddHandle(std::shared_ptr<Handle> handle);

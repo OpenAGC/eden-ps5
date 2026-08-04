@@ -74,6 +74,24 @@ NvResult NvMap::Handle::Duplicate(bool internal_session) {
 
 NvMap::NvMap(Container& core_, Tegra::Host1x::Host1x& host1x_) : host1x{host1x_}, core{core_} {}
 
+NvMap::~NvMap() {
+    u64 outstanding_pins = 0;
+    const auto handles_copy = [&] {
+        std::scoped_lock handles_guard{handles_lock};
+        return handles;
+    }();
+    for (const auto& [id, handle] : handles_copy) {
+        (void)id;
+        std::scoped_lock handle_guard{handle->mutex};
+        outstanding_pins += handle->pins.Count();
+    }
+    LOG_INFO(Service_NVDRV,
+             "NVMap pin telemetry: pin_calls={} unpin_calls={} unbalanced_unpins={} "
+             "outstanding_pins={}",
+             pin_calls.load(std::memory_order_relaxed), unpin_calls.load(std::memory_order_relaxed),
+             unbalanced_unpins.load(std::memory_order_relaxed), outstanding_pins);
+}
+
 void NvMap::AddHandle(std::shared_ptr<Handle> handle_description) {
     std::scoped_lock lock(handles_lock);
 
@@ -90,7 +108,7 @@ void NvMap::UnmapHandle(Handle& handle_description) {
     // Free and unmap the handle from Host1x GMMU
     if (handle_description.pin_virt_address) {
         host1x.gmmu_manager.Unmap(static_cast<GPUVAddr>(handle_description.pin_virt_address),
-                            handle_description.aligned_size);
+                                  handle_description.aligned_size);
         host1x.Allocator().Free(handle_description.pin_virt_address,
                                 static_cast<u32>(handle_description.aligned_size));
         handle_description.pin_virt_address = 0;
@@ -170,11 +188,12 @@ DAddr NvMap::PinHandle(NvMap::Handle::Id handle, bool low_area_pin) {
     const auto map_low_area = [&] {
         if (handle_description->pin_virt_address == 0) {
             u32 address = host1x.Allocator().Allocate(u32(handle_description->aligned_size));
-            host1x.gmmu_manager.Map(GPUVAddr(address), handle_description->d_address, handle_description->aligned_size);
+            host1x.gmmu_manager.Map(GPUVAddr(address), handle_description->d_address,
+                                    handle_description->aligned_size);
             handle_description->pin_virt_address = address;
         }
     };
-    if (!handle_description->pins) {
+    if (handle_description->pins.Count() == 0) {
         // If we're in the unmap queue we can just remove ourselves and return since we're already
         // mapped
         {
@@ -187,11 +206,13 @@ DAddr NvMap::PinHandle(NvMap::Handle::Id handle, bool low_area_pin) {
 
                 if (low_area_pin) {
                     map_low_area();
-                    handle_description->pins++;
+                    handle_description->pins.Add();
+                    pin_calls.fetch_add(1, std::memory_order_relaxed);
                     return static_cast<DAddr>(handle_description->pin_virt_address);
                 }
 
-                handle_description->pins++;
+                handle_description->pins.Add();
+                pin_calls.fetch_add(1, std::memory_order_relaxed);
                 return handle_description->d_address;
             }
         }
@@ -232,7 +253,8 @@ DAddr NvMap::PinHandle(NvMap::Handle::Id handle, bool low_area_pin) {
         map_low_area();
     }
 
-    handle_description->pins++;
+    handle_description->pins.Add();
+    pin_calls.fetch_add(1, std::memory_order_relaxed);
     if (low_area_pin) {
         return static_cast<DAddr>(handle_description->pin_virt_address);
     }
@@ -246,9 +268,12 @@ void NvMap::UnpinHandle(Handle::Id handle) {
     }
 
     std::scoped_lock lock(handle_description->mutex);
-    if (--handle_description->pins < 0) {
-        LOG_WARNING(Service_NVDRV, "Pin count imbalance detected!");
-    } else if (!handle_description->pins) {
+    unpin_calls.fetch_add(1, std::memory_order_relaxed);
+    const auto release = handle_description->pins.Release();
+    if (release == PinState::ReleaseResult::Unbalanced) {
+        unbalanced_unpins.fetch_add(1, std::memory_order_relaxed);
+        LOG_WARNING(Service_NVDRV, "Pin count imbalance detected for handle {}", handle);
+    } else if (release == PinState::ReleaseResult::LastPin) {
         std::scoped_lock queueLock(unmap_queue_lock);
 
         // Add to the unmap queue allowing this handle's memory to be freed if needed
@@ -291,8 +316,6 @@ std::optional<NvMap::FreeInfo> NvMap::FreeHandle(Handle::Id handle, bool interna
                     std::scoped_lock queueLock(unmap_queue_lock);
                     UnmapHandle(*handle_description);
                 }
-
-                handle_description->pins = 0;
             }
         }
 

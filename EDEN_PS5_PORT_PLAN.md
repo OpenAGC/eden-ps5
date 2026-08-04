@@ -2,7 +2,34 @@
 
 ## Current active slice (2026-08-04)
 
-### Active goal: Flappy Bird guest-pipeline canary
+### Active goal: eliminate remaining Flappy runtime diagnostics
+
+The visual Flappy Bird canary is complete. The active goal is now to remove
+the remaining actionable non-Vulkan diagnostics without regressing the proven
+direct `/dev/gc` renderer path. In order: preserve NVMap pin ownership through
+session cleanup and prove balanced pin/unpin telemetry; implement the NVDRV
+error notifier contract; remove the two avoidable BSD-before-initialization
+errors; audit the remaining NVDRV, VI, AM, and GetInfo stubs and either
+implement workload-required behavior or document why each retained stub is
+safe; and classify or avoid ps5debug's post-exit suspend race. Each slice needs
+focused host coverage and a meaningful commit. The final gate is a fresh
+cleanup-first, 300-frame Flappy run on exact FW 5.50 using only direct
+`/dev/gc`, with visible intro, zero Vulkan/critical errors, balanced NVMap
+telemetry, bounded teardown, and repeated exact-process absence.
+
+The first slice identified the teardown imbalance: `NvMap::FreeHandle`
+force-unmapped a last-user handle and reset its shared pin count even though
+AS-GPU/NVDEC mapping records still owned pins. Their later orderly unpins then
+underflowed the count. The fix preserves ownership until those owners release
+it, uses a saturating pin-state transition so a genuine unmatched unpin cannot
+make the count negative, and emits destructor totals for pin calls, unpin
+calls, unmatched unpins, and outstanding pins. The focused host regression
+passes 10 assertions. The clean host tests target builds successfully; its
+unfiltered run still encounters the unrelated existing `HostMemory: Simple
+unmap` SIGSEGV, so that failure is not evidence against the focused NVMap
+state-machine test and remains a separate host-test issue.
+
+### Completed goal: Flappy Bird guest-pipeline canary
 
 The completed 2048 gate proves the FW 5.50 renderer lifecycle, native
 presentation, immediate relaunch, and teardown, but its SDL software renderer
@@ -3407,6 +3434,11 @@ On 2026-08-02 the first Eden-side Vulkan integration slices completed:
   dependency/package gate.
 - The full Prospero configuration now resolves the pacbrew-compatible OpenSSL
   3.6.2 sysroot install and Eden's source-built FFmpeg 8.0 dependency. FFmpeg
+  package recipes, patches, and PS5 build references are available in the
+  pinned local pacbrew checkout at
+  `/Users/bizkut/Downloads/PS5/homebrew/pacbrew-repo`; use that tree as the
+  Prospero FFmpeg source/reference rather than inventing a second packaging
+  path. FFmpeg
   must link its configure probes through `prospero-clang`, because raw
   `prospero-lld` omits crt/libc/SceLibcInternal and incorrectly reports PS5
   math functions unavailable. The PS5-only linker-driver selection preserves
