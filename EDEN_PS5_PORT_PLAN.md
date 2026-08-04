@@ -2,7 +2,7 @@
 
 ## Current active slice (2026-08-04)
 
-### Active goal: qualify the SDL package dependency baseline
+### Completed prerequisite: qualify the SDL package dependency baseline
 
 Before FFmpeg or any other package that consumes SDL is rebuilt, the sibling
 `../SDL` tree must qualify against the current `../OpenAGC` and
@@ -30,10 +30,11 @@ libSceAgcDriver. Vulkan-PS5's shared-ICD verifier also passes with 204 exports
 and only the qualified relocation set. The pacbrew libsamplerate recipe is
 `/Users/bizkut/Downloads/PS5/homebrew/pacbrew-repo/libsamplerate/PKGBUILD`.
 
-After this package slice is committed, resume the paused Flappy diagnostic
-goal below, then build FFmpeg and downstream SDL packages in dependency order.
+This package slice is committed. Work has resumed on the Flappy diagnostic
+goal below; FFmpeg and downstream SDL packages remain later dependency-order
+work.
 
-### Paused goal: eliminate remaining Flappy runtime diagnostics
+### Active goal: eliminate remaining Flappy runtime diagnostics
 
 The visual Flappy Bird canary is complete. The active goal is now to remove
 the remaining actionable non-Vulkan diagnostics without regressing the proven
@@ -4351,13 +4352,50 @@ and this slice does not claim semantics for commands that were not audited.
 Focused host evidence passes 16 NVDRV lifecycle assertions, 6 SVC PID-bound
 assertions, and the combined `[core][nvdrv]` set with 34 assertions across
 three cases. Launch configuration, shader-cache identity, PS5 thread-budget,
-and multi-level page-table CTests also pass. The current Prospero full build in
-`build-prospero-full-audit2` completes and produces a 65,733,016-byte candidate
-`eden-ps5.elf` with SHA-256
-`d86590c679cb4e1c2d1c8a9ed8c08c61225e94d0865c016ccc3f06d017950ed2`.
-This ELF has not been sent to hardware. It is not qualification evidence until
-the pinned cleanup ELF and repeated exact-name absence checks precede a fresh
-FW 5.500.008 300-frame replay with operator-visible magenta then game output.
+and multi-level page-table CTests also pass. The Prospero tree was explicitly
+reconfigured after commit `4856e25ded` so the artifact identity is no longer
+the stale pre-commit revision retained by the prior incremental build. The
+resulting 65,733,016-byte `eden-ps5.elf` embeds `4856e25ded-master` and has
+SHA-256
+`a411867c1fbb353d413e252b90e75d78343a9bc032fbed29925480da53cf217b`.
+The Flappy wrapper SHA-256 is
+`22d562f055a44abf4c1a57a050fdf3e340e3155164bfe848b2d0a0a4fdb0b61c`;
+it pins the current exact-process helper SHA-256
+`c46e8b9f1095599498763e1a9e3923cfa47f787d48c2b952a1a90ab6feaaabe5`
+from Vulkan-PS5 commit `5499b2b`. Every Eden hardware wrapper that consumes
+that helper now pins the same tested bytes. The helper's nine host tests and
+the guarded-runner safety regression pass.
+
+The fresh cleanup-first FW `5.500.008` replay of those exact committed bytes
+passed as PID 136. Its primary log is
+`Vulkan-PS5/examples/qualification-logs/flappy-bird/20260804T021734Z-swapchain-run1.log`,
+SHA-256
+`f3339b1a0e90e35f5821edbf22a8ceccd32f059f6417f5fa1dcb9dd872aa57cb`,
+and its target klog is the adjacent
+`20260804T021734Z-swapchain-run1-target.klog`, SHA-256
+`c1320d76b416ace3c404f63410a0f55b294fe5289802e1df131fab068195f9e4`.
+The pinned cleanup preflight proved global exact `eboot.bin` absence twice
+before launch. The run selected only `backend=direct-dev-gc`, loaded all five
+discovered guest graphics-cache records with zero rejection, stopped the
+input cycle at two presses, and emitted `GAME PASS 300 frames`. Teardown
+reported NVMap `pin_calls=77`, `unpin_calls=29`, `unbalanced_unpins=0`, and
+`outstanding_pins=0`; the differing call totals reflect shared pin ownership,
+while zero unmatched and outstanding ownership is the lifecycle oracle.
+The primary log contains no Warning, Error, or Critical record, no `VK_ERROR`,
+no targeted format rejection, no stub diagnostic, and no GPU, submit,
+presentation, cache, or teardown failure.
+
+The target klog retains only platform-side notices that do not originate in
+Eden or its GPU path: one Shell AppInfo IPC performance warning, controller
+queries with no active process, the verified post-exit suspend race followed
+by successful process deletion, and the runner's accepted raw-ELF `0x4000` VM
+baseline. The wrapper proved PID-specific and global absence twice; a separate
+post-run helper pair again found no exact `eboot.bin`, and websrv remained
+responsive. The earlier `20260804T021330Z` run also passed functionally but is
+not final identity evidence because its incremental artifact still embedded
+the stale `9509cc26dc` revision. The only remaining gate for this active goal
+is operator confirmation that the committed-revision replay visibly showed
+magenta followed by the Flappy intro.
 
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
