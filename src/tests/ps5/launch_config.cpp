@@ -15,6 +15,7 @@ TEST_CASE("PS5 launch configuration parses exact modes", "[ps5]") {
     REQUIRE(config.mode == Eden::PS5::LaunchMode::Init);
     REQUIRE(config.game_path.empty());
     REQUIRE_FALSE(config.qualification_input_cycle);
+    REQUIRE(config.qualification_input_profile == Eden::PS5::QualificationInputProfile::Generic);
 
     REQUIRE(Eden::PS5::ParseLaunchConfig("game\n/data/homebrew/games/2048.nro\n", config) ==
             Eden::PS5::LaunchConfigError::None);
@@ -40,10 +41,18 @@ TEST_CASE("PS5 launch configuration parses exact modes", "[ps5]") {
             Eden::PS5::LaunchConfigError::None);
     REQUIRE(config.qualification_input_cycle);
     REQUIRE(config.qualification_input_press_limit == 64);
+    REQUIRE(config.qualification_input_profile == Eden::PS5::QualificationInputProfile::Generic);
+
+    REQUIRE(Eden::PS5::ParseLaunchConfig(
+                "game\n/data/homebrew/games/Flappy_Bird_NX.nro\nframes=300\ninput_cycle=18\n"
+                "input_profile=flappy\n",
+                config) == Eden::PS5::LaunchConfigError::None);
+    REQUIRE(config.qualification_input_press_limit == 18);
+    REQUIRE(config.qualification_input_profile == Eden::PS5::QualificationInputProfile::Flappy);
 
     const std::string max_path = "/" + std::string(Eden::PS5::MaxGamePathBytes - 1, 'a');
     const std::string max_config =
-        "game\n" + max_path + "\nframes=108000\ninput_cycle=10000\n";
+        "game\n" + max_path + "\nframes=108000\ninput_cycle=10000\ninput_profile=flappy\n";
     REQUIRE(max_config.size() == Eden::PS5::MaxLaunchConfigBytes);
     REQUIRE(Eden::PS5::ParseLaunchConfig(max_config, config) ==
             Eden::PS5::LaunchConfigError::None);
@@ -52,6 +61,25 @@ TEST_CASE("PS5 launch configuration parses exact modes", "[ps5]") {
     REQUIRE(config.qualification_input_cycle);
     REQUIRE(config.qualification_input_press_limit ==
             Eden::PS5::MaxQualificationInputPressLimit);
+    REQUIRE(config.qualification_input_profile == Eden::PS5::QualificationInputProfile::Flappy);
+}
+
+TEST_CASE("PS5 qualification input profiles expose deterministic keys and cadence", "[ps5]") {
+    using Eden::PS5::QualificationInputKey;
+    using Eden::PS5::QualificationInputKeyForPress;
+    using Eden::PS5::QualificationInputProfile;
+    using Eden::PS5::QualificationInputStepIntervalMs;
+
+    REQUIRE(QualificationInputStepIntervalMs(QualificationInputProfile::Generic) == 250);
+    REQUIRE(QualificationInputStepIntervalMs(QualificationInputProfile::Flappy) == 450);
+    REQUIRE(QualificationInputKeyForPress(QualificationInputProfile::Generic, 4) ==
+            QualificationInputKey::B);
+    REQUIRE(QualificationInputKeyForPress(QualificationInputProfile::Generic, 9) ==
+            QualificationInputKey::A);
+    for (std::size_t press = 0; press < 32; ++press) {
+        REQUIRE(QualificationInputKeyForPress(QualificationInputProfile::Flappy, press) ==
+                QualificationInputKey::A);
+    }
 }
 
 TEST_CASE("PS5 launch configuration fails closed", "[ps5]") {
@@ -59,13 +87,16 @@ TEST_CASE("PS5 launch configuration fails closed", "[ps5]") {
     for (const std::string_view malformed :
          {"", "init", "init\nextra\n", "game\n", "game\nrelative.nro\n", "game\n/data/game.nro\r\n",
           "game\n/data/game.nro\nframes=0\n", "game\n/data/game.nro\nframes=108001\n",
-          "game\n/data/game.nro\nframes=60\nextra\n",
-          "game\n/data/game.nro\ninput_cycle=1\n",
+          "game\n/data/game.nro\nframes=60\nextra\n", "game\n/data/game.nro\ninput_cycle=1\n",
           "game\n/data/game.nro\ninput_cycle=1\nframes=60\n",
           "game\n/data/game.nro\nframes=60\ninput_cycle=0\n",
           "game\n/data/game.nro\nframes=60\ninput_cycle=10001\n",
           "game\n/data/game.nro\nframes=60\ninput_cycle=abc\n",
-          "game\n/data/game.nro\nframes=60\ninput_cycle=1\ninput_cycle=1\n", "capture\n"}) {
+          "game\n/data/game.nro\nframes=60\ninput_profile=flappy\n",
+          "game\n/data/game.nro\nframes=60\ninput_cycle=1\ninput_cycle=1\n",
+          "game\n/data/game.nro\nframes=60\ninput_cycle=18\ninput_profile=generic\n",
+          "game\n/data/game.nro\nframes=60\ninput_cycle=18\ninput_profile=flappy\nextra\n",
+          "capture\n"}) {
         REQUIRE(Eden::PS5::ParseLaunchConfig(malformed, config) ==
                 Eden::PS5::LaunchConfigError::Malformed);
     }

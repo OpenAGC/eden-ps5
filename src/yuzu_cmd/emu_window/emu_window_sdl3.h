@@ -12,6 +12,7 @@
 
 #include "core/frontend/emu_window.h"
 #include "core/frontend/graphics_context.h"
+#include "ps5/qualification_input.h"
 
 struct SDL_Window;
 
@@ -41,7 +42,9 @@ public:
     void SetPresentedFrameLimit(u32 limit);
     u32 GetPresentedFrameCount() const;
     void OnFrameDisplayed() override;
-    void SetQualificationInputCycle(bool enabled, u32 press_limit = 0);
+    void SetQualificationInputCycle(bool enabled, u32 press_limit = 0,
+                                    Eden::PS5::QualificationInputProfile profile =
+                                        Eden::PS5::QualificationInputProfile::Generic);
 
     // Sets the window icon from yuzu.bmp
     void SetWindowIcon();
@@ -110,6 +113,8 @@ protected:
     u64 qualification_input_last_step_ms = 0;
     u32 qualification_input_press_count = 0;
     u32 qualification_input_press_limit = 0;
+    Eden::PS5::QualificationInputProfile qualification_input_profile =
+        Eden::PS5::QualificationInputProfile::Generic;
 
     /// Input subsystem to use with this window.
     InputCommon::InputSubsystem* input_subsystem;

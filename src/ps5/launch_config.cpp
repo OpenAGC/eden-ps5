@@ -42,6 +42,7 @@ LaunchConfigError ParseLaunchConfig(std::string_view text, LaunchConfig& config)
     if (option_offset != std::string_view::npos) {
         constexpr std::string_view FramePrefix = "frames=";
         constexpr std::string_view InputCyclePrefix = "input_cycle=";
+        constexpr std::string_view InputProfilePrefix = "input_profile=";
         const std::string_view options = body.substr(option_offset + 1);
         const std::size_t second_option_offset = options.find('\n');
         const std::string_view frame_option = options.substr(0, second_option_offset);
@@ -58,7 +59,9 @@ LaunchConfigError ParseLaunchConfig(std::string_view text, LaunchConfig& config)
         }
         config.presented_frame_limit = frame_limit;
         if (second_option_offset != std::string_view::npos) {
-            const std::string_view input_option = options.substr(second_option_offset + 1);
+            const std::string_view remaining_options = options.substr(second_option_offset + 1);
+            const std::size_t third_option_offset = remaining_options.find('\n');
+            const std::string_view input_option = remaining_options.substr(0, third_option_offset);
             if (!input_option.starts_with(InputCyclePrefix)) {
                 return LaunchConfigError::Malformed;
             }
@@ -74,6 +77,18 @@ LaunchConfigError ParseLaunchConfig(std::string_view text, LaunchConfig& config)
             // Preserve input_cycle=1 as the original unbounded mode. Values
             // greater than one cap synthesized presses for deterministic games.
             config.qualification_input_press_limit = press_limit == 1 ? 0 : press_limit;
+            if (third_option_offset != std::string_view::npos) {
+                const std::string_view profile_option =
+                    remaining_options.substr(third_option_offset + 1);
+                if (!profile_option.starts_with(InputProfilePrefix)) {
+                    return LaunchConfigError::Malformed;
+                }
+                const std::string_view profile = profile_option.substr(InputProfilePrefix.size());
+                if (profile != "flappy") {
+                    return LaunchConfigError::Malformed;
+                }
+                config.qualification_input_profile = QualificationInputProfile::Flappy;
+            }
         }
     }
     return LaunchConfigError::None;

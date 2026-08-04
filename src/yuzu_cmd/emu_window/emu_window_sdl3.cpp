@@ -6,8 +6,6 @@
 
 #include <SDL3/SDL.h>
 
-#include <array>
-
 #include "common/logging.h"
 #include "common/scm_rev.h"
 #include "common/settings.h"
@@ -20,6 +18,28 @@
 #include "input_common/main.h"
 #include "yuzu_cmd/emu_window/emu_window_sdl3.h"
 #include "yuzu_cmd/yuzu_icon.h"
+
+namespace {
+
+int QualificationInputScancode(Eden::PS5::QualificationInputKey key) {
+    switch (key) {
+    case Eden::PS5::QualificationInputKey::A:
+        return SDL_SCANCODE_A;
+    case Eden::PS5::QualificationInputKey::B:
+        return SDL_SCANCODE_S;
+    case Eden::PS5::QualificationInputKey::Left:
+        return SDL_SCANCODE_LEFT;
+    case Eden::PS5::QualificationInputKey::Up:
+        return SDL_SCANCODE_UP;
+    case Eden::PS5::QualificationInputKey::Right:
+        return SDL_SCANCODE_RIGHT;
+    case Eden::PS5::QualificationInputKey::Down:
+        return SDL_SCANCODE_DOWN;
+    }
+    return SDL_SCANCODE_UNKNOWN;
+}
+
+} // namespace
 
 EmuWindow_SDL3::EmuWindow_SDL3(InputCommon::InputSubsystem* input_subsystem_, Core::System& system_)
     : input_subsystem{input_subsystem_}, system{system_} {
@@ -117,9 +137,10 @@ void EmuWindow_SDL3::OnKeyEvent(int key, u8 state) {
     }
 }
 
-void EmuWindow_SDL3::SetQualificationInputCycle(bool enabled, u32 press_limit) {
+void EmuWindow_SDL3::SetQualificationInputCycle(bool enabled, u32 press_limit,
+                                                Eden::PS5::QualificationInputProfile profile) {
     if (qualification_input_cycle_enabled == enabled &&
-        qualification_input_press_limit == press_limit) {
+        qualification_input_press_limit == press_limit && qualification_input_profile == profile) {
         return;
     }
     if (qualification_input_held_key != 0) {
@@ -129,44 +150,46 @@ void EmuWindow_SDL3::SetQualificationInputCycle(bool enabled, u32 press_limit) {
     qualification_input_cycle_enabled = enabled;
     qualification_input_cycle_capped = false;
     qualification_input_press_limit = enabled ? press_limit : 0;
+    qualification_input_profile = enabled ? profile : Eden::PS5::QualificationInputProfile::Generic;
     qualification_input_direction = 0;
     qualification_input_press_count = 0;
     qualification_input_last_step_ms = SDL_GetTicks();
-    LOG_INFO(Frontend, "PS5 qualification input cycle: enabled={} interval_ms=250 press_limit={}",
-             enabled, qualification_input_press_limit);
+    LOG_INFO(Frontend,
+             "PS5 qualification input cycle: enabled={} profile={} interval_ms={} press_limit={}",
+             enabled, Eden::PS5::QualificationInputProfileName(qualification_input_profile),
+             Eden::PS5::QualificationInputStepIntervalMs(qualification_input_profile),
+             qualification_input_press_limit);
 }
 
 void EmuWindow_SDL3::AdvanceQualificationInputCycle() {
     if (!qualification_input_cycle_enabled) {
         return;
     }
-    constexpr u64 StepIntervalMs = 250;
-    // Slow guest frames can miss short key pulses entirely. Give title and
-    // tutorial screens sustained, repeated A windows while retaining B and
-    // every default left-stick direction in the bounded qualification cycle.
-    constexpr std::array<int, 9> QualificationKeys{
-        SDL_SCANCODE_A,
-        SDL_SCANCODE_A,
-        SDL_SCANCODE_A,
-        SDL_SCANCODE_A,
-        SDL_SCANCODE_S,
-        SDL_SCANCODE_LEFT,
-        SDL_SCANCODE_UP,
-        SDL_SCANCODE_RIGHT,
-        SDL_SCANCODE_DOWN,
-    };
+    const u64 step_interval_ms =
+        Eden::PS5::QualificationInputStepIntervalMs(qualification_input_profile);
     const u64 now = SDL_GetTicks();
-    if (now - qualification_input_last_step_ms < StepIntervalMs) {
+    if (now - qualification_input_last_step_ms < step_interval_ms) {
         return;
     }
     qualification_input_last_step_ms = now;
     if (qualification_input_held_key != 0) {
+        const auto released_key = Eden::PS5::QualificationInputKeyForPress(
+            qualification_input_profile, qualification_input_press_count - 1);
         OnKeyEvent(qualification_input_held_key, 0);
         qualification_input_held_key = 0;
+        if (qualification_input_profile == Eden::PS5::QualificationInputProfile::Flappy) {
+            LOG_INFO(Frontend,
+                     "PS5 qualification input: profile=flappy action=release key={} ordinal={} "
+                     "limit={}",
+                     Eden::PS5::QualificationInputKeyName(released_key),
+                     qualification_input_press_count, qualification_input_press_limit);
+        }
         if (qualification_input_press_limit != 0 &&
             qualification_input_press_count >= qualification_input_press_limit) {
             qualification_input_cycle_capped = true;
-            LOG_INFO(Frontend, "PS5 qualification input cycle: stopped presses={} limit={}",
+            LOG_INFO(Frontend,
+                     "PS5 qualification input cycle: stopped profile={} presses={} limit={}",
+                     Eden::PS5::QualificationInputProfileName(qualification_input_profile),
                      qualification_input_press_count, qualification_input_press_limit);
         }
         return;
@@ -175,12 +198,17 @@ void EmuWindow_SDL3::AdvanceQualificationInputCycle() {
         return;
     }
 
-    qualification_input_held_key =
-        QualificationKeys[qualification_input_direction++ % QualificationKeys.size()];
+    const auto pressed_key = Eden::PS5::QualificationInputKeyForPress(
+        qualification_input_profile, qualification_input_direction++);
+    qualification_input_held_key = QualificationInputScancode(pressed_key);
     OnKeyEvent(qualification_input_held_key, 1);
     ++qualification_input_press_count;
-    if (qualification_input_press_count <= QualificationKeys.size() ||
-        qualification_input_press_count % 32 == 0) {
+    if (qualification_input_profile == Eden::PS5::QualificationInputProfile::Flappy) {
+        LOG_INFO(Frontend,
+                 "PS5 qualification input: profile=flappy action=press key={} ordinal={} limit={}",
+                 Eden::PS5::QualificationInputKeyName(pressed_key), qualification_input_press_count,
+                 qualification_input_press_limit);
+    } else if (qualification_input_press_count <= 9 || qualification_input_press_count % 32 == 0) {
         LOG_INFO(Frontend, "PS5 qualification input cycle: presses={}",
                  qualification_input_press_count);
     }

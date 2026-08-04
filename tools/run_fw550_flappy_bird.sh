@@ -21,7 +21,7 @@ pinned_runner_sha256=96e396e42d6b3a73eef0ed7de78fe0e318b1aa51cdcf8ff2c89a54b0134
 pinned_process_helper_sha256=c46e8b9f1095599498763e1a9e3923cfa47f787d48c2b952a1a90ab6feaaabe5
 pinned_pyps4debug_commit=8f1443bb97bd6e2a77ed5ea2cc9145975d3152eb
 pinned_pyps4debug_lock_sha256=c9eb85e0f0bc1bde6c4e00f1112a1aea982dc7eed024eb973fca91e436051033
-sidecar_sha256=44f0abd17639f09a237074de03db839c755d7e0767a9d32e1de99f35977ff5f2
+sidecar_sha256=a50e3090ef1c7c8ff056eca2b499f1aacc354f738058ceef11382748a6818198
 homebrew_sha256=6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d
 cache_identity=ee7cd9a1a22a0102
 websrv_timeout=${EDEN_PS5_WEBSRV_TIMEOUT:-55}
@@ -83,8 +83,8 @@ if [ "${EDEN_PS5_QUALIFICATION_REJECT_PATTERN+x}" = x ]; then
 fi
 
 firmware_pattern='^\[openagc\] system software raw=0x05500008 string= 5\.500\.008$'
-input_cycle_pattern='PS5 qualification input cycle: enabled=true interval_ms=250 press_limit=2'
-input_cycle_stop_pattern='PS5 qualification input cycle: stopped presses=2 limit=2'
+input_cycle_pattern='PS5 qualification input cycle: enabled=true profile=flappy interval_ms=450 press_limit=18'
+input_cycle_stop_pattern='PS5 qualification input cycle: stopped profile=flappy presses=18 limit=18'
 telemetry_baseline_pattern='Prospero guest pipeline cache live: reason=baseline .*graphics_discovered=0 compute_discovered=0 graphics_loaded=0 compute_loaded=0 records_rejected=0'
 telemetry_pattern='Prospero guest pipeline cache live:'
 cache_reload_pattern='Prospero guest pipeline cache live: reason=disk-load-complete .*graphics_discovered=[1-9][0-9]* compute_discovered=[0-9]+ graphics_loaded=[1-9][0-9]* compute_loaded=[0-9]+ records_rejected=[0-9]+'

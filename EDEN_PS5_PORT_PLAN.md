@@ -2,6 +2,36 @@
 
 ## Current active slice (2026-08-04)
 
+### Active goal: exercise bounded Flappy gameplay input
+
+The passing 300-frame Flappy renderer canary previously injected only two A
+presses, which was sufficient to reach visible game content but did not prove
+that the guest consumed sustained gameplay input. The next slice must retain
+the same cleanup, firmware, direct-`/dev/gc`, cache, rendering, presentation,
+teardown, and exact-process gates while deterministically starting a round and
+flapping for several seconds. The log must identify the selected input
+profile, cadence, every synthesized press/release, final count, and bounded
+stop; operator observation remains the oracle for visible bird movement.
+
+The control contract was audited against local Flappy source at
+`../FlappyBird/FlappyBirdNX/FlappyBirdNX/source/SplashScreen.cpp`,
+`TitleScreen.cpp`, `GameScreen.cpp`, and `Settings.hpp`. `KEY_A` skips the
+splash, activates Play, dismisses the tutorial, and flaps once gameplay has
+started. Loading takes two seconds, the gameplay countdown takes three
+seconds, and a jump lasts 700 ms. Eden therefore adds an explicit `flappy`
+qualification profile with only A presses, 450 ms press/release steps (one
+press every 900 ms), and an 18-press bound. This tolerates the two loading
+windows and leaves approximately seven seconds of flap input after the
+countdown without making the runner unbounded.
+
+The sidecar parser accepts `input_profile=flappy` only after a valid bounded
+`input_cycle`, rejects unknown or misplaced profiles, and retains the generic
+cycle for other homebrew. The pure profile schedule exposes host-testable key
+and cadence selection. Focused host evidence passes 92 assertions across four
+launch/profile cases. The Flappy wrapper requires the exact profile, 450 ms
+step, 18-press limit, and stopped-after-release marker. A fresh committed
+Prospero artifact and cleanup-first hardware replay are still pending.
+
 ### Completed prerequisite: qualify the SDL package dependency baseline
 
 Before FFmpeg or any other package that consumes SDL is rebuilt, the sibling
@@ -34,7 +64,7 @@ This package slice is committed. Work has resumed on the Flappy diagnostic
 goal below; FFmpeg and downstream SDL packages remain later dependency-order
 work.
 
-### Active goal: eliminate remaining Flappy runtime diagnostics
+### Completed goal: eliminate remaining Flappy runtime diagnostics
 
 The visual Flappy Bird canary is complete. The active goal is now to remove
 the remaining actionable non-Vulkan diagnostics without regressing the proven
