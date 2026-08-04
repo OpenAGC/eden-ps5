@@ -317,9 +317,11 @@ FormatInfo SurfaceFormat(const Device& device, FormatType format_type, bool with
 #if defined(__PROSPERO__)
         // PS5 qualifies combined D32/S8 for attachment and transfer, but a
         // direct sampled-depth dispatch leaves the native queue pending.
-        // Permit D24/S8 emulation only as the qualified attachment fallback;
-        // a sampled view remains unavailable and therefore fails closed.
-        if (tuple.format == VK_FORMAT_D24_UNORM_S8_UINT) {
+        // Keep both native D32/S8 and the D24/S8 emulation path restricted to
+        // the qualified subset; a sampled view remains unavailable and fails
+        // closed through FormatInfo::sampled.
+        if (tuple.format == VK_FORMAT_D24_UNORM_S8_UINT ||
+            tuple.format == VK_FORMAT_D32_SFLOAT_S8_UINT) {
             usage &= ~VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
             sampled = false;
         }

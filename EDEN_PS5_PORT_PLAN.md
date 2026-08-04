@@ -4175,6 +4175,22 @@ and wrapper `f8d51a5d7a7533985975faf47ac888ef40ae80971f73681c9cb29326609225ed`.
 The exact current ELF still requires operator confirmation that Flappy output
 was visible on the display before this active goal can be marked complete.
 
+The follow-up Flappy format-error slice covers every enum reported by the
+passing 300-frame canary. Vulkan-PS5 now exposes the already-present OpenAGC
+storage-image path for color formats 44, 51, 64, 76, 83, 97, 100, 103, 109,
+and 122 in commit `236687c3818a`. Its lifecycle regression requires the exact
+sampled/storage/color-attachment/transfer feature combination Eden requests,
+and its image-format query must accept that combined usage. The complete
+62-test host suite passes. Format 130 (`VK_FORMAT_D32_SFLOAT_S8_UINT`) remains
+truthfully limited to its qualified attachment and transfer subset: Eden no
+longer asks for sampled support during Prospero format inventory and reports
+the format as non-sampleable, because the earlier FW 5.50 sampled probe left
+the native queue pending. The Prospero `video_core` rebuild passes. A guarded
+cleanup-first Flappy replay must still prove that these eleven startup errors
+are absent and that the expanded color storage paths do not regress guest
+rendering, teardown, or immediate relaunch; no new ELF has been launched for
+this host-only slice.
+
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
    through Vulkan-PS5 into `openagc-psbc`, record it in versioned shader
