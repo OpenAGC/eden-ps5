@@ -6,6 +6,7 @@
 
 #include <array>
 #include <memory>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -27,6 +28,8 @@
 namespace Service::Sockets {
 
 namespace {
+
+std::once_flag proxy_unavailable_log_once;
 
 bool IsConnectionBased(Type type) {
     switch (type) {
@@ -1111,7 +1114,13 @@ BSD::BSD(Core::System& system_, const char* name)
         proxy_packet_received = room_member->BindOnProxyPacketReceived(
             [this](const Network::ProxyPacket& packet) { OnProxyPacketReceived(packet); });
     } else {
-        LOG_ERROR(Service, "Network isn't initialized");
+        // The RoomMember callback is an optional multiplayer tunnelling path,
+        // not a prerequisite for the guest BSD socket service. Headless and
+        // console frontends intentionally run without Network::Init().
+        std::call_once(proxy_unavailable_log_once, [] {
+            LOG_DEBUG(Service,
+                      "Optional multiplayer proxy is unavailable; guest BSD sockets remain active");
+        });
     }
 }
 

@@ -39,6 +39,24 @@ class nvhost_as_gpu;
 class nvmap;
 class nvhost_gpu final : public nvdevice {
 public:
+    class ErrorNotifierState {
+    public:
+        void Set(u32 memory_handle) noexcept {
+            handle = memory_handle;
+        }
+
+        [[nodiscard]] bool IsEnabled() const noexcept {
+            return handle != 0;
+        }
+
+        [[nodiscard]] u32 MemoryHandle() const noexcept {
+            return handle;
+        }
+
+    private:
+        u32 handle{};
+    };
+
     explicit nvhost_gpu(Core::System& system_, EventInterface& events_interface_,
                         NvCore::Container& core);
     ~nvhost_gpu() override;
@@ -181,6 +199,7 @@ private:
     std::array<std::optional<IoctlAllocObjCtx>, 6> ctxObjs{};
     u32_le channel_priority{};
     u32_le channel_timeslice{};
+    ErrorNotifierState error_notifier_state{};
 
     NvResult SetNVMAPfd(IoctlSetNvmapFD& params);
     NvResult SetClientData(IoctlClientData& params);

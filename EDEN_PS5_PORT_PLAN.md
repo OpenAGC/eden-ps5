@@ -4295,18 +4295,27 @@ pkg-config file, and imported target. SDL2 explicitly supplies both
 `OpenAGC_DIR` and `SampleRate_DIR`, enables static libsamplerate, and applies a
 SHA-256-pinned direct-backend packaging patch. Its installed CMake target,
 pkg-config file, and `prospero-sdl2-config` must expose OpenAGC and
-libsamplerate while remaining free of `SceAgcDriver`. FFmpeg rejects the old
-mixed-driver metadata and refuses to configure unless SDL's static metadata
-contains libsamplerate.
+libsamplerate while remaining free of `SceAgcDriver`. The traditional static
+metadata now explicitly includes `SceVideoOut`, which cannot be inherited from
+OpenAGC's CMake target by `sdl2-config` or pkg-config consumers. SDL installs a
+shared `prospero-validate-sdl2-static` gate that requires exact `openagc`,
+`kernel`, `SceVideoOut`, and `samplerate` tokens and rejects
+`SceAgcDriver`. FFmpeg, the SDL2 extension libraries, SDL_kitchensink, OpenAL,
+and every direct Pacbrew SDL application run that gate before configure; their
+package releases were advanced so stale builds are not mistaken for the
+hardened recipes.
 
 Recipe-equivalent clean Prospero builds passed for libsamplerate and for SDL2
 with samplerate both enabled and disabled. Both SDL metadata modes passed the
 new checker. A fresh external CMake consumer of the enabled install linked
 SDL2, OpenAGC, `kernel`, `SceVideoOut`, and libsamplerate without
-`SceAgcDriver`. This is host packaging evidence only; `makepkg`/pacman is not
-available on this Mac, and no new PS5 runtime qualification is claimed from
-this slice. Build FFmpeg and the remaining dependent packages only from these
-validated package contracts.
+`SceAgcDriver`. The updated patch applies cleanly to the pinned SDL archive,
+all affected PKGBUILDs pass Bash syntax validation, and the reusable contract
+test covers the valid direct stack, forbidden driver mixing, missing
+`SceVideoOut`, misleading substring tokens, and an absent helper. This is host
+packaging evidence only; `makepkg`/pacman is not available on this Mac, and no
+new PS5 runtime qualification is claimed from this slice. Build FFmpeg and the
+remaining dependent packages only from these validated package contracts.
 
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value

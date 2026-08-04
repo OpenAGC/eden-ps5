@@ -165,8 +165,12 @@ NvResult nvhost_gpu::ZCullBind(IoctlZCullBind& params) {
 }
 
 NvResult nvhost_gpu::SetErrorNotifier(IoctlSetErrorNotifier& params) {
-    LOG_WARNING(Service_NVDRV, "(STUBBED) called, offset={:X}, size={:X}, mem={:X}", params.offset,
-                params.size, params.mem);
+    // Horizon's channel notifier ioctl uses only mem as an enable token. The
+    // Switch driver reports errors through separate ioctls/events instead of
+    // writing into the offset/size userspace range used by the Linux driver.
+    error_notifier_state.Set(params.mem);
+    LOG_DEBUG(Service_NVDRV, "called, enabled={}, mem={:#x} (offset/size ignored)",
+              error_notifier_state.IsEnabled(), error_notifier_state.MemoryHandle());
     return NvResult::Success;
 }
 
