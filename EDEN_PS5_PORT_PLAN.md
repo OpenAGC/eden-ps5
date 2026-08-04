@@ -4286,6 +4286,28 @@ by ps5debug during post-exit process inspection, after the application has
 already stopped, and is not an Eden or GPU execution failure. This completes
 the pinned FW 5.50 Flappy canary including operator-visible presentation.
 
+The dependent pacbrew packaging gate is now hardened before FFmpeg or other
+SDL consumers are rebuilt. The OpenAGC and Vulkan-PS5 recipes validate their
+installed CMake metadata and reject any `SceAgcDriver` dependency. The
+libsamplerate recipe now uses the Prospero CMake toolchain, installs a
+relocatable `SampleRate` package, and verifies its header, static archive,
+pkg-config file, and imported target. SDL2 explicitly supplies both
+`OpenAGC_DIR` and `SampleRate_DIR`, enables static libsamplerate, and applies a
+SHA-256-pinned direct-backend packaging patch. Its installed CMake target,
+pkg-config file, and `prospero-sdl2-config` must expose OpenAGC and
+libsamplerate while remaining free of `SceAgcDriver`. FFmpeg rejects the old
+mixed-driver metadata and refuses to configure unless SDL's static metadata
+contains libsamplerate.
+
+Recipe-equivalent clean Prospero builds passed for libsamplerate and for SDL2
+with samplerate both enabled and disabled. Both SDL metadata modes passed the
+new checker. A fresh external CMake consumer of the enabled install linked
+SDL2, OpenAGC, `kernel`, `SceVideoOut`, and libsamplerate without
+`SceAgcDriver`. This is host packaging evidence only; `makepkg`/pacman is not
+available on this Mac, and no new PS5 runtime qualification is claimed from
+this slice. Build FFmpeg and the remaining dependent packages only from these
+validated package contracts.
+
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
    through Vulkan-PS5 into `openagc-psbc`, record it in versioned shader
