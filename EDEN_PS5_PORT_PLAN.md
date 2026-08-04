@@ -12,9 +12,9 @@ Eden ELF. The local NRO is SHA-256
 `6e7cd9a1a22a0102a4f68ba6e434378c9b7381ce4f44a43ca376953f536aa54d`
 and its path-independent Prospero cache identity is `ee7cd9a1a22a0102`.
 The current pinned guest diagnostic Eden ELF is SHA-256
-`4fbccbe733095447f6d851110986c58c7eb0ce363be581043e808b3b5628d67d`.
+`ff3c252883753a41ba3a27cb7aea3bd9b392cb208f6672c2e3b816d21e74fc82`.
 It includes OpenAGC command-state span and capacity fixes through `d7ed7f2`,
-Vulkan-PS5 fragmented vertex/copy preparation through `1a62d45`, and explicit
+Vulkan-PS5 storage-color support through `236687c`, and explicit
 Eden disk-cache discovery/load/rejection telemetry. The guarded wrapper pins
 these exact bytes for the immediate cache-reload replay.
 
@@ -4189,10 +4189,13 @@ the native queue pending. The Prospero `video_core` rebuild passes. A guarded
 full link from Eden `b77d7b5c4994` and Vulkan-PS5 `236687c3818a` produced
 `build-prospero-full-audit2/bin/eden-ps5.elf`, SHA-256
 `ff3c252883753a41ba3a27cb7aea3bd9b392cb208f6672c2e3b816d21e74fc82`.
-A guarded cleanup-first Flappy replay must still prove that these eleven startup errors
-are absent and that the expanded color storage paths do not regress guest
-rendering, teardown, or immediate relaunch; no new ELF has been launched for
-this host-only slice.
+The updated guarded wrapper is SHA-256
+`e035024d3889d0e16621e0fd62cb9e821d65bde0bd0a48e5b7806326d4cf7c30`
+and rejects any recurrence of those eleven exact format-selection errors. A
+guarded cleanup-first Flappy replay must still prove that these eleven startup
+errors are absent and that the expanded color storage paths do not regress
+guest rendering, teardown, or immediate relaunch; no new ELF has been launched
+for this host-only slice.
 
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
