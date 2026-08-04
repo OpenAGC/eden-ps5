@@ -56,6 +56,12 @@ protected:
     /// Advances the sidecar-scoped qualification input state on the main thread.
     void AdvanceQualificationInputCycle();
 
+#ifdef __PROSPERO__
+    void InitializeProsperoPad();
+    void PollProsperoPad();
+    void ShutdownProsperoPad();
+#endif
+
     /// Converts a SDL mouse button into MouseInput mouse button
     InputCommon::MouseButton SDLButtonToMouseButton(u32 button) const;
 
@@ -108,6 +114,7 @@ protected:
     std::atomic<u32> presented_frame_limit = 0;
     bool qualification_input_cycle_enabled = false;
     bool qualification_input_cycle_capped = false;
+    bool qualification_input_cycle_started = false;
     int qualification_input_held_key = 0;
     std::size_t qualification_input_direction = 0;
     u64 qualification_input_last_step_ms = 0;
@@ -115,6 +122,12 @@ protected:
     u32 qualification_input_press_limit = 0;
     Eden::PS5::QualificationInputProfile qualification_input_profile =
         Eden::PS5::QualificationInputProfile::Generic;
+
+#ifdef __PROSPERO__
+    int prospero_pad_handle = -1;
+    u32 prospero_pad_buttons = 0;
+    bool prospero_pad_read_error_logged = false;
+#endif
 
     /// Input subsystem to use with this window.
     InputCommon::InputSubsystem* input_subsystem;

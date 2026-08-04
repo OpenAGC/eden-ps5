@@ -1,5 +1,3 @@
 game
 /data/homebrew/eden_ps5/Flappy_Bird_NX.nro
 frames=1600
-input_cycle=40
-input_profile=flappy

@@ -41,6 +41,13 @@ enum class QualificationInputKey {
     return profile == QualificationInputProfile::Flappy ? 450 : 250;
 }
 
+[[nodiscard]] constexpr bool QualificationInputMayStart(
+    QualificationInputProfile profile, std::uint32_t presented_frames) noexcept {
+    // Flappy's first counted frames precede its long shader-loading interval.
+    // The qualified title menu is visible by frame 600 on the FW 5.50 canary.
+    return profile != QualificationInputProfile::Flappy || presented_frames >= 600;
+}
+
 [[nodiscard]] constexpr QualificationInputKey QualificationInputKeyForPress(
     QualificationInputProfile profile, std::size_t press_index) noexcept {
     if (profile == QualificationInputProfile::Flappy) {

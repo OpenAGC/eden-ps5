@@ -2,16 +2,15 @@
 
 ## Current active slice (2026-08-04)
 
-### Active goal: exercise bounded Flappy gameplay input
+### Active goal: close the extended Flappy gameplay qualification
 
-The passing 300-frame Flappy renderer canary previously injected only two A
-presses, which was sufficient to reach visible game content but did not prove
-that the guest consumed sustained gameplay input. The next slice must retain
-the same cleanup, firmware, direct-`/dev/gc`, cache, rendering, presentation,
-teardown, and exact-process gates while deterministically starting a round and
-flapping for several seconds. The log must identify the selected input
-profile, cadence, every synthesized press/release, final count, and bounded
-stop; operator observation remains the oracle for visible bird movement.
+Flappy now accepts real DualSense input through `libScePad`, and the operator
+confirmed that manual control works. The apparent menu stall was the title's
+long first-load/shader-compilation interval, not a controller or Vulkan error.
+The remaining gate is one cleanup-first 1,600-frame run that reaches its normal
+`GAME PASS` and teardown markers within the bounded host window. Preserve the
+same exact firmware, direct-`/dev/gc`, cache, rendering, presentation, and
+exact-process gates; do not shorten the workload back to 300 frames.
 
 The control contract was audited against local Flappy source at
 `../FlappyBird/FlappyBirdNX/FlappyBirdNX/source/SplashScreen.cpp`,
@@ -19,18 +18,88 @@ The control contract was audited against local Flappy source at
 splash, activates Play, dismisses the tutorial, and flaps once gameplay has
 started. Loading takes two seconds, the gameplay countdown takes three
 seconds, and a jump lasts 700 ms. Eden therefore adds an explicit `flappy`
-qualification profile with only A presses, 450 ms press/release steps (one
-press every 900 ms), and an 18-press bound. This tolerates the two loading
-windows and leaves approximately seven seconds of flap input after the
-countdown without making the runner unbounded.
+qualification profile with only A presses and 450 ms press/release steps (one
+press every 900 ms). Because Eden's earliest presented frames precede the long
+shader-loading interval, automatic input now starts only after presented frame
+600. The final automatic sidecar uses a 40-press bound and 1,600-frame lifetime,
+retaining deterministic stop and teardown after sustained gameplay input.
 
 The sidecar parser accepts `input_profile=flappy` only after a valid bounded
 `input_cycle`, rejects unknown or misplaced profiles, and retains the generic
 cycle for other homebrew. The pure profile schedule exposes host-testable key
 and cadence selection. Focused host evidence passes 92 assertions across four
 launch/profile cases. The Flappy wrapper requires the exact profile, 450 ms
-step, 18-press limit, and stopped-after-release marker. A fresh committed
-Prospero artifact and cleanup-first hardware replay are still pending.
+step, 40-press limit, frame-600 start marker, stopped-after-release marker, and
+`GAME PASS 1600 frames`.
+
+The Prospero SDL3 frontend also has a direct `libScePad` bridge based on the
+qualified local SDL2 PS5 backend. It initializes User Service and Pad, opens the
+first logged-in user's controller, polls at 50 ms, translates Cross/Circle/
+Square/Triangle to Switch A/B/X/Y, Options to Plus, and the configured D-pad
+keys, emits transition telemetry, releases held inputs, and closes the handle
+during teardown. `yuzu-cmd` links `ScePad` and `SceUserService` only on
+Prospero. A separate `eden-flappy-bird-manual.launch` disables synthetic input
+while retaining the bounded 1,600-frame lifetime. Set
+`EDEN_PS5_FLAPPY_MANUAL_INPUT=1` to select it; the wrapper then requires pad
+initialization plus a real Cross press and release.
+
+The first 300-frame gameplay-profile run passed all automated gates and the
+operator saw magenta followed by Flappy. Extending the same workload to 600
+frames then exposed a real failure after native present 300: a 16-byte uniform
+descriptor range at offset 43,384,576 in a 128 MiB streaming buffer returned
+OpenAGC `AGC_ERROR_OUT_OF_MEMORY` (`0x80890004`) while transitioning from
+Undefined/Host to ShaderRead/Graphics. This was not physical-memory pressure.
+OpenAGC's persistent interval tracker had reached its artificial 32,769-range,
+512-KiB metadata ceiling.
+
+OpenAGC commit `e32fde1` raises that bounded budget to 1,048,577 ranges, or
+16 MiB of metadata for a maximally fragmented buffer. That covers one complete
+128 MiB streaming cycle with disjoint allocations at the qualified 256-byte
+alignment while retaining exact range states and eager adjacent-state merging.
+Its regression crosses the former ceiling in 512-transition batches and the
+clean unit binary passes 36,576 assertions. The wider OpenAGC CTest run retains
+five failures owned by the pre-existing uncommitted reference-game/API-doc
+slice; none is in the runtime unit suite or this change.
+
+The rebuilt 65,749,440-byte Prospero ELF with `libScePad` has SHA-256
+`726d5c59291b835470a93b65ad9ccd686b8c2009ddf19e88500ed25694a02dc1`.
+The automatic and manual 1,600-frame sidecars have SHA-256
+`22bc12a92b303d02786b2a048b22787aacad04fa81033df9792649dc04093086`
+and `b4789bf49eb03058e7e20a6bda96e3b73bcab3a85a7684ec874d42d3fba0d65c`,
+respectively. The wrapper uses a 140-second default rather than 150 or 300
+seconds: the measured cold run reached frame 600 at 98.46 seconds, after which
+presentation accelerated, so 140 seconds leaves bounded room for the remaining
+frames and teardown without making a short load failure excessively slow. The
+repinned wrapper has SHA-256
+`c735f32a97a9aa4eee86b946fed1186d49494ed12914abd660e6dd2afed907cf`.
+The cleanup-first exact-FW `5.500.008` replay passed as PID 143 using only the
+direct `/dev/gc` backend. Its primary log is
+`Vulkan-PS5/examples/qualification-logs/flappy-bird/20260804T024247Z-swapchain-run1.log`,
+SHA-256
+`7a6e15c74f9ac5157141fa96d9102915541f6607ac6a937357f4a830e5b0146d`,
+and the adjacent target klog has SHA-256
+`758ddc56f4c3cd6484bd32ec166a5a8a6b18fe579af43852adf7c7fa4d97fcb1`.
+All 40 A press/release pairs were logged, native present progressed through
+300, 400, 500, and 600, all five discovered graphics-cache records loaded with
+zero rejection, and teardown reported `unbalanced_unpins=0` and
+`outstanding_pins=0`. The primary log contains no Warning, Error, Critical,
+`VK_ERROR`, transition failure, exception, panic, or fault. PID-specific and
+global exact `eboot.bin` absence both passed twice after exit.
+
+The first manual-pad run used PID 148. It initialized pad handle 50595328 and
+recorded repeated Cross transitions plus Circle and Triangle transitions; the
+operator confirmed that control worked once loading completed. The run reached
+native present 600 at 98.46 seconds but the then-current 110-second web timeout
+expired before the configured 1,600-frame pass marker. Therefore the runner's
+`swapchain run failed` line classifies only the incomplete qualification gate,
+not a Vulkan, presentation, or pad failure. Its safety trap relaunched the
+pinned cleanup ELF and verified exact process absence. The retained diagnostic
+log is
+`Vulkan-PS5/examples/qualification-logs/flappy-bird/20260804T025658Z-swapchain-run1.log`,
+SHA-256
+`7356ed177360183df31dc459ef3ec3dfc8af0daf4be445cc596ba7bacd55f0e9`;
+its adjacent klog has SHA-256
+`fd5c2d921a7e76ba0c696f1ac542d462971011220c8cb70d30549a1ea52819ea`.
 
 ### Completed prerequisite: qualify the SDL package dependency baseline
 

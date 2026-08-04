@@ -4,6 +4,8 @@
 // SPDX-FileCopyrightText: 2016 Citra Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <array>
+
 #include <SDL3/SDL.h>
 
 #include "common/logging.h"
@@ -20,6 +22,86 @@
 #include "yuzu_cmd/yuzu_icon.h"
 
 namespace {
+
+#ifdef __PROSPERO__
+constexpr u32 Ps5PadButtonOptions = 0x0008;
+constexpr u32 Ps5PadButtonUp = 0x0010;
+constexpr u32 Ps5PadButtonRight = 0x0020;
+constexpr u32 Ps5PadButtonDown = 0x0040;
+constexpr u32 Ps5PadButtonLeft = 0x0080;
+constexpr u32 Ps5PadButtonTriangle = 0x1000;
+constexpr u32 Ps5PadButtonCircle = 0x2000;
+constexpr u32 Ps5PadButtonCross = 0x4000;
+constexpr u32 Ps5PadButtonSquare = 0x8000;
+
+struct Ps5PadTouch {
+    u16 x;
+    u16 y;
+    u8 finger;
+    u8 reserved[3];
+};
+
+struct Ps5PadTouchData {
+    u8 fingers;
+    u8 reserved0[3];
+    u32 reserved1;
+    Ps5PadTouch touch[2];
+};
+
+struct Ps5PadData {
+    u32 buttons;
+    struct {
+        u8 x;
+        u8 y;
+    } left_stick;
+    struct {
+        u8 x;
+        u8 y;
+    } right_stick;
+    struct {
+        u8 l2;
+        u8 r2;
+    } analog_buttons;
+    u16 padding;
+    float quaternion[4];
+    float velocity[3];
+    float acceleration[3];
+    Ps5PadTouchData touch;
+    u8 connected;
+    u64 timestamp;
+    u8 extension[16];
+    u8 count;
+    u8 unknown[15];
+};
+
+static_assert(sizeof(Ps5PadData) == 120);
+
+extern "C" {
+int sceUserServiceInitialize(void*);
+int sceUserServiceGetLoginUserIdList(int user_ids[4]);
+int scePadInit();
+int scePadOpen(int user_id, int type, int index, const void* parameters);
+int scePadReadState(int handle, Ps5PadData* data);
+int scePadClose(int handle);
+}
+
+struct ProsperoPadKey {
+    u32 button;
+    int scancode;
+    const char* name;
+};
+
+constexpr std::array ProsperoPadKeys{
+    ProsperoPadKey{Ps5PadButtonCross, SDL_SCANCODE_A, "Cross/A"},
+    ProsperoPadKey{Ps5PadButtonCircle, SDL_SCANCODE_S, "Circle/B"},
+    ProsperoPadKey{Ps5PadButtonSquare, SDL_SCANCODE_Z, "Square/X"},
+    ProsperoPadKey{Ps5PadButtonTriangle, SDL_SCANCODE_X, "Triangle/Y"},
+    ProsperoPadKey{Ps5PadButtonOptions, SDL_SCANCODE_M, "Options/Plus"},
+    ProsperoPadKey{Ps5PadButtonLeft, SDL_SCANCODE_1, "DPadLeft"},
+    ProsperoPadKey{Ps5PadButtonUp, SDL_SCANCODE_2, "DPadUp"},
+    ProsperoPadKey{Ps5PadButtonRight, SDL_SCANCODE_B, "DPadRight"},
+};
+#endif
 
 int QualificationInputScancode(Eden::PS5::QualificationInputKey key) {
     switch (key) {
@@ -52,14 +134,110 @@ EmuWindow_SDL3::EmuWindow_SDL3(InputCommon::InputSubsystem* input_subsystem_, Co
         LOG_CRITICAL(Frontend, "Failed to initialize SDL3: {}, Exiting...", SDL_GetError());
         exit(1);
     }
+#ifdef __PROSPERO__
+    InitializeProsperoPad();
+#endif
 }
 
 EmuWindow_SDL3::~EmuWindow_SDL3() {
     SetQualificationInputCycle(false);
+#ifdef __PROSPERO__
+    ShutdownProsperoPad();
+#endif
     system.HIDCore().UnloadInputDevices();
     input_subsystem->Shutdown();
     SDL_Quit();
 }
+
+#ifdef __PROSPERO__
+void EmuWindow_SDL3::InitializeProsperoPad() {
+    constexpr int AlreadyInitialized = static_cast<int>(0x80960003u);
+    const int user_result = sceUserServiceInitialize(nullptr);
+    if (user_result != 0 && user_result != AlreadyInitialized) {
+        LOG_ERROR(Frontend, "Prospero pad input: sceUserServiceInitialize failed result=0x{:08x}",
+                  static_cast<u32>(user_result));
+        return;
+    }
+    const int pad_result = scePadInit();
+    if (pad_result != 0) {
+        LOG_ERROR(Frontend, "Prospero pad input: scePadInit failed result=0x{:08x}",
+                  static_cast<u32>(pad_result));
+        return;
+    }
+    int user_ids[4] = {-1, -1, -1, -1};
+    const int list_result = sceUserServiceGetLoginUserIdList(user_ids);
+    if (list_result != 0) {
+        LOG_ERROR(Frontend,
+                  "Prospero pad input: sceUserServiceGetLoginUserIdList failed result=0x{:08x}",
+                  static_cast<u32>(list_result));
+        return;
+    }
+    for (const int user_id : user_ids) {
+        if (user_id == -1) {
+            continue;
+        }
+        prospero_pad_handle = scePadOpen(user_id, 0, 0, nullptr);
+        if (prospero_pad_handle >= 0) {
+            LOG_INFO(Frontend, "Prospero pad input: initialized user={} handle={}", user_id,
+                     prospero_pad_handle);
+            return;
+        }
+        LOG_ERROR(Frontend, "Prospero pad input: scePadOpen failed user={} result=0x{:08x}",
+                  user_id, static_cast<u32>(prospero_pad_handle));
+        prospero_pad_handle = -1;
+    }
+    LOG_ERROR(Frontend, "Prospero pad input: no logged-in user has an available controller");
+}
+
+void EmuWindow_SDL3::PollProsperoPad() {
+    if (prospero_pad_handle < 0) {
+        return;
+    }
+    Ps5PadData pad{};
+    const int result = scePadReadState(prospero_pad_handle, &pad);
+    if (result != 0) {
+        if (!prospero_pad_read_error_logged) {
+            LOG_ERROR(Frontend, "Prospero pad input: scePadReadState failed result=0x{:08x}",
+                      static_cast<u32>(result));
+            prospero_pad_read_error_logged = true;
+        }
+        return;
+    }
+    prospero_pad_read_error_logged = false;
+    const u32 buttons = pad.connected != 0 ? pad.buttons : 0;
+    const u32 changed = buttons ^ prospero_pad_buttons;
+    for (const auto& mapping : ProsperoPadKeys) {
+        if ((changed & mapping.button) == 0) {
+            continue;
+        }
+        const u8 pressed = (buttons & mapping.button) != 0 ? 1 : 0;
+        OnKeyEvent(mapping.scancode, pressed);
+        LOG_INFO(Frontend, "Prospero pad input: action={} button={}",
+                 pressed != 0 ? "press" : "release", mapping.name);
+    }
+    prospero_pad_buttons = buttons;
+}
+
+void EmuWindow_SDL3::ShutdownProsperoPad() {
+    if (prospero_pad_handle < 0) {
+        return;
+    }
+    for (const auto& mapping : ProsperoPadKeys) {
+        if ((prospero_pad_buttons & mapping.button) != 0) {
+            OnKeyEvent(mapping.scancode, 0);
+        }
+    }
+    prospero_pad_buttons = 0;
+    const int result = scePadClose(prospero_pad_handle);
+    if (result != 0) {
+        LOG_ERROR(Frontend, "Prospero pad input: scePadClose failed result=0x{:08x}",
+                  static_cast<u32>(result));
+    } else {
+        LOG_INFO(Frontend, "Prospero pad input: closed handle={}", prospero_pad_handle);
+    }
+    prospero_pad_handle = -1;
+}
+#endif
 
 InputCommon::MouseButton EmuWindow_SDL3::SDLButtonToMouseButton(u32 button) const {
     switch (button) {
@@ -149,6 +327,8 @@ void EmuWindow_SDL3::SetQualificationInputCycle(bool enabled, u32 press_limit,
     }
     qualification_input_cycle_enabled = enabled;
     qualification_input_cycle_capped = false;
+    qualification_input_cycle_started =
+        enabled && Eden::PS5::QualificationInputMayStart(profile, GetPresentedFrameCount());
     qualification_input_press_limit = enabled ? press_limit : 0;
     qualification_input_profile = enabled ? profile : Eden::PS5::QualificationInputProfile::Generic;
     qualification_input_direction = 0;
@@ -163,6 +343,20 @@ void EmuWindow_SDL3::SetQualificationInputCycle(bool enabled, u32 press_limit,
 
 void EmuWindow_SDL3::AdvanceQualificationInputCycle() {
     if (!qualification_input_cycle_enabled) {
+        return;
+    }
+    if (!qualification_input_cycle_started) {
+        const u32 presented_frame_count = GetPresentedFrameCount();
+        if (!Eden::PS5::QualificationInputMayStart(qualification_input_profile,
+                                                   presented_frame_count)) {
+            return;
+        }
+        qualification_input_cycle_started = true;
+        qualification_input_last_step_ms = SDL_GetTicks();
+        LOG_INFO(Frontend,
+                 "PS5 qualification input cycle: started profile={} presented_frames={}",
+                 Eden::PS5::QualificationInputProfileName(qualification_input_profile),
+                 presented_frame_count);
         return;
     }
     const u64 step_interval_ms =
@@ -313,6 +507,9 @@ void EmuWindow_SDL3::WaitEvent() {
 
     SDL_ClearError();
     const bool received_event = qualification_input_cycle_enabled
+#ifdef __PROSPERO__
+                                    || prospero_pad_handle >= 0
+#endif
                                     ? SDL_WaitEventTimeout(&event, 50)
                                     : SDL_WaitEvent(&event);
     if (!received_event) {
@@ -321,6 +518,9 @@ void EmuWindow_SDL3::WaitEvent() {
             // https://github.com/libsdl-org/SDL/issues/5780
             // Sometimes SDL will return without actually having hit an error condition;
             // just ignore it in this case.
+#ifdef __PROSPERO__
+            PollProsperoPad();
+#endif
             AdvanceQualificationInputCycle();
             return;
         }
@@ -383,6 +583,9 @@ void EmuWindow_SDL3::WaitEvent() {
     }
 
     if (is_open) {
+#ifdef __PROSPERO__
+        PollProsperoPad();
+#endif
         AdvanceQualificationInputCycle();
     } else {
         SetQualificationInputCycle(false);

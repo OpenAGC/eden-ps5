@@ -67,11 +67,16 @@ TEST_CASE("PS5 launch configuration parses exact modes", "[ps5]") {
 TEST_CASE("PS5 qualification input profiles expose deterministic keys and cadence", "[ps5]") {
     using Eden::PS5::QualificationInputKey;
     using Eden::PS5::QualificationInputKeyForPress;
+    using Eden::PS5::QualificationInputMayStart;
     using Eden::PS5::QualificationInputProfile;
     using Eden::PS5::QualificationInputStepIntervalMs;
 
     REQUIRE(QualificationInputStepIntervalMs(QualificationInputProfile::Generic) == 250);
     REQUIRE(QualificationInputStepIntervalMs(QualificationInputProfile::Flappy) == 450);
+    REQUIRE(QualificationInputMayStart(QualificationInputProfile::Generic, 0));
+    REQUIRE_FALSE(QualificationInputMayStart(QualificationInputProfile::Flappy, 0));
+    REQUIRE_FALSE(QualificationInputMayStart(QualificationInputProfile::Flappy, 599));
+    REQUIRE(QualificationInputMayStart(QualificationInputProfile::Flappy, 600));
     REQUIRE(QualificationInputKeyForPress(QualificationInputProfile::Generic, 4) ==
             QualificationInputKey::B);
     REQUIRE(QualificationInputKeyForPress(QualificationInputProfile::Generic, 9) ==
