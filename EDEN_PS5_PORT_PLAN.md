@@ -34,7 +34,17 @@ OpenAGC build, and the full Eden `yuzu-cmd` link. Hardware qualification still
 requires a fresh reboot because direct `/dev/gc` and the installed driver must
 never be used in the same boot cycle. The repinned Sony-only Flappy wrapper has
 SHA-256
-`579faf90434659d67336032d00ea1f6f8a039974123cf3d66bc7c133a7a4b42f`.
+`0ed65394a3ceacfe7a1218782d76c8a7ac17bb49e4cce6bc8032d4a4cc514d60`.
+
+Pre-launch review found that Vulkan-PS5's guarded runner consumed only ten
+required patterns while this wrapper supplied eleven, silently omitting the
+manual Cross-press oracle. Vulkan-PS5 commit `fd3b732` adds bounded enforcement
+and present/missing regression coverage for the eleventh pattern. The runner's
+new pinned SHA-256 is
+`6730996b22594de47467d46addfcf6c8def1ccfa085d233120371c1fd0b6db68`.
+The mandatory reject expression was also compacted to 252 bytes after adding
+the Sony-only exclusion, remaining below the runner's fail-closed 256-byte
+limit without dropping its covered failure classes.
 
 Automatic SDL3 key injection has been removed. The sidecar grammar now accepts
 only a game path and optional bounded `frames=N`; former `input_cycle` and

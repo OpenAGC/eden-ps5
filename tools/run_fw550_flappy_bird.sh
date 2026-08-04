@@ -17,7 +17,7 @@ sidecar="$repo_dir/src/ps5/eden-flappy-bird.launch"
 log_dir="$vulkan_repo/examples/qualification-logs/flappy-bird"
 pinned_eden_sha256=2df2321b40545aff81d954c0556633166b974bd0494cf74b4b05fb8020bc5bc2
 pinned_cleanup_sha256=ff88ac293a55ec4ba5636a6556b74ffbeaf5d1093e96f86208cc55ce262565c5
-pinned_runner_sha256=96e396e42d6b3a73eef0ed7de78fe0e318b1aa51cdcf8ff2c89a54b013452c08
+pinned_runner_sha256=6730996b22594de47467d46addfcf6c8def1ccfa085d233120371c1fd0b6db68
 pinned_process_helper_sha256=c46e8b9f1095599498763e1a9e3923cfa47f787d48c2b952a1a90ab6feaaabe5
 pinned_pyps4debug_commit=8f1443bb97bd6e2a77ed5ea2cc9145975d3152eb
 pinned_pyps4debug_lock_sha256=c9eb85e0f0bc1bde6c4e00f1112a1aea982dc7eed024eb973fca91e436051033
@@ -89,10 +89,10 @@ cache_reload_pattern='Prospero guest pipeline cache live: reason=disk-load-compl
 pad_init_pattern='Prospero pad input: initialized user=[0-9]+ handle=[0-9]+'
 pad_press_pattern='Prospero pad input: action=press button=Cross/A'
 pad_release_pattern='Prospero pad input: action=release button=Cross/A'
-reject_pattern='(alloc|map|mprotect|dynarmic|vulkan-ps5:).*failed|invalid JIT mapping'
-reject_pattern="$reject_pattern|Failed to (present|derive|obtain|load)|GPU thread failure"
-reject_pattern="$reject_pattern|presented-frame oracle failed|CPUCore not initialized"
-reject_pattern="$reject_pattern|backend=direct-dev-gc|direct_gc=true"
+reject_pattern='(alloc|map|mprotect|dynarmic|vulkan-ps5:).*fail|invalid JIT'
+reject_pattern="$reject_pattern|Failed to (present|derive|obtain|load)|GPU thread fail"
+reject_pattern="$reject_pattern|presented-frame oracle failed|CPUCore not init"
+reject_pattern="$reject_pattern|direct(_gc=true|-dev-gc)"
 reject_pattern="$reject_pattern|GetSupportedFormat: Format=(44|51|64|76|83|97|1(00|03|09|22|30)) "
 if [ -n "${EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN:-}" ]; then
     reject_pattern="$reject_pattern|$EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN"
