@@ -15,7 +15,7 @@ cleanup_elf=${EDEN_PS5_CLEANUP_ELF:-$vulkan_repo/build-prospero-msaa/vulkan_ps5_
 homebrew=${EDEN_PS5_FLAPPY_BIRD_NRO:-$repo_dir/../Flappy_Bird_NX.nro}
 sidecar="$repo_dir/src/ps5/eden-flappy-bird.launch"
 log_dir="$vulkan_repo/examples/qualification-logs/flappy-bird"
-pinned_eden_sha256=194e51d033f890410530901dc961b4c00c243a8289c09157851d3f6f8463466f
+pinned_eden_sha256=2df2321b40545aff81d954c0556633166b974bd0494cf74b4b05fb8020bc5bc2
 pinned_cleanup_sha256=ff88ac293a55ec4ba5636a6556b74ffbeaf5d1093e96f86208cc55ce262565c5
 pinned_runner_sha256=96e396e42d6b3a73eef0ed7de78fe0e318b1aa51cdcf8ff2c89a54b013452c08
 pinned_process_helper_sha256=c46e8b9f1095599498763e1a9e3923cfa47f787d48c2b952a1a90ab6feaaabe5
@@ -92,6 +92,7 @@ pad_release_pattern='Prospero pad input: action=release button=Cross/A'
 reject_pattern='(alloc|map|mprotect|dynarmic|vulkan-ps5:).*failed|invalid JIT mapping'
 reject_pattern="$reject_pattern|Failed to (present|derive|obtain|load)|GPU thread failure"
 reject_pattern="$reject_pattern|presented-frame oracle failed|CPUCore not initialized"
+reject_pattern="$reject_pattern|backend=direct-dev-gc|direct_gc=true"
 reject_pattern="$reject_pattern|GetSupportedFormat: Format=(44|51|64|76|83|97|1(00|03|09|22|30)) "
 if [ -n "${EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN:-}" ]; then
     reject_pattern="$reject_pattern|$EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN"
@@ -112,7 +113,7 @@ VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_5="$telemetry_baseline_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_6='Prospero Dynarmic memory path: core=0 sparse_page_table=true callback_fallback=true' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_7="$cache_reload_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_8='Prospero audio policy: sink=null fail_soft=true' \
-VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_9='^\[openagc\] backend=direct-dev-gc fd_open=true capability=0x[0-9A-Fa-f]+$' \
+VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_9='^\[openagc\] backend=sony-installed installed_driver=true direct_gc=false$' \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_10="$pad_release_pattern" \
 VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_11="$pad_press_pattern" \
 VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \

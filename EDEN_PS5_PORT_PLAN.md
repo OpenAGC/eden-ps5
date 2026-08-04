@@ -7,10 +7,34 @@
 Flappy now accepts real DualSense input through `libScePad`, and the operator
 confirmed that manual control works. The apparent menu stall was the title's
 long first-load/shader-compilation interval, not a controller or Vulkan error.
-The remaining gate is one cleanup-first 1,600-frame run that reaches its normal
-`GAME PASS` and teardown markers within the bounded host window. Preserve the
-same exact firmware, direct-`/dev/gc`, cache, rendering, presentation, and
-exact-process gates; do not shorten the workload back to 300 frames.
+The remaining gate is one fresh-boot, cleanup-first 1,600-frame run through the
+installed `libSceAgcDriver.sprx` carrier that reaches its normal `GAME PASS`
+and teardown markers within the bounded host window. Preserve the same exact
+firmware, cache, rendering, presentation, and exact-process gates; do not
+shorten the workload back to 300 frames.
+
+OpenAGC commits `21c42e3` and `4b90e9c` close the carrier-selection bug found
+during this pivot. A Sony-linked build no longer supplies the direct backend
+as an automatic fallback: missing or incomplete installed-driver discovery
+fails closed. Every target PS5 is expected to provide
+`libSceAgcDriver.sprx`, and a missing module in this linked artifact is treated
+as an invalid artifact/loader state, not a reason to open `/dev/gc`. Successful
+selection emits
+`[openagc] backend=sony-installed installed_driver=true direct_gc=false`.
+The active Flappy wrapper requires that exact marker and rejects
+`backend=direct-dev-gc` or `direct_gc=true`.
+
+The rebuilt 65,750,920-byte `eden-ps5.elf` has SHA-256
+`2df2321b40545aff81d954c0556633166b974bd0494cf74b4b05fb8020bc5bc2`
+and a hard `DT_NEEDED` entry for `libSceAgcDriver.sprx`. Its linked direct
+backend strings are dead code for this configuration and are not runtime
+evidence; the required carrier marker is the qualification oracle. Offline
+verification passes all 36,698 OpenAGC runtime assertions, the strict Prospero
+OpenAGC build, and the full Eden `yuzu-cmd` link. Hardware qualification still
+requires a fresh reboot because direct `/dev/gc` and the installed driver must
+never be used in the same boot cycle. The repinned Sony-only Flappy wrapper has
+SHA-256
+`579faf90434659d67336032d00ea1f6f8a039974123cf3d66bc7c133a7a4b42f`.
 
 Automatic SDL3 key injection has been removed. The sidecar grammar now accepts
 only a game path and optional bounded `frames=N`; former `input_cycle` and
