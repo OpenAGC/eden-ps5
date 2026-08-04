@@ -4186,7 +4186,10 @@ truthfully limited to its qualified attachment and transfer subset: Eden no
 longer asks for sampled support during Prospero format inventory and reports
 the format as non-sampleable, because the earlier FW 5.50 sampled probe left
 the native queue pending. The Prospero `video_core` rebuild passes. A guarded
-cleanup-first Flappy replay must still prove that these eleven startup errors
+full link from Eden `b77d7b5c4994` and Vulkan-PS5 `236687c3818a` produced
+`build-prospero-full-audit2/bin/eden-ps5.elf`, SHA-256
+`ff3c252883753a41ba3a27cb7aea3bd9b392cb208f6672c2e3b816d21e74fc82`.
+A guarded cleanup-first Flappy replay must still prove that these eleven startup errors
 are absent and that the expanded color storage paths do not regress guest
 rendering, teardown, or immediate relaunch; no new ELF has been launched for
 this host-only slice.
