@@ -12,8 +12,6 @@
 
 #include "core/frontend/emu_window.h"
 #include "core/frontend/graphics_context.h"
-#include "ps5/qualification_input.h"
-
 struct SDL_Window;
 
 namespace Core {
@@ -42,9 +40,6 @@ public:
     void SetPresentedFrameLimit(u32 limit);
     u32 GetPresentedFrameCount() const;
     void OnFrameDisplayed() override;
-    void SetQualificationInputCycle(bool enabled, u32 press_limit = 0,
-                                    Eden::PS5::QualificationInputProfile profile =
-                                        Eden::PS5::QualificationInputProfile::Generic);
 
     // Sets the window icon from yuzu.bmp
     void SetWindowIcon();
@@ -52,9 +47,6 @@ public:
 protected:
     /// Called by WaitEvent when a key is pressed or released.
     void OnKeyEvent(int key, u8 state);
-
-    /// Advances the sidecar-scoped qualification input state on the main thread.
-    void AdvanceQualificationInputCycle();
 
 #ifdef __PROSPERO__
     void InitializeProsperoPad();
@@ -112,16 +104,6 @@ protected:
 
     std::atomic<u32> presented_frames = 0;
     std::atomic<u32> presented_frame_limit = 0;
-    bool qualification_input_cycle_enabled = false;
-    bool qualification_input_cycle_capped = false;
-    bool qualification_input_cycle_started = false;
-    int qualification_input_held_key = 0;
-    std::size_t qualification_input_direction = 0;
-    u64 qualification_input_last_step_ms = 0;
-    u32 qualification_input_press_count = 0;
-    u32 qualification_input_press_limit = 0;
-    Eden::PS5::QualificationInputProfile qualification_input_profile =
-        Eden::PS5::QualificationInputProfile::Generic;
 
 #ifdef __PROSPERO__
     int prospero_pad_handle = -1;

@@ -12,25 +12,12 @@ The remaining gate is one cleanup-first 1,600-frame run that reaches its normal
 same exact firmware, direct-`/dev/gc`, cache, rendering, presentation, and
 exact-process gates; do not shorten the workload back to 300 frames.
 
-The control contract was audited against local Flappy source at
-`../FlappyBird/FlappyBirdNX/FlappyBirdNX/source/SplashScreen.cpp`,
-`TitleScreen.cpp`, `GameScreen.cpp`, and `Settings.hpp`. `KEY_A` skips the
-splash, activates Play, dismisses the tutorial, and flaps once gameplay has
-started. Loading takes two seconds, the gameplay countdown takes three
-seconds, and a jump lasts 700 ms. Eden therefore adds an explicit `flappy`
-qualification profile with only A presses and 450 ms press/release steps (one
-press every 900 ms). Because Eden's earliest presented frames precede the long
-shader-loading interval, automatic input now starts only after presented frame
-600. The final automatic sidecar uses a 40-press bound and 1,600-frame lifetime,
-retaining deterministic stop and teardown after sustained gameplay input.
-
-The sidecar parser accepts `input_profile=flappy` only after a valid bounded
-`input_cycle`, rejects unknown or misplaced profiles, and retains the generic
-cycle for other homebrew. The pure profile schedule exposes host-testable key
-and cadence selection. Focused host evidence passes 92 assertions across four
-launch/profile cases. The Flappy wrapper requires the exact profile, 450 ms
-step, 40-press limit, frame-600 start marker, stopped-after-release marker, and
-`GAME PASS 1600 frames`.
+Automatic SDL3 key injection has been removed. The sidecar grammar now accepts
+only a game path and optional bounded `frames=N`; former `input_cycle` and
+qualification `input_profile` directives fail closed. This removes the
+qualification scheduler, its synthetic `OnKeyEvent` calls, timing state, and
+profile helpers rather than leaving a parsed option that silently does nothing.
+The 2048 and Flappy sidecars no longer request synthetic input.
 
 The Prospero SDL3 frontend also has a direct `libScePad` bridge based on the
 qualified local SDL2 PS5 backend. It initializes User Service and Pad, opens the
@@ -38,10 +25,9 @@ first logged-in user's controller, polls at 50 ms, translates Cross/Circle/
 Square/Triangle to Switch A/B/X/Y, Options to Plus, and the configured D-pad
 keys, emits transition telemetry, releases held inputs, and closes the handle
 during teardown. `yuzu-cmd` links `ScePad` and `SceUserService` only on
-Prospero. A separate `eden-flappy-bird-manual.launch` disables synthetic input
-while retaining the bounded 1,600-frame lifetime. Set
-`EDEN_PS5_FLAPPY_MANUAL_INPUT=1` to select it; the wrapper then requires pad
-initialization plus a real Cross press and release.
+Prospero. Flappy's single bounded 1,600-frame sidecar is manual-only, and its
+wrapper requires pad initialization plus a real Cross press and release. There
+is no environment switch back to automatic input.
 
 The first 300-frame gameplay-profile run passed all automated gates and the
 operator saw magenta followed by Flappy. Extending the same workload to 600
@@ -61,17 +47,24 @@ clean unit binary passes 36,576 assertions. The wider OpenAGC CTest run retains
 five failures owned by the pre-existing uncommitted reference-game/API-doc
 slice; none is in the runtime unit suite or this change.
 
-The rebuilt 65,749,440-byte Prospero ELF with `libScePad` has SHA-256
-`726d5c59291b835470a93b65ad9ccd686b8c2009ddf19e88500ed25694a02dc1`.
-The automatic and manual 1,600-frame sidecars have SHA-256
-`22bc12a92b303d02786b2a048b22787aacad04fa81033df9792649dc04093086`
-and `b4789bf49eb03058e7e20a6bda96e3b73bcab3a85a7684ec874d42d3fba0d65c`,
-respectively. The wrapper uses a 140-second default rather than 150 or 300
-seconds: the measured cold run reached frame 600 at 98.46 seconds, after which
+The rebuilt 65,749,696-byte Prospero ELF with manual-only `libScePad` input has
+SHA-256
+`194e51d033f890410530901dc961b4c00c243a8289c09157851d3f6f8463466f`.
+The single 1,600-frame Flappy sidecar has SHA-256
+`b4789bf49eb03058e7e20a6bda96e3b73bcab3a85a7684ec874d42d3fba0d65c`;
+the 600-frame 2048 sidecar has SHA-256
+`9f85dcac310c0031ca32bd735a8e6a93d04bfb81c9d60aedc3a659b09c2c5e2b`.
+Their repinned wrappers have SHA-256
+`865129fc68d4e975dacd3d0d5edf6a82d26295ba5518b762fa556e08ecc15b6e`
+and `0fecbfef2571bf9cfc81752f6991a385154e75bf0b456d012e6d5fa2ba4676e8`,
+respectively. The launch parser's focused suite passes 38 assertions across
+three cases, including fail-closed coverage for every removed automatic-input
+directive, and the Prospero `yuzu-cmd` target rebuilds successfully.
+
+The Flappy wrapper uses a 140-second default rather than 150 or 300 seconds:
+the measured cold run reached frame 600 at 98.46 seconds, after which
 presentation accelerated, so 140 seconds leaves bounded room for the remaining
-frames and teardown without making a short load failure excessively slow. The
-repinned wrapper has SHA-256
-`c735f32a97a9aa4eee86b946fed1186d49494ed12914abd660e6dd2afed907cf`.
+frames and teardown without making a short load failure excessively slow.
 The cleanup-first exact-FW `5.500.008` replay passed as PID 143 using only the
 direct `/dev/gc` backend. Its primary log is
 `Vulkan-PS5/examples/qualification-logs/flappy-bird/20260804T024247Z-swapchain-run1.log`,

@@ -77,32 +77,16 @@ native present sequence 63 and left no exact `eboot.bin` after cleanup. This
 qualifies immediate cache reload, but not the separate 300-present gate: the
 45-second bound expired while the title remained at its static intro.
 
-Qualification sidecars may use `input_cycle=N`. `input_cycle=1` preserves the
-legacy unbounded cycle; values from 2 through 10000 stop key injection after
-exactly N presses while retaining nonblocking event polling. Flappy currently
-uses two: the first advances the splash and the second is consumed during the
-following loading interval, leaving the title/intro to render continuously.
-Its wrapper requires the exact stop marker before a 300-present result can
-pass.
+Qualification sidecars never synthesize controller or keyboard input. They may
+select a game and an optional bounded `frames=N` lifetime only. On Prospero,
+interactive qualification uses the native `libScePad` bridge; obsolete
+`input_cycle` and qualification `input_profile` options fail closed as malformed
+sidecars.
 
-The 48-press hardware replay confirmed that later input was still able to enter
-another scene transition before injection stopped, ending at native present
-sequence 63. The two-press calibration removes those later transitions while
-preserving the exact same Eden ELF.
-
-The two-press replay advanced through native present sequence 255. Its process
-clock reached 37.86 seconds when the 45-second web request expired because the
-request also includes roughly seven seconds of launch overhead. The wrapper
-therefore uses a bounded 55-second host deadline, giving the process enough
-time for the remaining 44 frames without approaching the rejected 150-second
-diagnostic window.
-
-Final automated FW 5.50 evidence is
-`20260803T232023Z-swapchain-run1.log`: exact FW and direct backend, fail-soft
-audio, two-press stop, 5/5 graphics-cache reload with zero rejection, exactly
-300 presented frames, orderly destructor telemetry, and repeated PID/global
-exact-process absence all pass. Operator-visible confirmation of this exact
-ELF remains mandatory before declaring the canary complete.
+Earlier 48-press and two-press logs remain historical renderer evidence only.
+They predate removal of synthetic SDL3 input and cannot qualify the current
+manual-only ELF. New interactive evidence must contain `libScePad` transition
+telemetry and operator confirmation.
 
 The first Flappy hardware attempt reached its accelerated GLES2 renderer and
 one native present, then exposed an eager allocation in the guest GPU

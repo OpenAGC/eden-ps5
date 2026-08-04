@@ -41,10 +41,11 @@ LaunchConfigError ParseLaunchConfig(std::string_view text, LaunchConfig& config)
     config.game_path.assign(path);
     if (option_offset != std::string_view::npos) {
         constexpr std::string_view FramePrefix = "frames=";
-        constexpr std::string_view InputCyclePrefix = "input_cycle=";
-        constexpr std::string_view InputProfilePrefix = "input_profile=";
         const std::string_view options = body.substr(option_offset + 1);
         const std::size_t second_option_offset = options.find('\n');
+        if (second_option_offset != std::string_view::npos) {
+            return LaunchConfigError::Malformed;
+        }
         const std::string_view frame_option = options.substr(0, second_option_offset);
         if (!frame_option.starts_with(FramePrefix)) {
             return LaunchConfigError::Malformed;
@@ -58,38 +59,6 @@ LaunchConfigError ParseLaunchConfig(std::string_view text, LaunchConfig& config)
             return LaunchConfigError::Malformed;
         }
         config.presented_frame_limit = frame_limit;
-        if (second_option_offset != std::string_view::npos) {
-            const std::string_view remaining_options = options.substr(second_option_offset + 1);
-            const std::size_t third_option_offset = remaining_options.find('\n');
-            const std::string_view input_option = remaining_options.substr(0, third_option_offset);
-            if (!input_option.starts_with(InputCyclePrefix)) {
-                return LaunchConfigError::Malformed;
-            }
-            const std::string_view input_value = input_option.substr(InputCyclePrefix.size());
-            std::uint32_t press_limit = 0;
-            const auto [input_end, input_error] = std::from_chars(
-                input_value.data(), input_value.data() + input_value.size(), press_limit);
-            if (input_error != std::errc{} || input_end != input_value.data() + input_value.size() ||
-                press_limit == 0 || press_limit > MaxQualificationInputPressLimit) {
-                return LaunchConfigError::Malformed;
-            }
-            config.qualification_input_cycle = true;
-            // Preserve input_cycle=1 as the original unbounded mode. Values
-            // greater than one cap synthesized presses for deterministic games.
-            config.qualification_input_press_limit = press_limit == 1 ? 0 : press_limit;
-            if (third_option_offset != std::string_view::npos) {
-                const std::string_view profile_option =
-                    remaining_options.substr(third_option_offset + 1);
-                if (!profile_option.starts_with(InputProfilePrefix)) {
-                    return LaunchConfigError::Malformed;
-                }
-                const std::string_view profile = profile_option.substr(InputProfilePrefix.size());
-                if (profile != "flappy") {
-                    return LaunchConfigError::Malformed;
-                }
-                config.qualification_input_profile = QualificationInputProfile::Flappy;
-            }
-        }
     }
     return LaunchConfigError::None;
 }

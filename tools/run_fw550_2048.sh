@@ -14,13 +14,13 @@ elf=${EDEN_PS5_ELF:-$repo_dir/build-prospero-full-audit2/bin/eden-ps5.elf}
 cleanup_elf=${EDEN_PS5_CLEANUP_ELF:-$vulkan_repo/build-prospero-msaa/vulkan_ps5_process_cleanup.elf}
 homebrew=${EDEN_PS5_2048_NRO:-$repo_dir/../2048.nro}
 sidecar="$repo_dir/src/ps5/eden-2048.launch"
-pinned_eden_sha256=ad5160147212771bb43b98aea8f4a835bcb735c315b4c84e362761d9cdf956cb
-pinned_cleanup_sha256=9fd6b41cf2ea87989c4217234c6f34c96a1ca5dc482355af1258539db77d4d76
-pinned_runner_sha256=1c2da402df3ca3eb30e7121e91abeb83c7da06aa4ff9c4e48e18fac5ec778552
+pinned_eden_sha256=194e51d033f890410530901dc961b4c00c243a8289c09157851d3f6f8463466f
+pinned_cleanup_sha256=ff88ac293a55ec4ba5636a6556b74ffbeaf5d1093e96f86208cc55ce262565c5
+pinned_runner_sha256=96e396e42d6b3a73eef0ed7de78fe0e318b1aa51cdcf8ff2c89a54b013452c08
 pinned_process_helper_sha256=c46e8b9f1095599498763e1a9e3923cfa47f787d48c2b952a1a90ab6feaaabe5
 pinned_pyps4debug_commit=8f1443bb97bd6e2a77ed5ea2cc9145975d3152eb
 pinned_pyps4debug_lock_sha256=c9eb85e0f0bc1bde6c4e00f1112a1aea982dc7eed024eb973fca91e436051033
-sidecar_sha256=e5c10f0d91bcb683f8e9f41a1bce44228d07317ff1f07236fcfabf702f4a4bac
+sidecar_sha256=9f85dcac310c0031ca32bd735a8e6a93d04bfb81c9d60aedc3a659b09c2c5e2b
 homebrew_sha256=cd7e7f343830920196590d99c82a9f1ab8a375eeaeb943fa6c671aa68250a20d
 cache_identity=cd7e7f3438309201
 websrv_timeout=${EDEN_PS5_WEBSRV_TIMEOUT:-900}
@@ -86,7 +86,6 @@ fi
 run=1
 native_present_600_pattern='^vulkan-ps5: native present 600-frame gate complete successes=600 frame=[0-9]+ index=[0-2]$'
 firmware_pattern='^\[openagc\] system software raw=0x05500008 string= 5\.500\.008$'
-input_cycle_pattern='PS5 qualification input cycle: enabled=true interval_ms=50'
 reject_pattern='allocation failed|mapping failed|mmap failed|mprotect failed|^eden-ps5 dynarmic .* failed:|terminating without executing an invalid JIT mapping|Failed to present|GPU thread failure|^vulkan-ps5: .*failed'
 reject_pattern="$reject_pattern|Failed to derive the Prospero shader-cache identity"
 if [ -n "${EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN:-}" ]; then
@@ -96,9 +95,8 @@ fi
 while [ "$run" -le 2 ]; do
     required_pattern="$native_present_600_pattern"
     required_pattern_2="$firmware_pattern"
-    required_pattern_3="$input_cycle_pattern"
-    required_pattern_4="EdenMain: Prospero shader-cache identity: $cache_identity"
-    required_pattern_5='^\[psbc\] Parameter exports: stage=0 count=1$'
+    required_pattern_3="EdenMain: Prospero shader-cache identity: $cache_identity"
+    required_pattern_4='^\[psbc\] Parameter exports: stage=0 count=1$'
     VULKAN_PS5_QUALIFICATION_ELF="$elf" \
     VULKAN_PS5_CLEANUP_ELF="$cleanup_elf" \
     VULKAN_PS5_QUALIFICATION_REMOTE_NAME=eden_ps5 \
@@ -109,7 +107,6 @@ while [ "$run" -le 2 ]; do
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_2="$required_pattern_2" \
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_3="$required_pattern_3" \
     VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_4="$required_pattern_4" \
-    VULKAN_PS5_QUALIFICATION_REQUIRED_PATTERN_5="$required_pattern_5" \
     VULKAN_PS5_QUALIFICATION_REJECT_PATTERN="$reject_pattern" \
     VULKAN_PS5_WEBSRV_TIMEOUT="$websrv_timeout" \
     VULKAN_PS5_LIVE_KLOG_TIMEOUT="$live_klog_timeout" \
