@@ -188,11 +188,17 @@ Result GetInfo(Core::System& system, u64* result, InfoType info_id_type, Handle 
         *result = GetCurrentProcess(system.Kernel()).GetRandomEntropy(info_sub_id);
         R_SUCCEED();
 
-    case InfoType::InitialProcessIdRange:
-        LOG_WARNING(Kernel_SVC,
-                    "(STUBBED) Attempted to query privileged process id bounds, returned 0");
-        *result = 0;
+    case InfoType::InitialProcessIdRange: {
+        // Horizon exposed this through GetInfo only on 4.x and moved it to
+        // GetSystemInfo afterward. Keep the legacy form for homebrew built
+        // against the older ABI, but preserve Atmosphere's validation and
+        // return the actual kernel allocation bounds.
+        R_UNLESS(handle == 0, ResultInvalidHandle);
+        const auto process_id_bound = GetInitialProcessIdRangeValue(info_sub_id);
+        R_UNLESS(process_id_bound.has_value(), ResultInvalidCombination);
+        *result = *process_id_bound;
         R_SUCCEED();
+    }
 
     case InfoType::ThreadTickCount: {
         constexpr u64 num_cpus = 4;

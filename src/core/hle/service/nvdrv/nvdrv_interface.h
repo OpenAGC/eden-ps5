@@ -13,6 +13,52 @@ namespace Service::Nvidia {
 
 class NVDRV final : public ServiceFramework<NVDRV> {
 public:
+    class LifecycleState {
+    public:
+        [[nodiscard]] NvResult Initialize(bool has_valid_process) noexcept {
+            if (initialized) {
+                return NvResult::Success;
+            }
+            if (!has_valid_process) {
+                return NvResult::BadParameter;
+            }
+            initialized = true;
+            return NvResult::Success;
+        }
+
+        [[nodiscard]] NvResult SetAruid(u64 caller_pid, u64 requested_aruid) noexcept {
+            if (!initialized) {
+                return NvResult::NotInitialized;
+            }
+            if (caller_pid == 0 || caller_pid != requested_aruid) {
+                return NvResult::AccessDenied;
+            }
+            aruid = requested_aruid;
+            return NvResult::Success;
+        }
+
+        void SetGraphicsFirmwareMemoryMarginEnabled(u64 value) noexcept {
+            graphics_firmware_memory_margin_enabled = value != 0;
+        }
+
+        [[nodiscard]] bool IsInitialized() const noexcept {
+            return initialized;
+        }
+
+        [[nodiscard]] u64 Aruid() const noexcept {
+            return aruid;
+        }
+
+        [[nodiscard]] bool IsGraphicsFirmwareMemoryMarginEnabled() const noexcept {
+            return graphics_firmware_memory_margin_enabled;
+        }
+
+    private:
+        bool initialized{};
+        u64 aruid{};
+        bool graphics_firmware_memory_margin_enabled{};
+    };
+
     explicit NVDRV(Core::System& system_, std::shared_ptr<Module> nvdrv_, const char* name);
     ~NVDRV() override;
 
@@ -37,8 +83,7 @@ private:
 
     std::shared_ptr<Module> nvdrv;
 
-    u64 pid{};
-    bool is_initialized{};
+    LifecycleState lifecycle_state{};
     NvCore::SessionId session_id{};
     Common::ScratchBuffer<u8> output_buffer;
     Common::ScratchBuffer<u8> inline_output_buffer;

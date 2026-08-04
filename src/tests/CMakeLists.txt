@@ -18,8 +18,10 @@ add_executable(tests
     common/unique_function.cpp
     core/core_timing.cpp
     core/internal_network/network.cpp
+    core/nvdrv_lifecycle.cpp
     core/nvhost_gpu_error_notifier.cpp
     core/nvmap_pin_state.cpp
+    core/svc_info.cpp
     video_core/memory_tracker.cpp
     input_common/calibration_configuration_job.cpp
 )

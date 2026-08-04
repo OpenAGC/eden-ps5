@@ -11,7 +11,6 @@
 #ifdef __PROSPERO__
 #include "common/ps5_qualification_trace.h"
 #endif
-#include "common/scope_exit.h"
 #include "common/string_util.h"
 #include "core/core.h"
 #include "core/hle/kernel/k_event.h"
@@ -29,7 +28,7 @@ void NVDRV::Open(HLERequestContext& ctx) {
     IPC::ResponseBuilder rb{ctx, 4};
     rb.Push(ResultSuccess);
 
-    if (!is_initialized) {
+    if (!lifecycle_state.IsInitialized()) {
         rb.Push<DeviceFD>(0);
         rb.PushEnum(NvResult::NotInitialized);
 
@@ -66,7 +65,7 @@ void NVDRV::Ioctl1(HLERequestContext& ctx) {
     const auto command = rp.PopRaw<Ioctl>();
     LOG_DEBUG(Service_NVDRV, "called fd={}, ioctl={:#08x}", fd, command.raw);
 
-    if (!is_initialized) {
+    if (!lifecycle_state.IsInitialized()) {
         ServiceError(ctx, NvResult::NotInitialized);
         LOG_ERROR(Service_NVDRV, "NvServices is not initialized!");
         return;
@@ -102,7 +101,7 @@ void NVDRV::Ioctl2(HLERequestContext& ctx) {
 #endif
     LOG_DEBUG(Service_NVDRV, "called fd={}, ioctl={:#08x}", fd, command.raw);
 
-    if (!is_initialized) {
+    if (!lifecycle_state.IsInitialized()) {
         ServiceError(ctx, NvResult::NotInitialized);
         LOG_ERROR(Service_NVDRV, "NvServices is not initialized!");
         return;
@@ -144,7 +143,7 @@ void NVDRV::Ioctl3(HLERequestContext& ctx) {
     const auto command = rp.PopRaw<Ioctl>();
     LOG_DEBUG(Service_NVDRV, "called fd={}, ioctl={:#08x}", fd, command.raw);
 
-    if (!is_initialized) {
+    if (!lifecycle_state.IsInitialized()) {
         ServiceError(ctx, NvResult::NotInitialized);
         LOG_ERROR(Service_NVDRV, "NvServices is not initialized!");
         return;
@@ -169,7 +168,7 @@ void NVDRV::Ioctl3(HLERequestContext& ctx) {
 void NVDRV::Close(HLERequestContext& ctx) {
     LOG_DEBUG(Service_NVDRV, "called");
 
-    if (!is_initialized) {
+    if (!lifecycle_state.IsInitialized()) {
         ServiceError(ctx, NvResult::NotInitialized);
         LOG_ERROR(Service_NVDRV, "NvServices is not initialized!");
         return;
@@ -185,15 +184,12 @@ void NVDRV::Close(HLERequestContext& ctx) {
 }
 
 void NVDRV::Initialize(HLERequestContext& ctx) {
-    LOG_WARNING(Service_NVDRV, "(STUBBED) called");
     IPC::ResponseBuilder rb{ctx, 3};
-    SCOPE_EXIT {
-        rb.Push(ResultSuccess);
-        rb.PushEnum(NvResult::Success);
-    };
+    rb.Push(ResultSuccess);
 
-    if (is_initialized) {
-        // No need to initialize again
+    if (lifecycle_state.IsInitialized()) {
+        LOG_DEBUG(Service_NVDRV, "called on an initialized session");
+        rb.PushEnum(NvResult::Success);
         return;
     }
 
@@ -206,9 +202,18 @@ void NVDRV::Initialize(HLERequestContext& ctx) {
 
     auto& container = nvdrv->GetContainer();
     auto process = ctx.GetObjectFromHandle<Kernel::KProcess>(process_handle);
-    session_id = container.OpenSession(process.GetPointerUnsafe());
+    const NvResult validation_result = lifecycle_state.Initialize(process.IsNotNull());
+    if (validation_result != NvResult::Success) {
+        LOG_ERROR(Service_NVDRV, "Initialize rejected invalid process handle={:#x}",
+                  process_handle);
+        rb.PushEnum(validation_result);
+        return;
+    }
 
-    is_initialized = true;
+    session_id = container.OpenSession(process.GetPointerUnsafe());
+    LOG_DEBUG(Service_NVDRV, "initialized process_id={:#x}, transfer_size={:#x}",
+              process->GetProcessId(), transfer_memory_size);
+    rb.PushEnum(NvResult::Success);
 }
 
 void NVDRV::QueryEvent(HLERequestContext& ctx) {
@@ -216,7 +221,7 @@ void NVDRV::QueryEvent(HLERequestContext& ctx) {
     const auto fd = rp.Pop<DeviceFD>();
     const auto event_id = rp.Pop<u32>();
 
-    if (!is_initialized) {
+    if (!lifecycle_state.IsInitialized()) {
         ServiceError(ctx, NvResult::NotInitialized);
         LOG_ERROR(Service_NVDRV, "NvServices is not initialized!");
         return;
@@ -241,16 +246,29 @@ void NVDRV::QueryEvent(HLERequestContext& ctx) {
 
 void NVDRV::SetAruid(HLERequestContext& ctx) {
     IPC::RequestParser rp{ctx};
-    pid = rp.Pop<u64>();
-    LOG_WARNING(Service_NVDRV, "(STUBBED) called, pid={:#x}", pid);
+    const u64 requested_aruid = rp.Pop<u64>();
+    const u64 caller_pid = ctx.GetPID();
+    const NvResult result = lifecycle_state.SetAruid(caller_pid, requested_aruid);
+
+    if (result == NvResult::Success) {
+        LOG_DEBUG(Service_NVDRV, "called, aruid={:#x}", requested_aruid);
+    } else {
+        LOG_ERROR(Service_NVDRV,
+                  "SetAruid rejected caller_pid={:#x}, requested_aruid={:#x}, result={:#x}",
+                  caller_pid, requested_aruid, static_cast<u32>(result));
+    }
 
     IPC::ResponseBuilder rb{ctx, 3};
     rb.Push(ResultSuccess);
-    rb.PushEnum(NvResult::Success);
+    rb.PushEnum(result);
 }
 
 void NVDRV::SetGraphicsFirmwareMemoryMarginEnabled(HLERequestContext& ctx) {
-    LOG_WARNING(Service_NVDRV, "(STUBBED) called");
+    IPC::RequestParser rp{ctx};
+    const u64 value = rp.Pop<u64>();
+    lifecycle_state.SetGraphicsFirmwareMemoryMarginEnabled(value);
+    LOG_DEBUG(Service_NVDRV, "called, enabled={}",
+              lifecycle_state.IsGraphicsFirmwareMemoryMarginEnabled());
 
     IPC::ResponseBuilder rb{ctx, 2};
     rb.Push(ResultSuccess);
@@ -296,7 +314,7 @@ NVDRV::NVDRV(Core::System& system_, std::shared_ptr<Module> nvdrv_, const char* 
 }
 
 NVDRV::~NVDRV() {
-    if (is_initialized) {
+    if (lifecycle_state.IsInitialized()) {
         auto& container = nvdrv->GetContainer();
         container.CloseSession(session_id);
     }

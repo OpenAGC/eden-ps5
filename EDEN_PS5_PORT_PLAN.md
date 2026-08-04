@@ -4317,6 +4317,48 @@ packaging evidence only; `makepkg`/pacman is not available on this Mac, and no
 new PS5 runtime qualification is claimed from this slice. Build FFmpeg and the
 remaining dependent packages only from these validated package contracts.
 
+The next Flappy warning-owner slice is implemented and host/Prospero verified.
+The preserved FW 5.50 replay identifies exactly `NVDRV::Initialize`,
+`NVDRV::SetAruid`, `svcGetInfo(InitialProcessIdRange)`, the four VI application
+display service factories, and `IApplicationFunctions::NotifyRunning` in
+addition to the NVMap, error-notifier, and BSD diagnostics already fixed.
+NVDRV now rejects an invalid initialization process handle, keeps repeated
+initialization idempotent, rejects SetAruid before initialization, and rejects
+a missing or mismatched PID descriptor with `NvResult::AccessDenied`. A valid
+descriptor/ARUID identity is retained as session state. The graphics firmware
+memory-margin command now consumes its documented u64 input and retains the
+derived Boolean instead of logging an unimplemented warning.
+
+The kernel PID-bound behavior was checked against the local Atmosphere source
+at `../Atmosphere/libraries/libmesosphere/source/svc/kern_svc_info.cpp` and
+`../Atmosphere/libraries/libmesosphere/source/kern_k_process.cpp`. Atmosphere
+confirms invalid handle `0`, minimum/maximum subtypes `0/1`, rejection of other
+subtypes, and the allocation interval `1..0x50`. Horizon removed legacy
+`GetInfo` ID 19 after 4.x in favor of `GetSystemInfo`; Eden intentionally keeps
+the old form as a homebrew compatibility extension, but now applies the same
+handle/subtype validation and returns the real kernel bounds rather than a
+successful fake zero.
+
+The four VI methods were false stub diagnostics: they already returned the
+live binder driver, system display service, and manager display service
+objects, so their logs are now debug-level implemented calls.
+`NotifyRunning` already returned success and the Boolean that official
+applications ignore, so its false stub warning is likewise removed without
+inventing additional state. Other generic AM/VI methods and NVDRV `GetStatus`
+remain explicitly workload-irrelevant: none appears in the pinned Flappy log,
+and this slice does not claim semantics for commands that were not audited.
+
+Focused host evidence passes 16 NVDRV lifecycle assertions, 6 SVC PID-bound
+assertions, and the combined `[core][nvdrv]` set with 34 assertions across
+three cases. Launch configuration, shader-cache identity, PS5 thread-budget,
+and multi-level page-table CTests also pass. The current Prospero full build in
+`build-prospero-full-audit2` completes and produces a 65,733,016-byte candidate
+`eden-ps5.elf` with SHA-256
+`d86590c679cb4e1c2d1c8a9ed8c08c61225e94d0865c016ccc3f06d017950ed2`.
+This ELF has not been sent to hardware. It is not qualification evidence until
+the pinned cleanup ELF and repeated exact-name absence checks precede a fresh
+FW 5.500.008 300-frame replay with operator-visible magenta then game output.
+
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
    through Vulkan-PS5 into `openagc-psbc`, record it in versioned shader

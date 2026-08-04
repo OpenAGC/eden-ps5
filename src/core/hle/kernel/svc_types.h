@@ -7,6 +7,7 @@
 #pragma once
 
 #include <bitset>
+#include <optional>
 
 #include "common/bit_field.h"
 #include "common/common_funcs.h"
@@ -675,5 +676,20 @@ enum class InitialProcessIdRangeInfo : u64 {
     Minimum = 0,
     Maximum = 1,
 };
+
+inline constexpr u64 InitialProcessIdMin = 1;
+inline constexpr u64 InitialProcessIdMax = 0x50;
+
+[[nodiscard]] constexpr std::optional<u64> GetInitialProcessIdRangeValue(
+    u64 info_sub_id) noexcept {
+    switch (static_cast<InitialProcessIdRangeInfo>(info_sub_id)) {
+    case InitialProcessIdRangeInfo::Minimum:
+        return InitialProcessIdMin;
+    case InitialProcessIdRangeInfo::Maximum:
+        return InitialProcessIdMax;
+    default:
+        return std::nullopt;
+    }
+}
 
 } // namespace Kernel::Svc

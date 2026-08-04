@@ -58,8 +58,8 @@ public:
     static constexpr size_t AslrAlignment = 2_MiB;
 
 public:
-    static constexpr u64 InitialProcessIdMin = 1;
-    static constexpr u64 InitialProcessIdMax = 0x50;
+    static constexpr u64 InitialProcessIdMin = Svc::InitialProcessIdMin;
+    static constexpr u64 InitialProcessIdMax = Svc::InitialProcessIdMax;
 
     static constexpr u64 ProcessIdMin = InitialProcessIdMax + 1;
     static constexpr u64 ProcessIdMax = (std::numeric_limits<u64>::max)();

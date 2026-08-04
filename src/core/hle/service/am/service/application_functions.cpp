@@ -341,7 +341,9 @@ Result IApplicationFunctions::EndBlockingHomeButton() {
 }
 
 Result IApplicationFunctions::NotifyRunning(Out<bool> out_became_running) {
-    LOG_WARNING(Service_AM, "(STUBBED) called");
+    // Official applications ignore this output; the service contract is fully
+    // satisfied by acknowledging the notification and returning a bool.
+    LOG_DEBUG(Service_AM, "called");
     *out_became_running = true;
     R_SUCCEED();
 }
