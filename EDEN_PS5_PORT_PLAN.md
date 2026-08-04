@@ -4209,8 +4209,19 @@ The saved log contains zero `Render.Vulkan <Error>` records, zero occurrences
 of the eleven targeted `GetSupportedFormat` failures, and zero `VK_ERROR`,
 device-loss, GPU-thread, submit, acquire, or present failures. This closes the
 automated Flappy format-error and lifecycle gate for the pinned ELF. Operator
-confirmation that the exact run was visible on the display remains required
-for the user-visible presentation clause.
+confirmation was obtained from an identical watched replay at
+`Vulkan-PS5/examples/qualification-logs/flappy-bird/20260804T003308Z-swapchain-run1.log`:
+the display showed the magenta clear followed by the Flappy Bird intro. That
+run again passed 300 frames, direct `/dev/gc`, 5/5/0 cache reload/destruction,
+bounded teardown, and all repeated PID/global absence checks, with zero Vulkan
+or targeted format errors. Its only application error-level records are two
+non-fatal guest BSD calls before network initialization. The remaining warning
+records are known stub/compatibility diagnostics plus one NVMap pin-count
+imbalance during teardown; none produced a critical, GPU, Vulkan, process, or
+presentation failure. Target klog's `Debug suspend sync failed(35)` is emitted
+by ps5debug during post-exit process inspection, after the application has
+already stopped, and is not an Eden or GPU execution failure. This completes
+the pinned FW 5.50 Flappy canary including operator-visible presentation.
 
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
