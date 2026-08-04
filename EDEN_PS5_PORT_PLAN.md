@@ -4194,8 +4194,23 @@ The updated guarded wrapper is SHA-256
 and rejects any recurrence of those eleven exact format-selection errors. A
 guarded cleanup-first Flappy replay must still prove that these eleven startup
 errors are absent and that the expanded color storage paths do not regress
-guest rendering, teardown, or immediate relaunch; no new ELF has been launched
-for this host-only slice.
+guest rendering, teardown, or immediate relaunch. The following guarded replay
+supplies that hardware evidence.
+
+The guarded FW 5.50 replay now passes at
+`Vulkan-PS5/examples/qualification-logs/flappy-bird/20260804T003035Z-swapchain-run1.log`
+with target klog `20260804T003035Z-swapchain-run1-target.klog`. It ran the
+pinned cleanup ELF first, observed global exact `eboot.bin` absence twice,
+launched only the direct `/dev/gc` backend on exact FW `5.500.008`, loaded all
+five discovered graphics-cache records with zero rejection, presented exactly
+300 frames, and reached the same 5/5/0 telemetry at destruction. PID 130 and
+the global exact process name were absent in every repeated post-run check.
+The saved log contains zero `Render.Vulkan <Error>` records, zero occurrences
+of the eleven targeted `GetSupportedFormat` failures, and zero `VK_ERROR`,
+device-loss, GPU-thread, submit, acquire, or present failures. This closes the
+automated Flappy format-error and lifecycle gate for the pinned ELF. Operator
+confirmation that the exact run was visible on the display remains required
+for the user-visible presentation clause.
 
 1. Complete the device-selected address32 contract: give OpenAGC a dedicated
    same-4-GiB resource arena, expose its selected high dword, pass that value
