@@ -4190,7 +4190,7 @@ full link from Eden `b77d7b5c4994` and Vulkan-PS5 `236687c3818a` produced
 `build-prospero-full-audit2/bin/eden-ps5.elf`, SHA-256
 `ff3c252883753a41ba3a27cb7aea3bd9b392cb208f6672c2e3b816d21e74fc82`.
 The updated guarded wrapper is SHA-256
-`e035024d3889d0e16621e0fd62cb9e821d65bde0bd0a48e5b7806326d4cf7c30`
+`5f997989294561995cdf9834b102d6d0b49edc98a3f629ca847a6a636c16f846`
 and rejects any recurrence of those eleven exact format-selection errors. A
 guarded cleanup-first Flappy replay must still prove that these eleven startup
 errors are absent and that the expanded color storage paths do not regress

@@ -88,10 +88,10 @@ input_cycle_stop_pattern='PS5 qualification input cycle: stopped presses=2 limit
 telemetry_baseline_pattern='Prospero guest pipeline cache live: reason=baseline .*graphics_discovered=0 compute_discovered=0 graphics_loaded=0 compute_loaded=0 records_rejected=0'
 telemetry_pattern='Prospero guest pipeline cache live:'
 cache_reload_pattern='Prospero guest pipeline cache live: reason=disk-load-complete .*graphics_discovered=[1-9][0-9]* compute_discovered=[0-9]+ graphics_loaded=[1-9][0-9]* compute_loaded=[0-9]+ records_rejected=[0-9]+'
-reject_pattern='(allocation|mapping|mmap|mprotect) failed|^eden-ps5 dynarmic .* failed:'
-reject_pattern="$reject_pattern|invalid JIT mapping|Failed to (present|derive|obtain|load)"
-reject_pattern="$reject_pattern|GPU thread failure|^vulkan-ps5: .*failed|PS5 presented-frame oracle failed|CPUCore not initialized"
-reject_pattern="$reject_pattern|GetSupportedFormat: Format=(44|51|64|76|83|97|100|103|109|122|130) "
+reject_pattern='(alloc|map|mprotect|dynarmic|vulkan-ps5:).*failed|invalid JIT mapping'
+reject_pattern="$reject_pattern|Failed to (present|derive|obtain|load)|GPU thread failure"
+reject_pattern="$reject_pattern|presented-frame oracle failed|CPUCore not initialized"
+reject_pattern="$reject_pattern|GetSupportedFormat: Format=(44|51|64|76|83|97|1(00|03|09|22|30)) "
 if [ -n "${EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN:-}" ]; then
     reject_pattern="$reject_pattern|$EDEN_PS5_QUALIFICATION_EXTRA_REJECT_PATTERN"
 fi
