@@ -46,6 +46,30 @@ The mandatory reject expression was also compacted to 252 bytes after adding
 the Sony-only exclusion, remaining below the runner's fail-closed 256-byte
 limit without dropping its covered failure classes.
 
+The fresh-boot cleanup-first installed-carrier replay ran as PID 152. It proved
+the exact firmware and emitted
+`[openagc] backend=sony-installed installed_driver=true direct_gc=false`, then
+completed GPU authorization, async-graphics setup, shader compilation, and the
+Vulkan device/memory/scheduler checkpoints. Its first native queue wait timed
+out with OpenAGC `0x80890007`, producing `VK_ERROR_DEVICE_LOST` before a game
+frame. The target klog shows the graphics queue active and non-empty at process
+teardown and then reset. This agrees with OpenAGC's earlier marker experiments:
+the installed exports accept submission in the websrv payload context, but the
+submitted DCB does not execute without an unrecovered Sony-private workload or
+context transition.
+
+The retained application log is
+`Vulkan-PS5/examples/qualification-logs/flappy-bird/20260804T043847Z-swapchain-run1.log`
+with SHA-256
+`cfd8e25b34c02485e265d2704528a13cc69dd8094a9bf8fc67514f703da67c88`;
+the adjacent klog has SHA-256
+`d720c09bba97a8050395eb5b6cdf3058e7730767fe01e21555aa8b7c53e71473`.
+The guarded failure path relaunched pinned cleanup and proved PID-specific and
+global exact `eboot.bin` absence twice; two additional independent checks also
+proved global absence. Do not retry this carrier or fall back to `/dev/gc` on
+the current boot. The next implementation slice is recovery and fail-closed
+qualification of the installed driver's required workload/context setup.
+
 Automatic SDL3 key injection has been removed. The sidecar grammar now accepts
 only a game path and optional bounded `frames=N`; former `input_cycle` and
 qualification `input_profile` directives fail closed. This removes the
